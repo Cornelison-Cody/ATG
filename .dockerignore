@@ -1,0 +1,14 @@
+.DS_Store
+.atg
+.env
+.env.*
+!.env.example
+.git
+.github
+.next
+build
+dist
+node_modules
+npm-debug.log*
+projects
+*.tsbuildinfo

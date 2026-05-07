@@ -1,0 +1,340 @@
+.screen {
+  background:
+    radial-gradient(circle at top left, rgba(77, 214, 201, 0.16), transparent 34rem),
+    #07090d;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 28px 12px 12px;
+}
+
+.header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 0 16px 24px;
+}
+
+.header h1 {
+  font-size: clamp(2.5rem, 5vw, 5rem);
+  line-height: 1;
+  margin: 0;
+}
+
+.headerActions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  position: relative;
+}
+
+.menuButton {
+  align-items: center;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: inline-grid;
+  gap: 2px;
+  height: 44px;
+  justify-content: center;
+  padding: 0;
+  width: 48px;
+}
+
+.menuButton:hover,
+.menuButton:focus-visible {
+  border-color: rgba(77, 214, 201, 0.52);
+  box-shadow: 0 0 0 3px rgba(77, 214, 201, 0.12);
+  outline: none;
+}
+
+.menuButton svg {
+  height: 24px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  width: 24px;
+}
+
+.menu {
+  background: rgba(16, 21, 31, 0.98);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px var(--shadow);
+  display: grid;
+  min-width: 190px;
+  overflow: hidden;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 10;
+}
+
+.menu a,
+.menu button {
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  font-weight: 850;
+  min-height: 46px;
+  padding: 12px 14px;
+  text-align: left;
+  text-decoration: none;
+}
+
+.menu a:hover,
+.menu a:focus-visible,
+.menu button:hover,
+.menu button:focus-visible {
+  background: rgba(77, 214, 201, 0.1);
+  outline: none;
+}
+
+.grid {
+  background: rgba(7, 9, 13, 0.28);
+  border: 1px solid rgba(163, 183, 210, 0.22);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(77, 214, 201, 0.04);
+  display: grid;
+  flex: 1;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  padding: 12px;
+}
+
+.promptPanel,
+.gameFramePanel,
+.errorPanel {
+  background: rgba(16, 21, 31, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px var(--shadow);
+  padding: 18px;
+}
+
+.promptPanel h2 {
+  font-size: 1rem;
+  margin: 0 0 12px;
+}
+
+.qrBox {
+  background: white;
+  border-radius: 8px;
+  display: grid;
+  justify-content: center;
+  padding: 18px;
+}
+
+.playersSection p {
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.promptPanel form {
+  display: grid;
+  gap: 12px;
+}
+
+.promptPanel textarea {
+  background: #0b1018;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  min-height: 128px;
+  padding: 14px;
+  resize: vertical;
+}
+
+.hostActions {
+  display: flex;
+  gap: 10px;
+}
+
+.hostActions button {
+  background: var(--accent);
+  border: 0;
+  border-radius: 8px;
+  color: #04110f;
+  font-weight: 900;
+  min-height: 44px;
+  padding: 12px 16px;
+}
+
+.hostActions button + button {
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+
+.promptPanel {
+  min-height: 220px;
+}
+
+.playerList {
+  display: grid;
+  gap: 10px;
+}
+
+.playerCard {
+  align-items: center;
+  background: rgba(7, 9, 13, 0.44);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.playerCard > span {
+  border-radius: 50%;
+  height: 18px;
+  width: 18px;
+}
+
+.playerCard strong {
+  display: block;
+}
+
+.playerCard em {
+  color: var(--accent-strong);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.disconnectButton {
+  align-items: center;
+  background: rgba(255, 107, 122, 0.12);
+  border: 1px solid rgba(255, 107, 122, 0.42);
+  border-radius: 8px;
+  color: var(--danger);
+  display: inline-flex;
+  height: 42px;
+  justify-content: center;
+  padding: 0;
+  width: 42px;
+}
+
+.disconnectButton:hover,
+.disconnectButton:focus-visible {
+  background: rgba(255, 107, 122, 0.2);
+  border-color: rgba(255, 107, 122, 0.72);
+  outline: none;
+}
+
+.disconnectButton svg {
+  height: 22px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.6;
+  width: 22px;
+}
+
+.gameFramePanel {
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.gameFramePanel iframe {
+  border: 0;
+  display: block;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+
+.modalOverlay {
+  align-items: center;
+  background: rgba(3, 6, 10, 0.72);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 28px;
+  position: fixed;
+  z-index: 20;
+}
+
+.joinModal {
+  background: rgba(16, 21, 31, 0.98);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+  display: grid;
+  gap: 18px;
+  max-width: 460px;
+  padding: 18px;
+  width: min(100%, 460px);
+}
+
+.playersSection {
+  background: rgba(7, 9, 13, 0.38);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.modalHeader {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  margin: -18px -18px 0;
+  padding: 14px 16px;
+}
+
+.modalHeader h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.closeButton {
+  align-items: center;
+  background: rgba(255, 107, 122, 0.12);
+  border: 1px solid rgba(255, 107, 122, 0.4);
+  border-radius: 8px;
+  color: var(--danger);
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  padding: 0;
+  width: 40px;
+}
+
+.closeButton:hover,
+.closeButton:focus-visible {
+  background: rgba(255, 107, 122, 0.2);
+  border-color: rgba(255, 107, 122, 0.7);
+  outline: none;
+}
+
+.closeButton svg {
+  height: 22px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+  width: 22px;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gameFramePanel {
+    min-height: 520px;
+  }
+
+  .gameFramePanel iframe {
+    min-height: 520px;
+  }
+}
