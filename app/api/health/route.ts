@@ -1,4 +1,4 @@
-import { getAiWorkerUrl } from "@/lib/env";
+import { getAiWorkerUrl, STORAGE_BACKEND } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,8 +11,11 @@ export function GET() {
     timestamp: new Date().toISOString(),
     dependencies: {
       aiWorkerConfigured: Boolean(getAiWorkerUrl()),
-      databaseConfigured: Boolean(process.env.DATABASE_URL),
-      objectStorageConfigured: Boolean(process.env.OBJECT_STORAGE_BUCKET)
+      storageBackend: STORAGE_BACKEND,
+      azureCosmosConfigured: Boolean(process.env.AZURE_COSMOS_ENDPOINT && process.env.AZURE_COSMOS_DATABASE),
+      azureBlobConfigured: Boolean(
+        process.env.AZURE_STORAGE_CONNECTION_STRING && process.env.AZURE_STORAGE_GAME_ASSETS_CONTAINER
+      )
     }
   });
 }

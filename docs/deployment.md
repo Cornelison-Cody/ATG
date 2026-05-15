@@ -1,59 +1,71 @@
-# ATG Production Deployment Checklist
+# ATG Azure Deployment
 
-ATG is moving from a local-only proof of concept to a container-hosted service. The first production target is a container-based VPS running the custom Node/Next/WebSocket server.
+ATG deploys to Azure Container Apps with the existing custom Node/Next/WebSocket server. The first Azure target uses Container Apps consumption, Cosmos DB free tier for project metadata/chat, Blob Storage for editable game files, GHCR for images, and GitHub Actions OIDC for deployment.
 
-## Production readiness
+## Azure resources
 
-- Configure environment variables from `.env.example`.
-- Run the app with `npm start` or `node server.mjs`; this preserves `/ws/game` WebSocket support.
-- Set `APP_BASE_URL` to the public HTTPS origin so TV QR codes and phone clients use production URLs.
-- Mount durable storage at `ATG_DATA_ROOT` while the filesystem-backed store is still active.
-- Use `/api/health` for container and reverse-proxy health checks.
+The Bicep template in `infra/main.bicep` creates:
 
-## Codex and hosted AI worker
+- Container Apps environment and Container App.
+- Log Analytics workspace.
+- Cosmos DB NoSQL account, `atg` database, and `projects` container.
+- Storage account and private `game-assets` blob container.
+- Container App secrets and environment variables for the Azure storage backend.
 
-Production must not depend on a local desktop Codex CLI. `/api/chat` now uses:
+The default Azure region is `westus`.
 
-- `AI_WORKER_URL` when configured, POSTing to `${AI_WORKER_URL}/chat`.
-- Local `codex exec` only in development or when `ENABLE_LOCAL_CODEX=true`.
+## Required GitHub configuration
 
-The worker response must be newline-delimited JSON events compatible with the app chat stream:
+Create a GitHub `production` environment and configure these repository or environment variables:
 
-- `{ "type": "status", "message": "..." }`
-- `{ "type": "session", "sessionId": "..." }`
-- `{ "type": "final", "message": "..." }`
-- `{ "type": "error", "message": "..." }`
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+- `AZURE_RESOURCE_GROUP`
+- `AZURE_LOCATION` set to `westus`
+- `AZURE_ENVIRONMENT_NAME` set to `prod`
+- `APP_BASE_URL` optional on first deploy; leave blank to use the generated Container Apps URL.
+- `AI_WORKER_URL`
+- `ENTRA_TENANT_ID`
+- `ENTRA_CLIENT_ID`
+- `GHCR_USERNAME` if the GHCR package is private
 
-The worker should load project data from durable storage, edit only the selected project's `game/` files, persist changes, and preserve conversation context.
+Configure these secrets:
 
-## Storage migration
+- `AI_WORKER_TOKEN`
+- `ENTRA_CLIENT_SECRET`
+- `GHCR_TOKEN` with `read:packages` if the GHCR package is private
+- `OPENAI_API_KEY`
 
-Current local storage remains filesystem-backed:
+The Azure identity used by GitHub Actions needs permissions to create/update resources in the target resource group. Configure it with an OIDC federated credential for:
 
-- Project metadata and chat: `.atg/projects.json`
-- Game files: `projects/<slug>/game/*`
+- Organization/repo: `Cornelison-Cody/ATG`
+- Branch: `main`
+- Environment: `production`, if using environment-scoped federation.
 
-Production migration target:
+## Deployment flow
 
-- Database tables for projects and chat messages.
-- Object storage or DB-backed file rows for editable game files.
-- One-time import from local `.atg/projects.json` and `projects/`.
+- Pull requests run `npm run check`, validate Bicep syntax, and build the Docker image.
+- Pushes to `main` run `.github/workflows/azure-deploy.yml`.
+- The deploy workflow builds and pushes the image to GHCR, deploys Bicep, updates the Container App image, and checks `/api/health`.
+- If the GHCR package is private, set `GHCR_USERNAME` and `GHCR_TOKEN` so Container Apps can pull the image.
 
-See `migrations/001_initial_schema.sql` for the proposed schema.
+## App behavior in Azure
 
-## VPS deployment outline
+- `ATG_STORAGE_BACKEND=azure` stores project metadata and chat in Cosmos DB.
+- Editable game files are stored in Blob Storage under project-scoped keys.
+- `/tv/*`, `/join/*`, `/ws/game`, join-info, health, and game asset routes remain public for gameplay.
+- Dashboard, editor, chat, and project mutation routes require Entra-backed Container Apps auth headers in production.
+- The Bicep template enables Container Apps authentication when `ENTRA_CLIENT_SECRET` is provided. Its global validation allows anonymous traffic so TV/phone routes can stay public; the app middleware enforces editor-only auth.
+- `AI_WORKER_URL` is required for production chat editing. Local Codex CLI execution stays disabled in production.
 
-1. Provision VPS with Docker and a reverse proxy.
-2. Point DNS to the VPS.
-3. Configure TLS.
-4. Pull the published image from GHCR.
-5. Run the container with secrets and `ATG_DATA_ROOT` mounted.
-6. Ensure reverse proxy forwards WebSocket upgrades to `/ws/game`.
-7. Check `/api/health`.
-8. Open the dashboard, TV route, and phone route.
+## Local development
 
-## Rollback
+Local development keeps the filesystem backend by default:
 
-- Keep the previous image tag from GitHub Actions.
-- If `/api/health` fails after deploy, restart the container using the previous image.
-- Keep database migrations backward-compatible until rollback policy is formalized.
+```bash
+npm install
+npm run dev
+```
+
+Use `ATG_STORAGE_BACKEND=azure` only when testing against deployed Azure resources.

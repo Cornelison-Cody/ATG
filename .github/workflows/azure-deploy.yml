@@ -1,0 +1,137 @@
+name: Azure Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare image name
+        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck and build
+        run: npm run check
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure resource group
+        uses: azure/cli@v2
+        env:
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+        with:
+          inlineScript: |
+            location="${AZURE_LOCATION:-westus}"
+            az group create \
+              --name "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --location "$location"
+
+      - name: Deploy infrastructure
+        id: deploy
+        uses: azure/cli@v2
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          AZURE_ENVIRONMENT_NAME: ${{ vars.AZURE_ENVIRONMENT_NAME }}
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          AI_WORKER_URL: ${{ vars.AI_WORKER_URL }}
+          AI_WORKER_TOKEN: ${{ secrets.AI_WORKER_TOKEN }}
+          ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ vars.ENTRA_TENANT_ID }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          inlineScript: |
+            set -euo pipefail
+            deployment_name="atg-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            location="${AZURE_LOCATION:-westus}"
+            environment_name="${AZURE_ENVIRONMENT_NAME:-prod}"
+            az deployment group create \
+              --name "$deployment_name" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --template-file infra/main.bicep \
+              --parameters \
+                location="$location" \
+                environmentName="$environment_name" \
+                containerImage="${{ env.IMAGE_NAME }}:${{ github.sha }}" \
+                appBaseUrl="$APP_BASE_URL" \
+                aiWorkerUrl="$AI_WORKER_URL" \
+                aiWorkerToken="$AI_WORKER_TOKEN" \
+                openAiApiKey="$OPENAI_API_KEY" \
+                ghcrUsername="$GHCR_USERNAME" \
+                ghcrToken="$GHCR_TOKEN" \
+                entraTenantId="$ENTRA_TENANT_ID" \
+                entraClientId="$ENTRA_CLIENT_ID" \
+                entraClientSecret="$ENTRA_CLIENT_SECRET" \
+              --query properties.outputs \
+              --output json > deployment-outputs.json
+            app_url="$(jq -r '.appUrl.value' deployment-outputs.json)"
+            container_app_name="$(jq -r '.containerAppName.value' deployment-outputs.json)"
+            echo "app_url=$app_url" >> "$GITHUB_OUTPUT"
+            echo "container_app_name=$container_app_name" >> "$GITHUB_OUTPUT"
+            echo "Deployed ATG to $app_url"
+
+      - name: Set generated app base URL
+        if: ${{ vars.APP_BASE_URL == '' }}
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp update \
+              --name "${{ steps.deploy.outputs.container_app_name }}" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --set-env-vars APP_BASE_URL="${{ steps.deploy.outputs.app_url }}"
+
+      - name: Health check
+        run: |
+          set -euo pipefail
+          for attempt in {1..20}; do
+            if curl --fail --silent --show-error "${{ steps.deploy.outputs.app_url }}/api/health"; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Health check failed for ${{ steps.deploy.outputs.app_url }}/api/health"
+          exit 1
