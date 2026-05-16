@@ -97,15 +97,15 @@ jobs:
                 location="$location" \
                 environmentName="$environment_name" \
                 containerImage="${{ env.IMAGE_NAME }}:${{ github.sha }}" \
-                appBaseUrl="$APP_BASE_URL" \
-                aiWorkerUrl="$AI_WORKER_URL" \
-                aiWorkerToken="$AI_WORKER_TOKEN" \
-                openAiApiKey="$OPENAI_API_KEY" \
-                ghcrUsername="$GHCR_USERNAME" \
-                ghcrToken="$GHCR_TOKEN" \
-                entraTenantId="$ENTRA_TENANT_ID" \
-                entraClientId="$ENTRA_CLIENT_ID" \
-                entraClientSecret="$ENTRA_CLIENT_SECRET" \
+                appBaseUrl="${APP_BASE_URL:-}" \
+                aiWorkerUrl="${AI_WORKER_URL:-}" \
+                aiWorkerToken="${AI_WORKER_TOKEN:-}" \
+                openAiApiKey="${OPENAI_API_KEY:-}" \
+                ghcrUsername="${GHCR_USERNAME:-}" \
+                ghcrToken="${GHCR_TOKEN:-}" \
+                entraTenantId="${ENTRA_TENANT_ID:-}" \
+                entraClientId="${ENTRA_CLIENT_ID:-}" \
+                entraClientSecret="${ENTRA_CLIENT_SECRET:-}" \
               --query properties.outputs \
               --output json > deployment-outputs.json
             app_url="$(jq -r '.appUrl.value' deployment-outputs.json)"

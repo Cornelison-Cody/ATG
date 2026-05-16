@@ -65,6 +65,114 @@ var cosmosDatabaseName = 'atg'
 var cosmosProjectsContainerName = 'projects'
 var storageAccountName = 'atg${take(normalizedEnvironment, 6)}${nameSeed}st'
 var gameAssetsContainerName = 'game-assets'
+var containerAppSecrets = concat(
+  [
+    {
+      name: 'cosmos-key'
+      value: cosmosAccount.listKeys().primaryMasterKey
+    }
+    {
+      name: 'storage-connection-string'
+      value: storageConnectionString
+    }
+  ],
+  empty(aiWorkerToken) ? [] : [
+    {
+      name: 'ai-worker-token'
+      value: aiWorkerToken
+    }
+  ],
+  empty(openAiApiKey) ? [] : [
+    {
+      name: 'openai-api-key'
+      value: openAiApiKey
+    }
+  ],
+  empty(ghcrToken) ? [] : [
+    {
+      name: 'ghcr-token'
+      value: ghcrToken
+    }
+  ],
+  empty(entraClientSecret) ? [] : [
+    {
+      name: 'entra-client-secret'
+      value: entraClientSecret
+    }
+  ]
+)
+var containerAppEnv = concat(
+  [
+    {
+      name: 'NODE_ENV'
+      value: 'production'
+    }
+    {
+      name: 'PORT'
+      value: '3000'
+    }
+    {
+      name: 'APP_BASE_URL'
+      value: appBaseUrl
+    }
+    {
+      name: 'ATG_STORAGE_BACKEND'
+      value: 'azure'
+    }
+    {
+      name: 'AZURE_COSMOS_ENDPOINT'
+      value: cosmosAccount.properties.documentEndpoint
+    }
+    {
+      name: 'AZURE_COSMOS_DATABASE'
+      value: cosmosDatabaseName
+    }
+    {
+      name: 'AZURE_COSMOS_PROJECTS_CONTAINER'
+      value: cosmosProjectsContainerName
+    }
+    {
+      name: 'AZURE_COSMOS_KEY'
+      secretRef: 'cosmos-key'
+    }
+    {
+      name: 'AZURE_STORAGE_GAME_ASSETS_CONTAINER'
+      value: gameAssetsContainerName
+    }
+    {
+      name: 'AZURE_STORAGE_CONNECTION_STRING'
+      secretRef: 'storage-connection-string'
+    }
+    {
+      name: 'AI_WORKER_URL'
+      value: aiWorkerUrl
+    }
+    {
+      name: 'ENTRA_TENANT_ID'
+      value: entraTenantId
+    }
+    {
+      name: 'ENTRA_CLIENT_ID'
+      value: entraClientId
+    }
+    {
+      name: 'ENABLE_LOCAL_CODEX'
+      value: 'false'
+    }
+  ],
+  empty(aiWorkerToken) ? [] : [
+    {
+      name: 'AI_WORKER_TOKEN'
+      secretRef: 'ai-worker-token'
+    }
+  ],
+  empty(openAiApiKey) ? [] : [
+    {
+      name: 'OPENAI_API_KEY'
+      secretRef: 'openai-api-key'
+    }
+  ]
+)
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logAnalyticsName
@@ -198,32 +306,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
         allowInsecure: false
       }
-      secrets: [
-        {
-          name: 'cosmos-key'
-          value: cosmosAccount.listKeys().primaryMasterKey
-        }
-        {
-          name: 'storage-connection-string'
-          value: storageConnectionString
-        }
-        {
-          name: 'ai-worker-token'
-          value: aiWorkerToken
-        }
-        {
-          name: 'openai-api-key'
-          value: openAiApiKey
-        }
-        {
-          name: 'ghcr-token'
-          value: ghcrToken
-        }
-        {
-          name: 'entra-client-secret'
-          value: entraClientSecret
-        }
-      ]
+      secrets: containerAppSecrets
       registries: empty(ghcrToken) ? [] : [
         {
           server: 'ghcr.io'
@@ -237,72 +320,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'atg'
           image: containerImage
-          env: [
-            {
-              name: 'NODE_ENV'
-              value: 'production'
-            }
-            {
-              name: 'PORT'
-              value: '3000'
-            }
-            {
-              name: 'APP_BASE_URL'
-              value: appBaseUrl
-            }
-            {
-              name: 'ATG_STORAGE_BACKEND'
-              value: 'azure'
-            }
-            {
-              name: 'AZURE_COSMOS_ENDPOINT'
-              value: cosmosAccount.properties.documentEndpoint
-            }
-            {
-              name: 'AZURE_COSMOS_DATABASE'
-              value: cosmosDatabaseName
-            }
-            {
-              name: 'AZURE_COSMOS_PROJECTS_CONTAINER'
-              value: cosmosProjectsContainerName
-            }
-            {
-              name: 'AZURE_COSMOS_KEY'
-              secretRef: 'cosmos-key'
-            }
-            {
-              name: 'AZURE_STORAGE_GAME_ASSETS_CONTAINER'
-              value: gameAssetsContainerName
-            }
-            {
-              name: 'AZURE_STORAGE_CONNECTION_STRING'
-              secretRef: 'storage-connection-string'
-            }
-            {
-              name: 'AI_WORKER_URL'
-              value: aiWorkerUrl
-            }
-            {
-              name: 'AI_WORKER_TOKEN'
-              secretRef: 'ai-worker-token'
-            }
-            {
-              name: 'OPENAI_API_KEY'
-              secretRef: 'openai-api-key'
-            }
-            {
-              name: 'ENTRA_TENANT_ID'
-              value: entraTenantId
-            }
-            {
-              name: 'ENTRA_CLIENT_ID'
-              value: entraClientId
-            }
-            {
-              name: 'ENABLE_LOCAL_CODEX'
-              value: 'false'
-            }
-          ]
+          env: containerAppEnv
           resources: {
             cpu: json(cpu)
             memory: memory
