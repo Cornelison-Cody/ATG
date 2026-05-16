@@ -79,6 +79,8 @@ jobs:
           AI_WORKER_TOKEN: ${{ secrets.AI_WORKER_TOKEN }}
           ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
           ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
+          ENTRA_API_AUDIENCE: ${{ vars.ENTRA_API_AUDIENCE }}
+          ENTRA_ALLOWED_APP_IDS: ${{ vars.ENTRA_ALLOWED_APP_IDS }}
           ENTRA_TENANT_ID: ${{ vars.ENTRA_TENANT_ID }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
@@ -106,6 +108,8 @@ jobs:
                 entraTenantId="${ENTRA_TENANT_ID:-}" \
                 entraClientId="${ENTRA_CLIENT_ID:-}" \
                 entraClientSecret="${ENTRA_CLIENT_SECRET:-}" \
+                entraApiAudience="${ENTRA_API_AUDIENCE:-}" \
+                entraAllowedAppIds="${ENTRA_ALLOWED_APP_IDS:-}" \
               --query properties.outputs \
               --output json > deployment-outputs.json
             app_url="$(jq -r '.appUrl.value' deployment-outputs.json)"
@@ -135,3 +139,36 @@ jobs:
           done
           echo "Health check failed for ${{ steps.deploy.outputs.app_url }}/api/health"
           exit 1
+
+      - name: Authenticated API smoke test
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          ATG_TEST_CLIENT_ID: ${{ vars.ATG_TEST_CLIENT_ID }}
+          ATG_TEST_CLIENT_SECRET: ${{ secrets.ATG_TEST_CLIENT_SECRET }}
+          ATG_TEST_SCOPE: ${{ vars.ATG_TEST_SCOPE }}
+          ENTRA_TENANT_ID: ${{ vars.ENTRA_TENANT_ID }}
+          FALLBACK_APP_URL: ${{ steps.deploy.outputs.app_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ATG_TEST_CLIENT_ID:-}" ] || [ -z "${ATG_TEST_CLIENT_SECRET:-}" ] || [ -z "${ATG_TEST_SCOPE:-}" ]; then
+            echo "Skipping authenticated API smoke test because ATG test service principal is not configured."
+            exit 0
+          fi
+
+          token_response="$(curl --fail --silent --show-error \
+            --request POST "https://login.microsoftonline.com/${ENTRA_TENANT_ID}/oauth2/v2.0/token" \
+            --header "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "client_id=${ATG_TEST_CLIENT_ID}" \
+            --data-urlencode "client_secret=${ATG_TEST_CLIENT_SECRET}" \
+            --data-urlencode "grant_type=client_credentials" \
+            --data-urlencode "scope=${ATG_TEST_SCOPE}")"
+          access_token="$(node -e 'const response = JSON.parse(process.argv[1]); process.stdout.write(response.access_token || "");' "$token_response")"
+          if [ -z "$access_token" ]; then
+            echo "Service principal token response did not include an access token."
+            exit 1
+          fi
+
+          base_url="${APP_BASE_URL:-$FALLBACK_APP_URL}"
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer ${access_token}" \
+            "${base_url}/api/projects" >/dev/null

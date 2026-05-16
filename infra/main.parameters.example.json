@@ -37,6 +37,12 @@
     },
     "entraClientSecret": {
       "value": "set-with-github-secret"
+    },
+    "entraApiAudience": {
+      "value": "api://00000000-0000-0000-0000-000000000000"
+    },
+    "entraAllowedAppIds": {
+      "value": "00000000-0000-0000-0000-000000000000"
     }
   }
 }
