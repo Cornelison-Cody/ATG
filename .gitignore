@@ -1,6 +1,6 @@
 .DS_Store
-.atg/
-projects/
+/.atg/
+/projects/
 node_modules/
 .next/
 dist/

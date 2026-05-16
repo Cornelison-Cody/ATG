@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import { randomUUID } from "crypto";
+import { requireEditorAuth } from "@/lib/api-auth";
 import { canUseLocalCodex, getAiWorkerUrl } from "@/lib/env";
 import {
   appendProjectMessages,
@@ -31,6 +32,11 @@ type GlobalState = typeof globalThis & {
 };
 
 export async function POST(request: Request) {
+  const authResponse = await requireEditorAuth(request);
+  if (authResponse) {
+    return authResponse;
+  }
+
   let body: ChatRequest;
 
   try {

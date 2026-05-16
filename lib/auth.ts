@@ -23,6 +23,11 @@ export function isAuthenticatedRequest(request: Request) {
   return Boolean(principal || principalName || objectId);
 }
 
+export function hasBearerToken(request: Request) {
+  const authorization = request.headers.get("authorization");
+  return Boolean(authorization?.startsWith("Bearer "));
+}
+
 export function requireEditorAuth(request: Request) {
   if (!isProduction()) {
     return null;

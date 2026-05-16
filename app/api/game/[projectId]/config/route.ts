@@ -1,3 +1,4 @@
+import { requireEditorAuth } from "@/lib/api-auth";
 import { getProject } from "@/lib/projects";
 import { readGameConfig, updateGameConfig } from "@/lib/project-game";
 
@@ -18,6 +19,11 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const authResponse = await requireEditorAuth(request);
+  if (authResponse) {
+    return authResponse;
+  }
+
   const project = await getActiveProject(context);
   if (!project) {
     return Response.json({ error: "Project was not found." }, { status: 404 });

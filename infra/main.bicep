@@ -42,6 +42,12 @@ param entraClientId string
 @description('Client secret for the Microsoft Entra app registration used by Container Apps authentication.')
 param entraClientSecret string = ''
 
+@description('Audience expected for service-principal bearer tokens that call protected editor APIs.')
+param entraApiAudience string = ''
+
+@description('Comma-separated service principal application ids allowed to call protected editor APIs.')
+param entraAllowedAppIds string = ''
+
 @description('Minimum number of Container App replicas.')
 param minReplicas int = 0
 
@@ -154,6 +160,14 @@ var containerAppEnv = concat(
     {
       name: 'ENTRA_CLIENT_ID'
       value: entraClientId
+    }
+    {
+      name: 'ENTRA_API_AUDIENCE'
+      value: entraApiAudience
+    }
+    {
+      name: 'ENTRA_ALLOWED_APP_IDS'
+      value: entraAllowedAppIds
     }
     {
       name: 'ENABLE_LOCAL_CODEX'

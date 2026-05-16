@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAuthenticatedRequest, isEditorAuthConfigured, isPublicRuntimePath } from "./lib/auth";
+import { hasBearerToken, isAuthenticatedRequest, isEditorAuthConfigured, isPublicRuntimePath } from "./lib/auth";
 
 export function proxy(request: NextRequest) {
   if (process.env.NODE_ENV !== "production") {
@@ -25,6 +25,10 @@ export function proxy(request: NextRequest) {
   }
 
   if (isAuthenticatedRequest(request)) {
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/api/") && hasBearerToken(request)) {
     return NextResponse.next();
   }
 
