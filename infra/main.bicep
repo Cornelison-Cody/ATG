@@ -14,6 +14,12 @@ param containerImage string
 @description('Public HTTPS base URL for ATG. Leave empty on first deploy to use the Container Apps generated URL after the app exists.')
 param appBaseUrl string = ''
 
+@description('Optional custom hostname to bind to the Container App, for example tv.azuretidesgaming.com.')
+param customDomainName string = ''
+
+@description('Optional managed certificate resource id to use for the custom hostname binding.')
+param customDomainCertificateId string = ''
+
 @description('Hosted AI editing worker URL. Production chat editing requires this.')
 param aiWorkerUrl string = ''
 
@@ -71,6 +77,13 @@ var cosmosDatabaseName = 'atg'
 var cosmosProjectsContainerName = 'projects'
 var storageAccountName = 'atg${take(normalizedEnvironment, 6)}${nameSeed}st'
 var gameAssetsContainerName = 'game-assets'
+var customDomains = empty(customDomainName) || empty(customDomainCertificateId) ? [] : [
+  {
+    name: customDomainName
+    bindingType: 'SniEnabled'
+    certificateId: customDomainCertificateId
+  }
+]
 var containerAppSecrets = concat(
   [
     {
@@ -319,6 +332,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 3000
         transport: 'auto'
         allowInsecure: false
+        customDomains: customDomains
       }
       secrets: containerAppSecrets
       registries: empty(ghcrToken) ? [] : [

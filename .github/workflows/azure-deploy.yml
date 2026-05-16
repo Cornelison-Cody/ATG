@@ -75,6 +75,8 @@ jobs:
           APP_BASE_URL: ${{ vars.APP_BASE_URL }}
           AZURE_ENVIRONMENT_NAME: ${{ vars.AZURE_ENVIRONMENT_NAME }}
           AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          CUSTOM_DOMAIN_CERTIFICATE_ID: ${{ vars.CUSTOM_DOMAIN_CERTIFICATE_ID }}
+          CUSTOM_DOMAIN_NAME: ${{ vars.CUSTOM_DOMAIN_NAME }}
           AI_WORKER_URL: ${{ vars.AI_WORKER_URL }}
           AI_WORKER_TOKEN: ${{ secrets.AI_WORKER_TOKEN }}
           ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
@@ -100,6 +102,8 @@ jobs:
                 environmentName="$environment_name" \
                 containerImage="${{ env.IMAGE_NAME }}:${{ github.sha }}" \
                 appBaseUrl="${APP_BASE_URL:-}" \
+                customDomainName="${CUSTOM_DOMAIN_NAME:-}" \
+                customDomainCertificateId="${CUSTOM_DOMAIN_CERTIFICATE_ID:-}" \
                 aiWorkerUrl="${AI_WORKER_URL:-}" \
                 aiWorkerToken="${AI_WORKER_TOKEN:-}" \
                 openAiApiKey="${OPENAI_API_KEY:-}" \
@@ -168,7 +172,22 @@ jobs:
             exit 1
           fi
 
-          base_url="${APP_BASE_URL:-$FALLBACK_APP_URL}"
-          curl --fail --silent --show-error \
-            --header "Authorization: Bearer ${access_token}" \
-            "${base_url}/api/projects" >/dev/null
+          urls=("$FALLBACK_APP_URL")
+          if [ -n "${APP_BASE_URL:-}" ] && [ "$APP_BASE_URL" != "$FALLBACK_APP_URL" ]; then
+            urls+=("$APP_BASE_URL")
+          fi
+
+          for base_url in "${urls[@]}"; do
+            for attempt in {1..10}; do
+              if curl --fail --silent --show-error \
+                --header "Authorization: Bearer ${access_token}" \
+                "${base_url}/api/projects" >/dev/null; then
+                echo "Authenticated API smoke test passed for ${base_url}."
+                exit 0
+              fi
+              sleep 10
+            done
+          done
+
+          echo "Authenticated API smoke test failed for all configured app URLs."
+          exit 1

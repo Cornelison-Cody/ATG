@@ -14,6 +14,12 @@
     "appBaseUrl": {
       "value": ""
     },
+    "customDomainName": {
+      "value": "tv.example.com"
+    },
+    "customDomainCertificateId": {
+      "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/atg-prod-rg/providers/Microsoft.App/managedEnvironments/atg-prod-env/managedCertificates/example-cert"
+    },
     "aiWorkerUrl": {
       "value": "https://worker.example.com"
     },
