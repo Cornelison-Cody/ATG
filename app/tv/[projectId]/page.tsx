@@ -15,7 +15,7 @@ const EMPTY_STATE: GameState = {
   prompt: ""
 };
 
-type PageParams = { projectId: string } | Promise<{ projectId: string }>;
+type PageParams = Promise<{ projectId: string }>;
 
 export default function TVPage({ params }: { params: PageParams }) {
   const { projectId } = isPromise(params) ? use(params) : params;
