@@ -1,5 +1,6 @@
 const PUBLIC_PATH_PREFIXES = [
-  "/api/health"
+  "/api/health",
+  "/images/"
 ];
 
 const PUBLIC_GAME_ASSET_MARKER = "/game-assets/";
