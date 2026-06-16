@@ -1,5 +1,6 @@
 const PUBLIC_PATH_PREFIXES = [
   "/api/health",
+  "/icon.png",
   "/images/"
 ];
 
