@@ -224,37 +224,3 @@
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 0.9rem;
 }
-
-.bgSelector {
-  position: absolute;
-  top: 1.5rem;
-  right: 1.5rem;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  background: rgba(16, 21, 31, 0.6);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 0.5rem 1rem;
-  border-radius: 9999px;
-  font-size: 0.875rem;
-  color: #eef4ff;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-}
-
-.select {
-  background: transparent;
-  color: #4dd6c9;
-  border: none;
-  outline: none;
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.select option {
-  background: #10151f;
-  color: white;
-}
