@@ -50,7 +50,11 @@ export function requireEditorAuth(request: Request) {
 }
 
 export function isPublicRuntimePath(pathname: string) {
-  if (pathname === "/" || pathname.startsWith("/_next/") || pathname === "/favicon.ico") {
+  if (pathname === "/") {
+    return true;
+  }
+
+  if (pathname.startsWith("/_next/") || pathname === "/favicon.ico") {
     return false;
   }
 
