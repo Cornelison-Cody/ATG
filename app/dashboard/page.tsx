@@ -46,6 +46,7 @@ export default function Home() {
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [isLoadingInstructions, setIsLoadingInstructions] = useState(false);
+  const [isSavingInstructions, setIsSavingInstructions] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
@@ -200,6 +201,32 @@ export default function Home() {
       setError(message);
     } finally {
       setIsLoadingInstructions(false);
+    }
+  }
+
+  async function saveInstructions() {
+    if (!activeProject) {
+      return;
+    }
+
+    setIsSavingInstructions(true);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/game/${activeProject.id}/instructions`, {
+        body: JSON.stringify({ instructions }),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH"
+      });
+      const data = (await response.json()) as { instructions?: string; error?: string };
+      if (!response.ok || typeof data.instructions !== "string") {
+        throw new Error(data.error || `Failed to save instructions (${response.status})`);
+      }
+      setInstructions(data.instructions);
+    } catch (instructionsError) {
+      setError(instructionsError instanceof Error ? instructionsError.message : "Unable to save instructions.");
+    } finally {
+      setIsSavingInstructions(false);
     }
   }
 
@@ -436,7 +463,10 @@ export default function Home() {
         <InstructionsModal
           instructions={instructions}
           isLoading={isLoadingInstructions}
+          isSaving={isSavingInstructions}
+          onChange={setInstructions}
           onClose={() => setIsInstructionsOpen(false)}
+          onSave={saveInstructions}
           projectId={activeProject.id}
         />
       ) : null}
@@ -559,14 +589,22 @@ function CreateProjectModal({
 function InstructionsModal({
   instructions,
   isLoading,
+  isSaving,
+  onChange,
   onClose,
+  onSave,
   projectId
 }: {
   instructions: string;
   isLoading: boolean;
+  isSaving: boolean;
+  onChange: (value: string) => void;
   onClose: () => void;
+  onSave: () => void;
   projectId: string;
 }) {
+  const [mode, setMode] = useState<"edit" | "preview">("edit");
+
   return (
     <div className={styles.modalOverlay} role="presentation">
       <section aria-label="Game instructions" className={`${styles.modal} ${styles.instructionsModal}`}>
@@ -581,15 +619,48 @@ function InstructionsModal({
             <X aria-hidden="true" />
           </button>
         </div>
+        <div className={styles.instructionsToolbar} role="tablist" aria-label="Instructions mode">
+          <button
+            aria-selected={mode === "edit"}
+            className={mode === "edit" ? styles.activeModeButton : undefined}
+            onClick={() => setMode("edit")}
+            role="tab"
+            type="button"
+          >
+            Edit
+          </button>
+          <button
+            aria-selected={mode === "preview"}
+            className={mode === "preview" ? styles.activeModeButton : undefined}
+            onClick={() => setMode("preview")}
+            role="tab"
+            type="button"
+          >
+            Preview
+          </button>
+        </div>
         <div className={styles.instructionsBody}>
           {isLoading ? (
             <p className={styles.emptyInstructions}>Loading instructions...</p>
+          ) : mode === "edit" ? (
+            <textarea
+              aria-label="Game instructions Markdown"
+              className={styles.instructionsEditor}
+              onChange={(event) => onChange(event.target.value)}
+              spellCheck
+              value={instructions}
+            />
           ) : (
             <InstructionsViewer
               assetBasePath={`/api/projects/${projectId}/game-assets`}
               markdown={instructions}
             />
           )}
+        </div>
+        <div className={styles.modalFooter}>
+          <button disabled={isLoading || isSaving} onClick={onSave} type="button">
+            {isSaving ? "Saving" : "Save"}
+          </button>
         </div>
       </section>
     </div>

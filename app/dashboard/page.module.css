@@ -388,6 +388,7 @@
 }
 
 .instructionsModal {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   max-height: min(760px, calc(100dvh - 48px));
   max-width: 860px;
   width: min(100%, 860px);
@@ -415,6 +416,52 @@
   min-height: 220px;
   overflow: auto;
   padding: 22px 24px;
+}
+
+.instructionsToolbar {
+  align-items: center;
+  background: rgba(7, 9, 13, 0.24);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+}
+
+.instructionsToolbar button {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  min-height: 38px;
+  padding: 8px 14px;
+}
+
+.instructionsToolbar button:hover,
+.instructionsToolbar button:focus-visible,
+.instructionsToolbar .activeModeButton {
+  background: rgba(77, 214, 201, 0.12);
+  border-color: rgba(77, 214, 201, 0.52);
+  outline: none;
+}
+
+.instructionsEditor {
+  background: #0b1018;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font: 0.95rem/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  min-height: 420px;
+  outline: none;
+  padding: 14px;
+  resize: vertical;
+  width: 100%;
+}
+
+.instructionsEditor:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(77, 214, 201, 0.14);
 }
 
 .emptyInstructions {
@@ -457,6 +504,12 @@
   filter: brightness(1.05);
   outline: none;
   transform: translateY(-1px);
+}
+
+.modalFooter button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
 }
 
 .closeButton {

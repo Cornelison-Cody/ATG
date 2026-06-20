@@ -367,7 +367,7 @@ function buildCodexArgs(threadId: string | null, message: string) {
 }
 
 function buildProjectPrompt(message: string) {
-  return `You are working inside one sandboxed Azure Tides Gaming game workspace, not the ATG platform app. The live game UI is customized by editing files under game/: tv.html, phone.html, styles.css, game.js, and config.json. Do not edit the parent ATG platform app unless the user explicitly asks for platform changes. The platform owns QR joining, phone player name/color identity, color selection, WebSocket connection, connection state, menus, player roster plumbing, and the TV Back to Editor control. Use the injected window.ATG SDK from project HTML/JS for custom TV and phone interactions.\n\nUser request:\n${message}`;
+  return `You are working inside one sandboxed Azure Tides Gaming game workspace, not the ATG platform app. The live game UI is customized by editing files under game/: tv.html, phone.html, styles.css, game.js, config.json, and instructions.md. Use game/instructions.md for player-facing game rules, setup, and gameplay instructions. Do not edit the parent ATG platform app unless the user explicitly asks for platform changes. The platform owns QR joining, phone player name/color identity, color selection, WebSocket connection, connection state, menus, player roster plumbing, and the TV Back to Editor control. Use the injected window.ATG SDK from project HTML/JS for custom TV and phone interactions.\n\nUser request:\n${message}`;
 }
 
 async function persistAssistantMessage(
