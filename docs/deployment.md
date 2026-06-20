@@ -54,7 +54,7 @@ The Azure identity used by GitHub Actions needs permissions to create/update res
 
 - `ATG_STORAGE_BACKEND=azure` stores project metadata and chat in Cosmos DB.
 - Editable game files are stored in Blob Storage under project-scoped keys.
-- `/tv/*`, `/join/*`, `/ws/game`, join-info, health, and game asset routes remain public for gameplay.
+- `/`, `/tv/*`, `/join/*`, `/ws/game`, join-info, health, and game asset routes remain public.
 - Dashboard, editor, chat, and project mutation routes require Entra-backed Container Apps auth headers in production.
 - The Bicep template enables Container Apps authentication when `ENTRA_CLIENT_SECRET` is provided. Its global validation allows anonymous traffic so TV/phone routes can stay public; the app middleware enforces editor-only auth.
 - `AI_WORKER_URL` is required for production chat editing. Local Codex CLI execution stays disabled in production.
