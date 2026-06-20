@@ -9,6 +9,7 @@ import type { ChatMessage, ProjectDatabase, ProjectRecord, PublicProject } from 
 
 export const GAME_DIR = "game";
 export const GAME_CONFIG_FILE = "config.json";
+export const GAME_INSTRUCTIONS_FILE = "instructions.md";
 
 const DB_PATH = path.join(ATG_ROOT, "projects.json");
 const PROJECTS_CONTAINER = process.env.AZURE_COSMOS_PROJECTS_CONTAINER || "projects";
@@ -27,6 +28,7 @@ interface ProjectStore {
   updateProjectThread(projectId: string, codexThreadId: string): Promise<ProjectRecord>;
   readGameConfig(project: ProjectRecord): Promise<GameConfig>;
   updateGameConfig(project: ProjectRecord, patch: unknown): Promise<GameConfig>;
+  readGameInstructions(project: ProjectRecord): Promise<string>;
   readGameAsset(project: ProjectRecord, segments: string[]): Promise<GameAsset>;
 }
 
@@ -138,6 +140,11 @@ class LocalProjectStore implements ProjectStore {
       "utf8"
     );
     return next;
+  }
+
+  async readGameInstructions(project: ProjectRecord) {
+    await this.ensureGameFiles(project);
+    return readFile(path.join(getGamePath(project), GAME_INSTRUCTIONS_FILE), "utf8");
   }
 
   async readGameAsset(project: ProjectRecord, segments: string[]) {
@@ -280,6 +287,11 @@ class AzureProjectStore implements ProjectStore {
     return next;
   }
 
+  async readGameInstructions(project: ProjectRecord) {
+    await this.ensureGameFiles(project);
+    return this.readTextBlob(blobName(project, `${GAME_DIR}/${GAME_INSTRUCTIONS_FILE}`));
+  }
+
   async readGameAsset(project: ProjectRecord, segments: string[]) {
     const assetPath = normalizeGameAssetPath(segments);
     await this.ensureGameFiles(project);
@@ -399,6 +411,24 @@ function renderReadme(project: ProjectRecord) {
 const TEMPLATE_FILES: Record<string, (project: ProjectRecord) => string> = {
   "config.json": (project) =>
     `${JSON.stringify({ ...DEFAULT_GAME_CONFIG, title: project.name }, null, 2)}\n`,
+  "instructions.md": (project) => `# ${project.name}
+
+## Goal
+
+Welcome to ${project.name}. Use these instructions to explain the game objective, setup, and how players interact from their phones.
+
+## How to Play
+
+| Step | Action |
+| --- | --- |
+| 1 | Open the TV screen and show the join QR code. |
+| 2 | Players join from their phones and choose a name. |
+| 3 | Follow the on-screen prompt and use the phone controls to play. |
+
+## Assets
+
+Images stored in the game folder can be embedded here with Markdown.
+`,
   "styles.css": () => `:root {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -646,9 +676,13 @@ function contentTypeForPath(filePath: string) {
   const contentTypes: Record<string, string> = {
     ".css": "text/css; charset=utf-8",
     ".html": "text/html; charset=utf-8",
+    ".gif": "image/gif",
     ".js": "text/javascript; charset=utf-8",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
     ".json": "application/json; charset=utf-8",
     ".md": "text/markdown; charset=utf-8",
+    ".png": "image/png",
     ".svg": "image/svg+xml"
   };
 

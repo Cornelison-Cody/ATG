@@ -275,6 +275,23 @@
   width: min(100%, 460px);
 }
 
+.instructionsModal {
+  max-height: min(760px, calc(100dvh - 56px));
+  max-width: 900px;
+  width: min(100%, 900px);
+}
+
+.instructionsBody {
+  min-height: 260px;
+  overflow: auto;
+}
+
+.loadingInstructions {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
 .playersSection {
   background: rgba(7, 9, 13, 0.38);
   border: 1px solid var(--line);

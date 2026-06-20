@@ -4,6 +4,7 @@ import { FormEvent, use, useEffect, useRef, useState } from "react";
 import { Menu, Unplug, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { DEFAULT_GAME_CONFIG, GameConfig, GameSocketMessage, GameState, JoinInfo } from "@/lib/game-types";
+import { InstructionsViewer } from "@/components/instructions-viewer";
 import styles from "./tv.module.css";
 
 const EMPTY_STATE: GameState = {
@@ -24,6 +25,9 @@ export default function TVPage({ params }: { params: PageParams }) {
   const [draftPrompt, setDraftPrompt] = useState("");
   const [connectionState, setConnectionState] = useState("Connecting");
   const [error, setError] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false);
+  const [isLoadingInstructions, setIsLoadingInstructions] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isPlayersModalOpen, setIsPlayersModalOpen] = useState(false);
@@ -207,6 +211,27 @@ export default function TVPage({ params }: { params: PageParams }) {
     setIsPlayersModalOpen(true);
   }
 
+  async function openInstructionsModal() {
+    setIsMenuOpen(false);
+    setIsInstructionsModalOpen(true);
+    setIsLoadingInstructions(true);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/game/${projectId}/instructions`, { cache: "no-store" });
+      const data = (await response.json()) as { instructions?: string; error?: string };
+      if (!response.ok || typeof data.instructions !== "string") {
+        throw new Error(data.error || "Unable to load instructions.");
+      }
+      setInstructions(data.instructions);
+    } catch (instructionsError) {
+      setError(instructionsError instanceof Error ? instructionsError.message : "Unable to load instructions.");
+      setIsInstructionsModalOpen(false);
+    } finally {
+      setIsLoadingInstructions(false);
+    }
+  }
+
   function disconnectPlayer(playerId: string) {
     send({ playerId, type: "disconnectPlayer" });
   }
@@ -242,6 +267,9 @@ export default function TVPage({ params }: { params: PageParams }) {
               </button>
               <button onClick={openPlayersModal} role="menuitem" type="button">
                 Show Players
+              </button>
+              <button onClick={openInstructionsModal} role="menuitem" type="button">
+                Instructions
               </button>
               <a href={projectId ? `/?project=${encodeURIComponent(projectId)}` : "/"} role="menuitem">
                 Back to Editor
@@ -317,6 +345,34 @@ export default function TVPage({ params }: { params: PageParams }) {
               </button>
             </div>
             <PlayerList onDisconnect={disconnectPlayer} players={gameState.players} />
+          </section>
+        </div>
+      ) : null}
+
+      {isInstructionsModalOpen ? (
+        <div className={styles.modalOverlay} role="presentation">
+          <section aria-label="Game instructions" className={`${styles.joinModal} ${styles.instructionsModal}`}>
+            <div className={styles.modalHeader}>
+              <h2>Instructions</h2>
+              <button
+                aria-label="Close instructions dialog"
+                className={styles.closeButton}
+                onClick={() => setIsInstructionsModalOpen(false)}
+                type="button"
+              >
+                <X aria-hidden="true" />
+              </button>
+            </div>
+            <div className={styles.instructionsBody}>
+              {isLoadingInstructions ? (
+                <p className={styles.loadingInstructions}>Loading instructions...</p>
+              ) : (
+                <InstructionsViewer
+                  assetBasePath={`/api/projects/${projectId}/game-assets`}
+                  markdown={instructions}
+                />
+              )}
+            </div>
           </section>
         </div>
       ) : null}

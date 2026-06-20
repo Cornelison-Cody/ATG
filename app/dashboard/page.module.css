@@ -387,6 +387,12 @@
   width: min(100%, 560px);
 }
 
+.instructionsModal {
+  max-height: min(760px, calc(100dvh - 48px));
+  max-width: 860px;
+  width: min(100%, 860px);
+}
+
 .modalHeader {
   align-items: center;
   background: rgba(7, 9, 13, 0.34);
@@ -403,6 +409,18 @@
 
 .modalBody {
   padding: 22px 20px;
+}
+
+.instructionsBody {
+  min-height: 220px;
+  overflow: auto;
+  padding: 22px 24px;
+}
+
+.emptyInstructions {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
 }
 
 .modalBody .createControls {
