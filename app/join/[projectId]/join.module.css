@@ -225,3 +225,81 @@
   font-weight: 900;
   min-height: 54px;
 }
+
+.modalOverlay {
+  align-items: stretch;
+  background: rgba(3, 6, 10, 0.74);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 12px;
+  position: fixed;
+  z-index: 20;
+}
+
+.instructionsModal {
+  background: rgba(16, 21, 31, 0.98);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-width: 760px;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.modalHeader {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.modalHeader h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.instructionsBody {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.loadingInstructions {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.closeButton {
+  align-items: center;
+  background: rgba(255, 107, 122, 0.12);
+  border: 1px solid rgba(255, 107, 122, 0.4);
+  border-radius: 8px;
+  color: var(--danger);
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  padding: 0;
+  width: 40px;
+}
+
+.closeButton:hover,
+.closeButton:focus-visible {
+  background: rgba(255, 107, 122, 0.2);
+  border-color: rgba(255, 107, 122, 0.7);
+  outline: none;
+}
+
+.closeButton svg {
+  height: 22px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+  width: 22px;
+}

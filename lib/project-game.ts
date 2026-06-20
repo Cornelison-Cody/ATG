@@ -1,7 +1,7 @@
 import { getProjectStore } from "./project-store";
 import type { ProjectRecord } from "./project-types";
 
-export { GAME_CONFIG_FILE, GAME_DIR } from "./project-store";
+export { GAME_CONFIG_FILE, GAME_DIR, GAME_INSTRUCTIONS_FILE } from "./project-store";
 
 export async function ensureProjectGameFiles(_project: ProjectRecord) {
   return;
@@ -13,6 +13,10 @@ export async function readGameConfig(project: ProjectRecord) {
 
 export async function updateGameConfig(project: ProjectRecord, patch: unknown) {
   return getProjectStore().updateGameConfig(project, patch);
+}
+
+export async function readGameInstructions(project: ProjectRecord) {
+  return getProjectStore().readGameInstructions(project);
 }
 
 export async function readGameAsset(project: ProjectRecord, segments: string[]) {

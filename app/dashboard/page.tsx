@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Menu, Trash2, X } from "lucide-react";
+import { InstructionsViewer } from "@/components/instructions-viewer";
 import styles from "./page.module.css";
 
 type ChatMessage = {
@@ -42,6 +43,9 @@ export default function Home() {
   const [newProjectName, setNewProjectName] = useState("");
   const [input, setInput] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
+  const [instructions, setInstructions] = useState("");
+  const [isLoadingInstructions, setIsLoadingInstructions] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
@@ -165,10 +169,38 @@ export default function Home() {
 
   function returnToProjects() {
     setIsProjectMenuOpen(false);
+    setIsInstructionsOpen(false);
     setActiveProject(null);
     setMessages([]);
     setInput("");
     window.history.pushState(null, "", "/dashboard");
+  }
+
+  async function openInstructions() {
+    if (!activeProject) {
+      return;
+    }
+
+    setIsProjectMenuOpen(false);
+    setIsInstructionsOpen(true);
+    setIsLoadingInstructions(true);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/game/${activeProject.id}/instructions`, { cache: "no-store" });
+      const data = (await response.json()) as { instructions?: string; error?: string };
+      if (!response.ok || typeof data.instructions !== "string") {
+        throw new Error(data.error || `Failed to load instructions (${response.status})`);
+      }
+      setInstructions(data.instructions);
+    } catch (instructionsError) {
+      const message =
+        instructionsError instanceof Error ? instructionsError.message : "Unable to load instructions.";
+      setInstructions("");
+      setError(message);
+    } finally {
+      setIsLoadingInstructions(false);
+    }
   }
 
   async function deleteProject(project: ProjectSummary) {
@@ -347,6 +379,9 @@ export default function Home() {
                 <a href={`/join/${activeProject.id}`} role="menuitem">
                   Open Phone
                 </a>
+                <button onClick={openInstructions} role="menuitem" type="button">
+                  Instructions
+                </button>
                 <button onClick={returnToProjects} role="menuitem" type="button">
                   Go Home
                 </button>
@@ -394,6 +429,15 @@ export default function Home() {
           }}
           onCreateProject={handleCreateProject}
           onNameChange={setNewProjectName}
+        />
+      ) : null}
+
+      {isInstructionsOpen && activeProject ? (
+        <InstructionsModal
+          instructions={instructions}
+          isLoading={isLoadingInstructions}
+          onClose={() => setIsInstructionsOpen(false)}
+          projectId={activeProject.id}
         />
       ) : null}
     </main>
@@ -508,6 +552,46 @@ function CreateProjectModal({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function InstructionsModal({
+  instructions,
+  isLoading,
+  onClose,
+  projectId
+}: {
+  instructions: string;
+  isLoading: boolean;
+  onClose: () => void;
+  projectId: string;
+}) {
+  return (
+    <div className={styles.modalOverlay} role="presentation">
+      <section aria-label="Game instructions" className={`${styles.modal} ${styles.instructionsModal}`}>
+        <div className={styles.modalHeader}>
+          <h2>Instructions</h2>
+          <button
+            aria-label="Close instructions dialog"
+            className={styles.closeButton}
+            onClick={onClose}
+            type="button"
+          >
+            <X aria-hidden="true" />
+          </button>
+        </div>
+        <div className={styles.instructionsBody}>
+          {isLoading ? (
+            <p className={styles.emptyInstructions}>Loading instructions...</p>
+          ) : (
+            <InstructionsViewer
+              assetBasePath={`/api/projects/${projectId}/game-assets`}
+              markdown={instructions}
+            />
+          )}
+        </div>
+      </section>
     </div>
   );
 }

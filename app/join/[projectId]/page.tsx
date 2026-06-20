@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Menu } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { DEFAULT_GAME_CONFIG, GameSocketMessage, GameState, JoinInfo } from "@/lib/game-types";
+import { InstructionsViewer } from "@/components/instructions-viewer";
 import styles from "./join.module.css";
 
 const COLORS = ["#4dd6c9", "#ff6b7a", "#ffd166", "#8ec5ff", "#c792ea", "#95f985"];
@@ -28,6 +29,9 @@ export default function JoinPage({ params }: { params: PageParams }) {
   const [hasJoined, setHasJoined] = useState(false);
   const [connectionState, setConnectionState] = useState("Not joined");
   const [error, setError] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
+  const [isLoadingInstructions, setIsLoadingInstructions] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -86,6 +90,27 @@ export default function JoinPage({ params }: { params: PageParams }) {
     setConnectionState("Not joined");
     setHasJoined(false);
     setIsMenuOpen(false);
+  }
+
+  async function openInstructions() {
+    setIsMenuOpen(false);
+    setIsInstructionsOpen(true);
+    setIsLoadingInstructions(true);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/game/${projectId}/instructions`, { cache: "no-store" });
+      const data = (await response.json()) as { instructions?: string; error?: string };
+      if (!response.ok || typeof data.instructions !== "string") {
+        throw new Error(data.error || "Unable to load instructions.");
+      }
+      setInstructions(data.instructions);
+    } catch (instructionsError) {
+      setError(instructionsError instanceof Error ? instructionsError.message : "Unable to load instructions.");
+      setIsInstructionsOpen(false);
+    } finally {
+      setIsLoadingInstructions(false);
+    }
   }
 
   function connect(
@@ -234,6 +259,9 @@ export default function JoinPage({ params }: { params: PageParams }) {
                 <button onClick={changePlayer} role="menuitem" type="button">
                   Change Player
                 </button>
+                <button onClick={openInstructions} role="menuitem" type="button">
+                  Instructions
+                </button>
               </div>
             ) : null}
           </div>
@@ -248,6 +276,34 @@ export default function JoinPage({ params }: { params: PageParams }) {
             title="Project phone game interface"
           />
         </section>
+
+        {isInstructionsOpen ? (
+          <div className={styles.modalOverlay} role="presentation">
+            <section aria-label="Game instructions" className={styles.instructionsModal}>
+              <div className={styles.modalHeader}>
+                <h2>Instructions</h2>
+                <button
+                  aria-label="Close instructions dialog"
+                  className={styles.closeButton}
+                  onClick={() => setIsInstructionsOpen(false)}
+                  type="button"
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </div>
+              <div className={styles.instructionsBody}>
+                {isLoadingInstructions ? (
+                  <p className={styles.loadingInstructions}>Loading instructions...</p>
+                ) : (
+                  <InstructionsViewer
+                    assetBasePath={`/api/projects/${projectId}/game-assets`}
+                    markdown={instructions}
+                  />
+                )}
+              </div>
+            </section>
+          </div>
+        ) : null}
       </main>
     );
   }
