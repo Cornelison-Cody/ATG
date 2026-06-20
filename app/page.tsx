@@ -2,41 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
 import { Gamepad2, Zap, Palette } from "lucide-react";
 import styles from "./page.module.css";
 
-const BACKGROUNDS = [
-  { id: "hero-bg", name: "Azure Tides", src: "/images/hero-bg.png" },
-  { id: "cyberpunk", name: "Cyberpunk City", src: "/images/cyberpunk-city.png" },
-  { id: "abstract", name: "Abstract Waves", src: "/images/abstract-waves.png" },
-  { id: "synthwave", name: "Synthwave Sunset", src: "/images/synthwave-sunset.png" },
-  { id: "connected", name: "Connected Phones", src: "/images/connected-phones.png" }
-];
-
 export default function LandingPage() {
-  const [bgImage, setBgImage] = useState(BACKGROUNDS[0].src);
-
   return (
     <main className={styles.container}>
-      <div className={styles.bgSelector}>
-        <label htmlFor="bg-select">Theme Preview:</label>
-        <select 
-          id="bg-select"
-          value={bgImage} 
-          onChange={(e) => setBgImage(e.target.value)}
-          className={styles.select}
-        >
-          {BACKGROUNDS.map((bg) => (
-            <option key={bg.id} value={bg.src}>{bg.name}</option>
-          ))}
-        </select>
-      </div>
-
       <section className={styles.hero}>
         <Image
-          src={bgImage}
-          alt="Futuristic hero background"
+          src="/images/hero-bg.png"
+          alt="Azure Tides hero background"
           fill
           priority
           className={styles.heroBackground}
