@@ -28,4 +28,10 @@ jobs:
           inlineScript: az bicep build --file infra/main.bicep --stdout > /dev/null
 
       - name: Build Docker image
-        run: docker build -t atg-ci:${{ github.sha }} .
+        uses: docker/build-push-action@v6
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          context: .
+          load: true
+          tags: atg-ci:${{ github.sha }}
