@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { type CSSProperties, FormEvent, useEffect, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { DEFAULT_GAME_CONFIG, GameSocketMessage, GameState, JoinInfo } from "@/lib/game-types";
 import { InstructionsViewer } from "@/components/instructions-viewer";
@@ -18,6 +18,11 @@ const EMPTY_STATE: GameState = {
 };
 
 type PageParams = Promise<{ projectId: string }>;
+type PlayerAccentStyle = CSSProperties & {
+  "--accent": string;
+  "--accent-strong": string;
+  "--join-text-color": string;
+};
 
 export default function JoinPage({ params }: { params: PageParams }) {
   const [projectId, setProjectId] = useState("");
@@ -234,7 +239,7 @@ export default function JoinPage({ params }: { params: PageParams }) {
 
   if (hasJoined) {
     return (
-      <main className={styles.phoneShell}>
+      <main className={styles.phoneShell} style={getPlayerAccentStyle(color)}>
         <header className={styles.phoneHeader}>
           <h1>{joinInfo?.project.name ?? "Game"}</h1>
           <div className={styles.headerActions}>
@@ -309,7 +314,7 @@ export default function JoinPage({ params }: { params: PageParams }) {
   }
 
   return (
-    <main className={styles.shell}>
+    <main className={styles.shell} style={getPlayerAccentStyle(color)}>
       <section className={styles.card}>
         <p className={styles.kicker}>Azure Tides Gaming</p>
         <h1>{joinInfo?.project.name ?? "Join Game"}</h1>
@@ -382,4 +387,26 @@ function writeStoredValue(key: string, value: string) {
   } catch {
     // Private browsing modes can deny storage; the in-memory React state still works for this visit.
   }
+}
+
+function getPlayerAccentStyle(color: string): PlayerAccentStyle {
+  return {
+    "--accent": color,
+    "--accent-strong": color,
+    "--join-text-color": getReadableTextColor(color)
+  };
+}
+
+function getReadableTextColor(hexColor: string) {
+  const hex = hexColor.replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(hex)) {
+    return "#04110f";
+  }
+
+  const red = Number.parseInt(hex.slice(0, 2), 16);
+  const green = Number.parseInt(hex.slice(2, 4), 16);
+  const blue = Number.parseInt(hex.slice(4, 6), 16);
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+
+  return luminance > 0.62 ? "#04110f" : "#ffffff";
 }
