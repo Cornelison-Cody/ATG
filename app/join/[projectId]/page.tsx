@@ -6,7 +6,7 @@ import { DEFAULT_GAME_CONFIG, GameSocketMessage, GameState, JoinInfo } from "@/l
 import { InstructionsViewer } from "@/components/instructions-viewer";
 import styles from "./join.module.css";
 
-const COLORS = ["#4dd6c9", "#ff6b7a", "#ffd166", "#8ec5ff", "#c792ea", "#95f985"];
+const COLORS = ["#4dd6c9", "#ff6b7a", "#ffd166", "#8ec5ff", "#c792ea", "#95f985", "#9aa9bd", "#f4a261"];
 
 const EMPTY_STATE: GameState = {
   actions: [],
@@ -30,6 +30,8 @@ export default function JoinPage({ params }: { params: PageParams }) {
   const [gameState, setGameState] = useState<GameState>(EMPTY_STATE);
   const [name, setName] = useState("");
   const [color, setColor] = useState(COLORS[0]);
+  const [customColor, setCustomColor] = useState(COLORS[0]);
+  const [customColorDraft, setCustomColorDraft] = useState(COLORS[0]);
   const [playerId, setPlayerId] = useState("");
   const [hasJoined, setHasJoined] = useState(false);
   const [connectionState, setConnectionState] = useState("Not joined");
@@ -48,11 +50,13 @@ export default function JoinPage({ params }: { params: PageParams }) {
   useEffect(() => {
     const storedId = readStoredValue("atg-player-id") || createPlayerId();
     const storedName = readStoredValue("atg-player-name") || "";
-    const storedColor = readStoredValue("atg-player-color") || COLORS[0];
+    const storedColor = normalizeHexColor(readStoredValue("atg-player-color") || "") || COLORS[0];
     writeStoredValue("atg-player-id", storedId);
     setPlayerId(storedId);
     setName(storedName);
     setColor(storedColor);
+    setCustomColor(storedColor);
+    setCustomColorDraft(storedColor);
   }, []);
 
   useEffect(() => {
@@ -95,6 +99,34 @@ export default function JoinPage({ params }: { params: PageParams }) {
     setConnectionState("Not joined");
     setHasJoined(false);
     setIsMenuOpen(false);
+  }
+
+  function selectPresetColor(nextColor: string) {
+    setColor(nextColor);
+    setCustomColor(nextColor);
+    setCustomColorDraft(nextColor);
+  }
+
+  function selectCustomColor(nextColor: string) {
+    const normalizedColor = normalizeHexColor(nextColor);
+    if (!normalizedColor) {
+      return;
+    }
+
+    setCustomColor(normalizedColor);
+    setCustomColorDraft(normalizedColor);
+    setColor(normalizedColor);
+  }
+
+  function updateCustomColorDraft(nextColor: string) {
+    const withHash = nextColor.startsWith("#") ? nextColor : `#${nextColor}`;
+    setCustomColorDraft(withHash);
+
+    const normalizedColor = normalizeHexColor(withHash);
+    if (normalizedColor) {
+      setCustomColor(normalizedColor);
+      setColor(normalizedColor);
+    }
   }
 
   async function openInstructions() {
@@ -332,11 +364,36 @@ export default function JoinPage({ params }: { params: PageParams }) {
                 aria-label={`Choose ${nextColor}`}
                 className={nextColor === color ? styles.selectedColor : undefined}
                 key={nextColor}
-                onClick={() => setColor(nextColor)}
+                onClick={() => selectPresetColor(nextColor)}
                 style={{ background: nextColor }}
                 type="button"
               />
             ))}
+          </div>
+          <div className={styles.customColorPanel}>
+            <label>
+              <span>Custom color</span>
+              <input
+                aria-label="Pick a custom player color"
+                className={styles.colorPicker}
+                onChange={(event) => selectCustomColor(event.target.value)}
+                type="color"
+                value={customColor}
+              />
+            </label>
+            <label>
+              <span>Hex</span>
+              <input
+                aria-label="Custom color hex value"
+                inputMode="text"
+                maxLength={7}
+                onChange={(event) => updateCustomColorDraft(event.target.value)}
+                onBlur={() => setCustomColorDraft(customColor)}
+                placeholder="#4dd6c9"
+                spellCheck={false}
+                value={customColorDraft}
+              />
+            </label>
           </div>
           <button disabled={!name.trim() || !joinInfo} type="submit">
             Join
@@ -408,4 +465,22 @@ function getReadableTextColor(hexColor: string) {
   const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
 
   return luminance > 0.62 ? "#04110f" : "#ffffff";
+}
+
+function normalizeHexColor(value: string) {
+  const rawHex = value.trim().replace(/^#/, "");
+
+  if (/^[0-9a-f]{3}$/i.test(rawHex)) {
+    return `#${rawHex
+      .split("")
+      .map((character) => character + character)
+      .join("")
+      .toLowerCase()}`;
+  }
+
+  if (/^[0-9a-f]{6}$/i.test(rawHex)) {
+    return `#${rawHex.toLowerCase()}`;
+  }
+
+  return "";
 }
