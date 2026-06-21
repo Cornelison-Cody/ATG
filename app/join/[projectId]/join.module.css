@@ -164,7 +164,7 @@
   border-radius: 8px;
   box-shadow: 0 24px 70px var(--shadow);
   display: grid;
-  gap: 18px;
+  gap: 20px;
   max-width: 420px;
   padding: 22px;
   width: 100%;
@@ -172,17 +172,12 @@
 
 .kicker {
   color: var(--accent);
-  font-size: 0.78rem;
+  font-size: 0.95rem;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
+  line-height: 1.25;
   margin: 0;
   text-transform: uppercase;
-}
-
-.card h1 {
-  font-size: 2rem;
-  line-height: 1.05;
-  margin: 0;
 }
 
 .joinForm {
