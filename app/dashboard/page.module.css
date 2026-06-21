@@ -354,11 +354,30 @@
   gap: 10px;
 }
 
+.runFeedbackHeader > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
 .runFeedbackHeader svg {
   color: var(--accent);
   flex: 0 0 auto;
   height: 18px;
   width: 18px;
+}
+
+.runFeedbackMeta {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.quietStep {
+  color: var(--text);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  margin: 0 0 0 28px;
 }
 
 .runFeedback ol {
