@@ -601,26 +601,24 @@ function ProjectDashboard({
                 <span>{formatUpdatedAt(project.updatedAt)}</span>
               </div>
             </a>
-            <div className={styles.projectCardActions}>
-              <button
-                aria-label={`Edit ${project.name}`}
-                className={styles.editButton}
-                onClick={() => onOpenProject(project.id)}
-                title="Edit project"
-                type="button"
-              >
-                <Pencil aria-hidden="true" />
-              </button>
-              <button
-                aria-label={`Delete ${project.name}`}
-                className={styles.trashButton}
-                onClick={() => onDeleteProject(project)}
-                title="Delete project"
-                type="button"
-              >
-                <Trash2 aria-hidden="true" />
-              </button>
-            </div>
+            <button
+              aria-label={`Edit ${project.name}`}
+              className={styles.editButton}
+              onClick={() => onOpenProject(project.id)}
+              title="Edit project"
+              type="button"
+            >
+              <Pencil aria-hidden="true" />
+            </button>
+            <button
+              aria-label={`Delete ${project.name}`}
+              className={styles.trashButton}
+              onClick={() => onDeleteProject(project)}
+              title="Delete project"
+              type="button"
+            >
+              <Trash2 aria-hidden="true" />
+            </button>
           </div>
         ))}
       </section>
