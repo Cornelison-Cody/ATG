@@ -236,6 +236,10 @@ export default function TVPage({ params }: { params: PageParams }) {
     send({ playerId, type: "disconnectPlayer" });
   }
 
+  const promptLabel = joinInfo?.config.promptLabel.trim() ?? "";
+  const resetLabel = joinInfo?.config.resetLabel.trim() ?? "";
+  const showPromptControls = Boolean(promptLabel || resetLabel);
+
   if (error) {
     return (
       <main className={styles.screen}>
@@ -279,23 +283,27 @@ export default function TVPage({ params }: { params: PageParams }) {
         </div>
       </header>
 
-      <section className={styles.grid}>
-        <section className={styles.promptPanel}>
-          <h2>{joinInfo?.config.promptLabel ?? "Prompt"}</h2>
-          <form onSubmit={savePrompt}>
-            <textarea
-              aria-label="Game prompt"
-              onChange={(event) => setDraftPrompt(event.target.value)}
-              value={draftPrompt}
-            />
-            <div className={styles.hostActions}>
-              <button type="submit">Set Prompt</button>
-              <button onClick={() => send({ type: "resetBuzzes" })} type="button">
-                {joinInfo?.config.resetLabel ?? "Reset Buzzes"}
-              </button>
-            </div>
-          </form>
-        </section>
+      <section className={`${styles.grid} ${showPromptControls ? "" : styles.fullGameGrid}`}>
+        {showPromptControls ? (
+          <section className={styles.promptPanel}>
+            <h2>{promptLabel || "Prompt"}</h2>
+            <form onSubmit={savePrompt}>
+              <textarea
+                aria-label="Game prompt"
+                onChange={(event) => setDraftPrompt(event.target.value)}
+                value={draftPrompt}
+              />
+              <div className={styles.hostActions}>
+                {promptLabel ? <button type="submit">Set Prompt</button> : null}
+                {resetLabel ? (
+                  <button onClick={() => send({ type: "resetBuzzes" })} type="button">
+                    {resetLabel}
+                  </button>
+                ) : null}
+              </div>
+            </form>
+          </section>
+        ) : null}
 
         <section className={styles.gameFramePanel}>
           <iframe

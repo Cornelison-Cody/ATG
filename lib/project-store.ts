@@ -430,11 +430,7 @@ Welcome to ${project.name}. Use these instructions to explain the game objective
 
 ## How to Play
 
-| Step | Action |
-| --- | --- |
-| 1 | Open the TV screen and show the join QR code. |
-| 2 | Players join from their phones and choose a name. |
-| 3 | Follow the on-screen prompt and use the phone controls to play. |
+Add setup and gameplay steps here.
 
 ## Assets
 
@@ -526,11 +522,6 @@ window.ATG.onState((state) => {
     title.textContent = state.config?.title || state.project?.name || "Game";
   }
 
-  const prompt = byId("prompt");
-  if (prompt) {
-    prompt.textContent = state.prompt || state.config?.initialPrompt || "Waiting for prompt...";
-  }
-
   const players = byId("players");
   if (players) {
     players.innerHTML = "";
@@ -540,36 +531,6 @@ window.ATG.onState((state) => {
       item.textContent = player.connected ? player.name : player.name + " (away)";
       players.append(item);
     }
-  }
-
-  const buzzes = byId("buzzes");
-  if (buzzes) {
-    buzzes.innerHTML = "";
-    for (const [index, buzz] of (state.buzzes || []).entries()) {
-      const item = document.createElement("div");
-      item.className = "pill";
-      item.textContent = String(index + 1) + ". " + buzz.name;
-      buzzes.append(item);
-    }
-  }
-
-  const buzzButton = byId("buzz-button");
-  if (buzzButton) {
-    const currentPlayerId = state.player?.id;
-    const hasBuzzed = (state.buzzes || []).some((buzz) => buzz.playerId === currentPlayerId);
-    buzzButton.textContent = hasBuzzed ? "Buzzed" : state.config?.buzzLabel || "Buzz";
-    buzzButton.disabled = hasBuzzed || state.connectionState !== "Live";
-  }
-});
-
-document.addEventListener("click", (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) {
-    return;
-  }
-
-  if (target.id === "buzz-button") {
-    window.ATG.sendAction("buzz");
   }
 });
 `,
@@ -584,8 +545,6 @@ document.addEventListener("click", (event) => {
   <body class="phone-ui">
     <main class="panel phone-panel">
       <h1 id="game-title">Game</h1>
-      <p id="prompt" class="muted">Waiting for prompt...</p>
-      <button id="buzz-button" class="button" type="button">Buzz</button>
     </main>
   </body>
 </html>
@@ -602,16 +561,8 @@ document.addEventListener("click", (event) => {
     <main class="panel">
       <h1 id="game-title">Game</h1>
       <section>
-        <h2>Prompt</h2>
-        <p id="prompt" class="muted">Waiting for prompt...</p>
-      </section>
-      <section>
         <h2>Players</h2>
         <div id="players" class="list"></div>
-      </section>
-      <section>
-        <h2>Buzz Order</h2>
-        <div id="buzzes" class="list"></div>
       </section>
     </main>
   </body>
