@@ -6,8 +6,7 @@ import { DEFAULT_GAME_CONFIG, GameSocketMessage, GameState, JoinInfo } from "@/l
 import { InstructionsViewer } from "@/components/instructions-viewer";
 import styles from "./join.module.css";
 
-const COLORS = ["#4dd6c9", "#ff6b7a", "#ffd166", "#8ec5ff", "#c792ea", "#95f985", "#9aa9bd"];
-const CUSTOM_COLOR_FALLBACK = "#6f7d90";
+const COLORS = ["#4dd6c9", "#ff6b7a", "#ffd166", "#8ec5ff", "#c792ea", "#95f985", "#9aa9bd", "#f4a261"];
 
 const EMPTY_STATE: GameState = {
   actions: [],
@@ -31,8 +30,8 @@ export default function JoinPage({ params }: { params: PageParams }) {
   const [gameState, setGameState] = useState<GameState>(EMPTY_STATE);
   const [name, setName] = useState("");
   const [color, setColor] = useState(COLORS[0]);
-  const [customColor, setCustomColor] = useState(CUSTOM_COLOR_FALLBACK);
-  const [customColorDraft, setCustomColorDraft] = useState(CUSTOM_COLOR_FALLBACK);
+  const [customColor, setCustomColor] = useState(COLORS[0]);
+  const [customColorDraft, setCustomColorDraft] = useState(COLORS[0]);
   const [playerId, setPlayerId] = useState("");
   const [hasJoined, setHasJoined] = useState(false);
   const [connectionState, setConnectionState] = useState("Not joined");
@@ -41,7 +40,6 @@ export default function JoinPage({ params }: { params: PageParams }) {
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const [isLoadingInstructions, setIsLoadingInstructions] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isCustomColorOpen, setIsCustomColorOpen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
 
@@ -57,10 +55,8 @@ export default function JoinPage({ params }: { params: PageParams }) {
     setPlayerId(storedId);
     setName(storedName);
     setColor(storedColor);
-    if (!COLORS.includes(storedColor)) {
-      setCustomColor(storedColor);
-      setCustomColorDraft(storedColor);
-    }
+    setCustomColor(storedColor);
+    setCustomColorDraft(storedColor);
   }, []);
 
   useEffect(() => {
@@ -107,7 +103,8 @@ export default function JoinPage({ params }: { params: PageParams }) {
 
   function selectPresetColor(nextColor: string) {
     setColor(nextColor);
-    setIsCustomColorOpen(false);
+    setCustomColor(nextColor);
+    setCustomColorDraft(nextColor);
   }
 
   function selectCustomColor(nextColor: string) {
@@ -373,45 +370,32 @@ export default function JoinPage({ params }: { params: PageParams }) {
                 type="button"
               />
             ))}
-            <button
-              aria-expanded={isCustomColorOpen}
-              aria-label="Choose custom color"
-              className={!COLORS.includes(color) ? styles.selectedColor : undefined}
-              onClick={() => {
-                setIsCustomColorOpen((current) => !current);
-                selectCustomColor(customColor);
-              }}
-              style={{ background: customColor }}
-              type="button"
-            />
           </div>
-          {isCustomColorOpen ? (
-            <div className={styles.customColorPanel}>
-              <label>
-                <span>Custom color</span>
-                <input
-                  aria-label="Pick a custom player color"
-                  className={styles.colorPicker}
-                  onChange={(event) => selectCustomColor(event.target.value)}
-                  type="color"
-                  value={customColor}
-                />
-              </label>
-              <label>
-                <span>Hex</span>
-                <input
-                  aria-label="Custom color hex value"
-                  inputMode="text"
-                  maxLength={7}
-                  onChange={(event) => updateCustomColorDraft(event.target.value)}
-                  onBlur={() => setCustomColorDraft(customColor)}
-                  placeholder="#4dd6c9"
-                  spellCheck={false}
-                  value={customColorDraft}
-                />
-              </label>
-            </div>
-          ) : null}
+          <div className={styles.customColorPanel}>
+            <label>
+              <span>Custom color</span>
+              <input
+                aria-label="Pick a custom player color"
+                className={styles.colorPicker}
+                onChange={(event) => selectCustomColor(event.target.value)}
+                type="color"
+                value={customColor}
+              />
+            </label>
+            <label>
+              <span>Hex</span>
+              <input
+                aria-label="Custom color hex value"
+                inputMode="text"
+                maxLength={7}
+                onChange={(event) => updateCustomColorDraft(event.target.value)}
+                onBlur={() => setCustomColorDraft(customColor)}
+                placeholder="#4dd6c9"
+                spellCheck={false}
+                value={customColorDraft}
+              />
+            </label>
+          </div>
           <button disabled={!name.trim() || !joinInfo} type="submit">
             Join
           </button>
