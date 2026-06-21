@@ -316,8 +316,7 @@ export default function JoinPage({ params }: { params: PageParams }) {
   return (
     <main className={styles.shell} style={getPlayerAccentStyle(color)}>
       <section className={styles.card}>
-        <p className={styles.kicker}>Azure Tides Gaming</p>
-        <h1>{joinInfo?.project.name ?? "Join Game"}</h1>
+        <h1 className={styles.kicker}>{joinInfo?.project.name ?? "Join Game"}</h1>
 
         <form className={styles.joinForm} onSubmit={joinGame} suppressHydrationWarning>
           <input
