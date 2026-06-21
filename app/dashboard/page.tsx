@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Menu, Trash2, X } from "lucide-react";
+import { CheckCircle2, LoaderCircle, Menu, MessageSquareWarning, Trash2, X } from "lucide-react";
 import { InstructionsViewer } from "@/components/instructions-viewer";
 import styles from "./page.module.css";
 
@@ -36,6 +36,12 @@ type StreamEvent =
   | { type: "final"; message: string }
   | { type: "error"; message: string };
 
+type ChatRunFeedback = {
+  state: "idle" | "connecting" | "running" | "done" | "error";
+  label: string;
+  details: string[];
+};
+
 export default function Home() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectDetail | null>(null);
@@ -51,6 +57,11 @@ export default function Home() {
   const [isCreating, setIsCreating] = useState(false);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [runFeedback, setRunFeedback] = useState<ChatRunFeedback>({
+    state: "idle",
+    label: "Ready",
+    details: []
+  });
   const [error, setError] = useState("");
   const decoderRef = useRef(new TextDecoder());
 
@@ -81,6 +92,7 @@ export default function Home() {
       setMessages([]);
       setInput("");
       setError("");
+      setRunFeedback({ state: "idle", label: "Ready", details: [] });
     }
 
     window.addEventListener("popstate", handlePopState);
@@ -174,6 +186,7 @@ export default function Home() {
     setActiveProject(null);
     setMessages([]);
     setInput("");
+    setRunFeedback({ state: "idle", label: "Ready", details: [] });
     window.history.pushState(null, "", "/dashboard");
   }
 
@@ -283,6 +296,11 @@ export default function Home() {
     setInput("");
     setIsRunning(true);
     setError("");
+    setRunFeedback({
+      state: "connecting",
+      label: "Connecting to Codex",
+      details: ["Queued your edit request."]
+    });
 
     try {
       const response = await fetch("/api/chat", {
@@ -330,6 +348,11 @@ export default function Home() {
         )
       );
       setError(message);
+      setRunFeedback((current) => ({
+        state: "error",
+        label: "Codex stopped",
+        details: appendRunDetail(current.details, message)
+      }));
     } finally {
       setIsRunning(false);
     }
@@ -351,10 +374,20 @@ export default function Home() {
       setActiveProject((current) =>
         current ? { ...current, codexThreadId: eventData.sessionId } : current
       );
+      setRunFeedback((current) => ({
+        state: current.state === "connecting" ? "running" : current.state,
+        label: current.state === "connecting" ? "Codex is working" : current.label,
+        details: appendRunDetail(current.details, "Session connected.")
+      }));
       return;
     }
 
     if (eventData.type === "status") {
+      setRunFeedback((current) => ({
+        state: "running",
+        label: eventData.message,
+        details: appendRunDetail(current.details, eventData.message)
+      }));
       setMessages((current) =>
         current.map((item) =>
           item.id === assistantId ? { ...item, content: eventData.message, status: "running" } : item
@@ -364,6 +397,11 @@ export default function Home() {
     }
 
     if (eventData.type === "final") {
+      setRunFeedback((current) => ({
+        state: "done",
+        label: "Changes saved",
+        details: appendRunDetail(current.details, "Codex finished updating the project.")
+      }));
       setMessages((current) =>
         current.map((item) =>
           item.id === assistantId ? { ...item, content: eventData.message, status: "done" } : item
@@ -372,6 +410,11 @@ export default function Home() {
       return;
     }
 
+    setRunFeedback((current) => ({
+      state: "error",
+      label: "Codex stopped",
+      details: appendRunDetail(current.details, eventData.message)
+    }));
     setMessages((current) =>
       current.map((item) =>
         item.id === assistantId ? { ...item, content: eventData.message, status: "error" } : item
@@ -432,6 +475,7 @@ export default function Home() {
           messages={messages}
           onInputChange={setInput}
           onSubmit={handleSubmit}
+          runFeedback={runFeedback}
         />
       ) : (
         <ProjectDashboard
@@ -673,7 +717,8 @@ function ProjectChat({
   isRunning,
   messages,
   onInputChange,
-  onSubmit
+  onSubmit,
+  runFeedback
 }: {
   canSubmit: boolean;
   input: string;
@@ -681,8 +726,10 @@ function ProjectChat({
   messages: ChatMessage[];
   onInputChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  runFeedback: ChatRunFeedback;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const showFeedback = runFeedback.state !== "idle";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
@@ -708,6 +755,8 @@ function ProjectChat({
         <div ref={messagesEndRef} />
       </div>
 
+      {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
+
       <form className={styles.composer} onSubmit={onSubmit}>
         <textarea
           aria-label="Message Codex"
@@ -728,6 +777,40 @@ function ProjectChat({
       </form>
     </section>
   );
+}
+
+function RunFeedback({ feedback }: { feedback: ChatRunFeedback }) {
+  const Icon =
+    feedback.state === "error"
+      ? MessageSquareWarning
+      : feedback.state === "done"
+        ? CheckCircle2
+        : LoaderCircle;
+
+  return (
+    <section className={`${styles.runFeedback} ${styles[feedback.state]}`} aria-live="polite">
+      <div className={styles.runFeedbackHeader}>
+        <Icon aria-hidden="true" className={feedback.state === "running" || feedback.state === "connecting" ? styles.spin : undefined} />
+        <span>{feedback.label}</span>
+      </div>
+      {feedback.details.length > 0 ? (
+        <ol>
+          {feedback.details.map((detail, index) => (
+            <li key={`${detail}-${index}`}>{detail}</li>
+          ))}
+        </ol>
+      ) : null}
+    </section>
+  );
+}
+
+function appendRunDetail(details: string[], detail: string) {
+  const trimmedDetail = detail.trim();
+  if (!trimmedDetail || details.at(-1) === trimmedDetail) {
+    return details;
+  }
+
+  return [...details, trimmedDetail].slice(-4);
 }
 
 function formatUpdatedAt(value: string) {

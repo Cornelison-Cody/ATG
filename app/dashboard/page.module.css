@@ -337,6 +337,64 @@
   color: var(--danger);
 }
 
+.runFeedback {
+  background: rgba(7, 9, 13, 0.72);
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.runFeedbackHeader {
+  align-items: center;
+  color: var(--text);
+  display: flex;
+  font-size: 0.86rem;
+  font-weight: 850;
+  gap: 10px;
+}
+
+.runFeedbackHeader svg {
+  color: var(--accent);
+  flex: 0 0 auto;
+  height: 18px;
+  width: 18px;
+}
+
+.runFeedback ol {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.84rem;
+  gap: 6px;
+  line-height: 1.35;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 28px;
+}
+
+.runFeedback li {
+  overflow-wrap: anywhere;
+}
+
+.connecting .runFeedbackHeader svg,
+.running .runFeedbackHeader svg {
+  color: var(--accent);
+}
+
+.done .runFeedbackHeader svg {
+  color: #8ee9b3;
+}
+
+.error .runFeedbackHeader,
+.error .runFeedbackHeader svg,
+.error ol {
+  color: var(--danger);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
 .composer {
   background: rgba(7, 9, 13, 0.72);
   border-top: 1px solid var(--line);
@@ -360,6 +418,12 @@
 .composer button {
   align-self: end;
   min-width: 112px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .modalOverlay {
