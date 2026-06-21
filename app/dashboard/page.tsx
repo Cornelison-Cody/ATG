@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, LoaderCircle, Menu, MessageSquareWarning, Trash2, X } from "lucide-react";
+import { CheckCircle2, LoaderCircle, Menu, MessageSquareWarning, Pencil, Trash2, X } from "lucide-react";
 import { InstructionsViewer } from "@/components/instructions-viewer";
 import styles from "./page.module.css";
 
@@ -591,24 +591,25 @@ function ProjectDashboard({
         ) : null}
         {projects.map((project) => (
           <div className={styles.projectCardShell} key={project.id}>
-            <article
-              aria-label={`Open ${project.name}`}
+            <a
+              aria-label={`Open ${project.name} on TV`}
               className={styles.projectCard}
-              onClick={() => onOpenProject(project.id)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onOpenProject(project.id);
-                }
-              }}
-              role="button"
-              tabIndex={0}
+              href={`/tv/${project.id}`}
             >
               <div>
                 <h2>{project.name}</h2>
                 <span>{formatUpdatedAt(project.updatedAt)}</span>
               </div>
-            </article>
+            </a>
+            <button
+              aria-label={`Edit ${project.name}`}
+              className={styles.editButton}
+              onClick={() => onOpenProject(project.id)}
+              title="Edit project"
+              type="button"
+            >
+              <Pencil aria-hidden="true" />
+            </button>
             <button
               aria-label={`Delete ${project.name}`}
               className={styles.trashButton}
