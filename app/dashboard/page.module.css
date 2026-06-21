@@ -217,11 +217,13 @@
   background: rgba(16, 21, 31, 0.82);
   border: 1px solid var(--line);
   border-radius: 8px;
+  color: var(--text);
   cursor: pointer;
   display: grid;
   height: 100%;
   min-height: 160px;
   padding: 18px 74px 18px 18px;
+  text-decoration: none;
   transition:
     background 160ms ease,
     border-color 160ms ease,
@@ -243,27 +245,52 @@
   font-size: 0.86rem;
 }
 
+.projectCardActions {
+  display: grid;
+  gap: 10px;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+}
+
+.editButton,
 .trashButton {
   align-items: center;
-  background: rgba(255, 107, 122, 0.12);
-  border: 1px solid rgba(255, 107, 122, 0.4);
   border-radius: 8px;
-  color: var(--danger);
   display: inline-flex;
   height: 40px;
   justify-content: center;
   padding: 0;
-  position: absolute;
-  right: 14px;
-  top: 14px;
   width: 40px;
 }
 
-.trashButton:hover {
-  background: rgba(255, 107, 122, 0.2);
-  border-color: rgba(255, 107, 122, 0.7);
+.editButton {
+  background: rgba(77, 214, 201, 0.12);
+  border: 1px solid rgba(77, 214, 201, 0.4);
+  color: var(--accent);
 }
 
+.editButton:hover,
+.editButton:focus-visible {
+  background: rgba(77, 214, 201, 0.2);
+  border-color: rgba(77, 214, 201, 0.7);
+  outline: none;
+}
+
+.trashButton {
+  background: rgba(255, 107, 122, 0.12);
+  border: 1px solid rgba(255, 107, 122, 0.4);
+  color: var(--danger);
+}
+
+.trashButton:hover,
+.trashButton:focus-visible {
+  background: rgba(255, 107, 122, 0.2);
+  border-color: rgba(255, 107, 122, 0.7);
+  outline: none;
+}
+
+.editButton svg,
 .trashButton svg {
   height: 21px;
   stroke: currentColor;
