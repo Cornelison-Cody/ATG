@@ -284,6 +284,15 @@
   overflow: hidden;
 }
 
+.emptyChatPanel {
+  align-self: start;
+  grid-template-rows: auto;
+}
+
+.emptyChatPanel .composer {
+  border-top: 0;
+}
+
 .messages {
   display: flex;
   flex-direction: column;

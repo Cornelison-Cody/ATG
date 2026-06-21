@@ -763,24 +763,29 @@ function ProjectChat({
   }, [messages]);
 
   return (
-    <section className={styles.chatPanel} aria-label="Project chat">
-      <div className={styles.messages}>
-        {messages.map((message) => (
-          <article
-            className={`${styles.message} ${styles[message.role]} ${
-              message.status === "error" ? styles.error : ""
-            }`}
-            key={message.id}
-          >
-            <div className={styles.messageMeta}>
-              <span>{message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}</span>
-              {message.status === "running" ? <span>Running</span> : null}
-            </div>
-            <p>{message.content}</p>
-          </article>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
+    <section
+      className={`${styles.chatPanel} ${messages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
+      aria-label="Project chat"
+    >
+      {messages.length > 0 ? (
+        <div className={styles.messages}>
+          {messages.map((message) => (
+            <article
+              className={`${styles.message} ${styles[message.role]} ${
+                message.status === "error" ? styles.error : ""
+              }`}
+              key={message.id}
+            >
+              <div className={styles.messageMeta}>
+                <span>{message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}</span>
+                {message.status === "running" ? <span>Running</span> : null}
+              </div>
+              <p>{message.content}</p>
+            </article>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+      ) : null}
 
       {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
 
