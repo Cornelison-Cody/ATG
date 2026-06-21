@@ -217,13 +217,32 @@
 }
 
 .joinForm > button {
-  background: var(--accent);
+  background: var(--join-color, var(--accent));
   border: 0;
   border-radius: 8px;
-  color: #04110f;
+  color: var(--join-text-color, #04110f);
   font-size: 1.15rem;
   font-weight: 900;
   min-height: 54px;
+  transition:
+    box-shadow 160ms ease,
+    filter 160ms ease,
+    transform 160ms ease;
+}
+
+.joinForm > button:hover,
+.joinForm > button:focus-visible {
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--join-color, var(--accent)) 22%, transparent);
+  filter: brightness(1.05);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.joinForm > button:disabled {
+  cursor: not-allowed;
+  filter: saturate(0.45);
+  opacity: 0.58;
+  transform: none;
 }
 
 .modalOverlay {

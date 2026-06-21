@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { type CSSProperties, FormEvent, useEffect, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { DEFAULT_GAME_CONFIG, GameSocketMessage, GameState, JoinInfo } from "@/lib/game-types";
 import { InstructionsViewer } from "@/components/instructions-viewer";
@@ -18,6 +18,10 @@ const EMPTY_STATE: GameState = {
 };
 
 type PageParams = Promise<{ projectId: string }>;
+type JoinColorStyle = CSSProperties & {
+  "--join-color": string;
+  "--join-text-color": string;
+};
 
 export default function JoinPage({ params }: { params: PageParams }) {
   const [projectId, setProjectId] = useState("");
@@ -308,6 +312,11 @@ export default function JoinPage({ params }: { params: PageParams }) {
     );
   }
 
+  const joinColorStyle: JoinColorStyle = {
+    "--join-color": color,
+    "--join-text-color": getReadableTextColor(color)
+  };
+
   return (
     <main className={styles.shell}>
       <section className={styles.card}>
@@ -334,7 +343,7 @@ export default function JoinPage({ params }: { params: PageParams }) {
               />
             ))}
           </div>
-          <button disabled={!name.trim() || !joinInfo} type="submit">
+          <button disabled={!name.trim() || !joinInfo} style={joinColorStyle} type="submit">
             Join
           </button>
         </form>
@@ -382,4 +391,18 @@ function writeStoredValue(key: string, value: string) {
   } catch {
     // Private browsing modes can deny storage; the in-memory React state still works for this visit.
   }
+}
+
+function getReadableTextColor(hexColor: string) {
+  const hex = hexColor.replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(hex)) {
+    return "#04110f";
+  }
+
+  const red = Number.parseInt(hex.slice(0, 2), 16);
+  const green = Number.parseInt(hex.slice(2, 4), 16);
+  const blue = Number.parseInt(hex.slice(4, 6), 16);
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+
+  return luminance > 0.62 ? "#04110f" : "#ffffff";
 }
