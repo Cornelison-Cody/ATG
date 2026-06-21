@@ -9,10 +9,10 @@ export type GameConfig = {
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
   accentColor: "#4dd6c9",
-  buzzLabel: "Buzz",
-  initialPrompt: "Tap buzz when you know the answer.",
-  promptLabel: "Prompt",
-  resetLabel: "Reset Buzzes",
+  buzzLabel: "",
+  initialPrompt: "",
+  promptLabel: "",
+  resetLabel: "",
   title: "Buzzer Lobby"
 };
 

@@ -107,6 +107,10 @@
   padding: 12px;
 }
 
+.fullGameGrid {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .promptPanel,
 .gameFramePanel,
 .errorPanel {
