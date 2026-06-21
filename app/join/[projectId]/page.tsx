@@ -18,8 +18,9 @@ const EMPTY_STATE: GameState = {
 };
 
 type PageParams = Promise<{ projectId: string }>;
-type JoinColorStyle = CSSProperties & {
-  "--join-color": string;
+type PlayerAccentStyle = CSSProperties & {
+  "--accent": string;
+  "--accent-strong": string;
   "--join-text-color": string;
 };
 
@@ -238,7 +239,7 @@ export default function JoinPage({ params }: { params: PageParams }) {
 
   if (hasJoined) {
     return (
-      <main className={styles.phoneShell}>
+      <main className={styles.phoneShell} style={getPlayerAccentStyle(color)}>
         <header className={styles.phoneHeader}>
           <h1>{joinInfo?.project.name ?? "Game"}</h1>
           <div className={styles.headerActions}>
@@ -312,13 +313,8 @@ export default function JoinPage({ params }: { params: PageParams }) {
     );
   }
 
-  const joinColorStyle: JoinColorStyle = {
-    "--join-color": color,
-    "--join-text-color": getReadableTextColor(color)
-  };
-
   return (
-    <main className={styles.shell}>
+    <main className={styles.shell} style={getPlayerAccentStyle(color)}>
       <section className={styles.card}>
         <p className={styles.kicker}>Azure Tides Gaming</p>
         <h1>{joinInfo?.project.name ?? "Join Game"}</h1>
@@ -343,7 +339,7 @@ export default function JoinPage({ params }: { params: PageParams }) {
               />
             ))}
           </div>
-          <button disabled={!name.trim() || !joinInfo} style={joinColorStyle} type="submit">
+          <button disabled={!name.trim() || !joinInfo} type="submit">
             Join
           </button>
         </form>
@@ -391,6 +387,14 @@ function writeStoredValue(key: string, value: string) {
   } catch {
     // Private browsing modes can deny storage; the in-memory React state still works for this visit.
   }
+}
+
+function getPlayerAccentStyle(color: string): PlayerAccentStyle {
+  return {
+    "--accent": color,
+    "--accent-strong": color,
+    "--join-text-color": getReadableTextColor(color)
+  };
 }
 
 function getReadableTextColor(hexColor: string) {
