@@ -29,6 +29,7 @@ interface ProjectStore {
   readGameConfig(project: ProjectRecord): Promise<GameConfig>;
   updateGameConfig(project: ProjectRecord, patch: unknown): Promise<GameConfig>;
   readGameInstructions(project: ProjectRecord): Promise<string>;
+  updateGameInstructions(project: ProjectRecord, instructions: string): Promise<string>;
   readGameAsset(project: ProjectRecord, segments: string[]): Promise<GameAsset>;
 }
 
@@ -145,6 +146,13 @@ class LocalProjectStore implements ProjectStore {
   async readGameInstructions(project: ProjectRecord) {
     await this.ensureGameFiles(project);
     return readFile(path.join(getGamePath(project), GAME_INSTRUCTIONS_FILE), "utf8");
+  }
+
+  async updateGameInstructions(project: ProjectRecord, instructions: string) {
+    const next = normalizeGameInstructions(instructions);
+    await this.ensureGameFiles(project);
+    await writeFile(path.join(getGamePath(project), GAME_INSTRUCTIONS_FILE), next, "utf8");
+    return next;
   }
 
   async readGameAsset(project: ProjectRecord, segments: string[]) {
@@ -292,6 +300,17 @@ class AzureProjectStore implements ProjectStore {
     return this.readTextBlob(blobName(project, `${GAME_DIR}/${GAME_INSTRUCTIONS_FILE}`));
   }
 
+  async updateGameInstructions(project: ProjectRecord, instructions: string) {
+    const next = normalizeGameInstructions(instructions);
+    await this.ensureGameFiles(project);
+    await this.writeBlob(
+      blobName(project, `${GAME_DIR}/${GAME_INSTRUCTIONS_FILE}`),
+      next,
+      "text/markdown; charset=utf-8"
+    );
+    return next;
+  }
+
   async readGameAsset(project: ProjectRecord, segments: string[]) {
     const assetPath = normalizeGameAssetPath(segments);
     await this.ensureGameFiles(project);
@@ -396,7 +415,7 @@ function buildNewProject(name: string, slug: string, pathForSlug: (slug: string)
       {
         id: randomUUID(),
         role: "system",
-        content: `${trimmedName} is a sandboxed ATG game project. Codex can update files in this workspace. Customize the live TV and phone gameplay by editing game/tv.html, game/phone.html, game/styles.css, game/game.js, and game/config.json. Keep QR joining, phone player identity, color selection, connection state, menus, and room plumbing in the ATG platform shell unless the user explicitly asks for platform changes.`,
+        content: `${trimmedName} is a sandboxed ATG game project. Codex can update files in this workspace. Customize the live TV and phone gameplay by editing game/tv.html, game/phone.html, game/styles.css, game/game.js, game/config.json, and game/instructions.md. Keep QR joining, phone player identity, color selection, connection state, menus, and room plumbing in the ATG platform shell unless the user explicitly asks for platform changes.`,
         status: "done",
         createdAt: now
       }
@@ -405,7 +424,7 @@ function buildNewProject(name: string, slug: string, pathForSlug: (slug: string)
 }
 
 function renderReadme(project: ProjectRecord) {
-  return `# ${project.name}\n\nA sandboxed Azure Tides Gaming game workspace. Customize the live TV and phone gameplay by editing \`game/tv.html\`, \`game/phone.html\`, \`game/styles.css\`, \`game/game.js\`, and \`game/config.json\`. The ATG platform owns QR joining, phone player identity, color selection, connection state, menus, and room plumbing.\n`;
+  return `# ${project.name}\n\nA sandboxed Azure Tides Gaming game workspace. Customize the live TV and phone gameplay by editing \`game/tv.html\`, \`game/phone.html\`, \`game/styles.css\`, \`game/game.js\`, \`game/config.json\`, and \`game/instructions.md\`. The ATG platform owns QR joining, phone player identity, color selection, connection state, menus, and room plumbing.\n`;
 }
 
 const TEMPLATE_FILES: Record<string, (project: ProjectRecord) => string> = {
@@ -631,6 +650,23 @@ function normalizeGameConfig(config: Partial<GameConfig>): GameConfig {
 function normalizeText(value: unknown, fallback: string, maxLength: number) {
   const text = typeof value === "string" ? value.trim() : "";
   return (text || fallback).slice(0, maxLength);
+}
+
+function normalizeGameInstructions(value: unknown) {
+  if (typeof value !== "string") {
+    throw new ProjectStoreError("Instructions are required.", 400);
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new ProjectStoreError("Instructions cannot be empty.", 400);
+  }
+
+  if (value.length > 100_000) {
+    throw new ProjectStoreError("Instructions must be 100,000 characters or fewer.", 400);
+  }
+
+  return `${value.replace(/\r\n?/g, "\n").trimEnd()}\n`;
 }
 
 function normalizeColor(value: unknown, fallback: string) {

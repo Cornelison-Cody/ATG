@@ -19,6 +19,10 @@ export async function readGameInstructions(project: ProjectRecord) {
   return getProjectStore().readGameInstructions(project);
 }
 
+export async function updateGameInstructions(project: ProjectRecord, instructions: string) {
+  return getProjectStore().updateGameInstructions(project, instructions);
+}
+
 export async function readGameAsset(project: ProjectRecord, segments: string[]) {
   return getProjectStore().readGameAsset(project, segments);
 }
