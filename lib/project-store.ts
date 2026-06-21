@@ -453,9 +453,6 @@ body {
 }
 
 .panel {
-  background: rgba(7, 9, 13, 0.72);
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 8px;
   display: grid;
   gap: 18px;
   min-height: 100vh;
@@ -510,28 +507,8 @@ p {
   document.documentElement.style.setProperty("--game-accent", config.accentColor || "#4dd6c9");
 }
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 window.ATG.onState((state) => {
   applyAccent(state.config || {});
-
-  const title = byId("game-title");
-  if (title) {
-    title.textContent = state.config?.title || state.project?.name || "Game";
-  }
-
-  const players = byId("players");
-  if (players) {
-    players.innerHTML = "";
-    for (const player of state.players || []) {
-      const item = document.createElement("div");
-      item.className = "pill";
-      item.textContent = player.connected ? player.name : player.name + " (away)";
-      players.append(item);
-    }
-  }
 });
 `,
   "phone.html": () => `<!doctype html>
@@ -543,9 +520,7 @@ window.ATG.onState((state) => {
     <script src="./game.js" defer></script>
   </head>
   <body class="phone-ui">
-    <main class="panel phone-panel">
-      <h1 id="game-title">Game</h1>
-    </main>
+    <main class="panel phone-panel"></main>
   </body>
 </html>
 `,
@@ -558,13 +533,7 @@ window.ATG.onState((state) => {
     <script src="./game.js" defer></script>
   </head>
   <body>
-    <main class="panel">
-      <h1 id="game-title">Game</h1>
-      <section>
-        <h2>Players</h2>
-        <div id="players" class="list"></div>
-      </section>
-    </main>
+    <main class="panel"></main>
   </body>
 </html>
 `
