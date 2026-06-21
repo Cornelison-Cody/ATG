@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Menu, Trash2, X } from "lucide-react";
+import { CheckCircle2, LoaderCircle, Menu, MessageSquareWarning, Trash2, X } from "lucide-react";
 import { InstructionsViewer } from "@/components/instructions-viewer";
 import styles from "./page.module.css";
 
@@ -36,6 +36,30 @@ type StreamEvent =
   | { type: "final"; message: string }
   | { type: "error"; message: string };
 
+type ChatRunFeedback = {
+  state: "idle" | "connecting" | "running" | "done" | "error";
+  label: string;
+  details: string[];
+  lastUpdateAt: string | null;
+  startedAt: string | null;
+};
+
+const idleRunFeedback: ChatRunFeedback = {
+  state: "idle",
+  label: "Ready",
+  details: [],
+  lastUpdateAt: null,
+  startedAt: null
+};
+
+const quietRunSteps = [
+  "Reviewing the request and project files.",
+  "Planning the safest edit path.",
+  "Applying changes in the project sandbox.",
+  "Checking the result for errors.",
+  "Preparing the final response."
+];
+
 export default function Home() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectDetail | null>(null);
@@ -51,6 +75,7 @@ export default function Home() {
   const [isCreating, setIsCreating] = useState(false);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [runFeedback, setRunFeedback] = useState<ChatRunFeedback>(idleRunFeedback);
   const [error, setError] = useState("");
   const decoderRef = useRef(new TextDecoder());
 
@@ -81,6 +106,7 @@ export default function Home() {
       setMessages([]);
       setInput("");
       setError("");
+      setRunFeedback(idleRunFeedback);
     }
 
     window.addEventListener("popstate", handlePopState);
@@ -174,6 +200,7 @@ export default function Home() {
     setActiveProject(null);
     setMessages([]);
     setInput("");
+    setRunFeedback(idleRunFeedback);
     window.history.pushState(null, "", "/dashboard");
   }
 
@@ -283,6 +310,14 @@ export default function Home() {
     setInput("");
     setIsRunning(true);
     setError("");
+    const now = new Date().toISOString();
+    setRunFeedback({
+      state: "connecting",
+      label: "Connecting to Codex",
+      details: ["Queued your edit request."],
+      lastUpdateAt: now,
+      startedAt: now
+    });
 
     try {
       const response = await fetch("/api/chat", {
@@ -330,6 +365,13 @@ export default function Home() {
         )
       );
       setError(message);
+      setRunFeedback((current) => ({
+        state: "error",
+        label: "Codex stopped",
+        details: appendRunDetail(current.details, message),
+        lastUpdateAt: new Date().toISOString(),
+        startedAt: current.startedAt
+      }));
     } finally {
       setIsRunning(false);
     }
@@ -351,10 +393,24 @@ export default function Home() {
       setActiveProject((current) =>
         current ? { ...current, codexThreadId: eventData.sessionId } : current
       );
+      setRunFeedback((current) => ({
+        state: current.state === "connecting" ? "running" : current.state,
+        label: current.state === "connecting" ? "Codex is working" : current.label,
+        details: appendRunDetail(current.details, "Session connected."),
+        lastUpdateAt: new Date().toISOString(),
+        startedAt: current.startedAt
+      }));
       return;
     }
 
     if (eventData.type === "status") {
+      setRunFeedback((current) => ({
+        state: "running",
+        label: eventData.message,
+        details: appendRunDetail(current.details, eventData.message),
+        lastUpdateAt: new Date().toISOString(),
+        startedAt: current.startedAt
+      }));
       setMessages((current) =>
         current.map((item) =>
           item.id === assistantId ? { ...item, content: eventData.message, status: "running" } : item
@@ -364,6 +420,13 @@ export default function Home() {
     }
 
     if (eventData.type === "final") {
+      setRunFeedback((current) => ({
+        state: "done",
+        label: "Changes saved",
+        details: appendRunDetail(current.details, "Codex finished updating the project."),
+        lastUpdateAt: new Date().toISOString(),
+        startedAt: current.startedAt
+      }));
       setMessages((current) =>
         current.map((item) =>
           item.id === assistantId ? { ...item, content: eventData.message, status: "done" } : item
@@ -372,6 +435,13 @@ export default function Home() {
       return;
     }
 
+    setRunFeedback((current) => ({
+      state: "error",
+      label: "Codex stopped",
+      details: appendRunDetail(current.details, eventData.message),
+      lastUpdateAt: new Date().toISOString(),
+      startedAt: current.startedAt
+    }));
     setMessages((current) =>
       current.map((item) =>
         item.id === assistantId ? { ...item, content: eventData.message, status: "error" } : item
@@ -432,6 +502,7 @@ export default function Home() {
           messages={messages}
           onInputChange={setInput}
           onSubmit={handleSubmit}
+          runFeedback={runFeedback}
         />
       ) : (
         <ProjectDashboard
@@ -673,7 +744,8 @@ function ProjectChat({
   isRunning,
   messages,
   onInputChange,
-  onSubmit
+  onSubmit,
+  runFeedback
 }: {
   canSubmit: boolean;
   input: string;
@@ -681,8 +753,10 @@ function ProjectChat({
   messages: ChatMessage[];
   onInputChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  runFeedback: ChatRunFeedback;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const showFeedback = runFeedback.state !== "idle";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
@@ -708,6 +782,8 @@ function ProjectChat({
         <div ref={messagesEndRef} />
       </div>
 
+      {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
+
       <form className={styles.composer} onSubmit={onSubmit}>
         <textarea
           aria-label="Message Codex"
@@ -728,6 +804,75 @@ function ProjectChat({
       </form>
     </section>
   );
+}
+
+function RunFeedback({ feedback }: { feedback: ChatRunFeedback }) {
+  const [now, setNow] = useState(() => Date.now());
+  const Icon =
+    feedback.state === "error"
+      ? MessageSquareWarning
+      : feedback.state === "done"
+        ? CheckCircle2
+        : LoaderCircle;
+  const startedAt = feedback.startedAt ? new Date(feedback.startedAt).getTime() : null;
+  const lastUpdateAt = feedback.lastUpdateAt ? new Date(feedback.lastUpdateAt).getTime() : null;
+  const elapsedSeconds = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+  const quietSeconds = lastUpdateAt ? Math.max(0, Math.floor((now - lastUpdateAt) / 1000)) : 0;
+  const quietStep = quietRunSteps[Math.min(quietRunSteps.length - 1, Math.floor(elapsedSeconds / 30))];
+  const isActive = feedback.state === "running" || feedback.state === "connecting";
+
+  useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [isActive]);
+
+  return (
+    <section className={`${styles.runFeedback} ${styles[feedback.state]}`} aria-live="polite">
+      <div className={styles.runFeedbackHeader}>
+        <Icon aria-hidden="true" className={feedback.state === "running" || feedback.state === "connecting" ? styles.spin : undefined} />
+        <div>
+          <span>{feedback.label}</span>
+          {startedAt ? (
+            <span className={styles.runFeedbackMeta}>
+              {formatDuration(elapsedSeconds)} elapsed
+              {isActive && quietSeconds >= 10 ? ` · ${formatDuration(quietSeconds)} since the last Codex update` : ""}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      {isActive ? <p className={styles.quietStep}>{quietStep}</p> : null}
+      {feedback.details.length > 0 ? (
+        <ol>
+          {feedback.details.map((detail, index) => (
+            <li key={`${detail}-${index}`}>{detail}</li>
+          ))}
+        </ol>
+      ) : null}
+    </section>
+  );
+}
+
+function appendRunDetail(details: string[], detail: string) {
+  const trimmedDetail = detail.trim();
+  if (!trimmedDetail || details.at(-1) === trimmedDetail) {
+    return details;
+  }
+
+  return [...details, trimmedDetail].slice(-4);
+}
+
+function formatDuration(totalSeconds: number) {
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
 }
 
 function formatUpdatedAt(value: string) {
