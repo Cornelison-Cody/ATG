@@ -239,6 +239,8 @@ export default function TVPage({ params }: { params: PageParams }) {
   const promptLabel = joinInfo?.config.promptLabel.trim() ?? "";
   const resetLabel = joinInfo?.config.resetLabel.trim() ?? "";
   const showPromptControls = Boolean(promptLabel || resetLabel);
+  const editorHref = `/dashboard?project=${encodeURIComponent(projectId)}`;
+  const joinHref = `/join/${encodeURIComponent(projectId)}`;
 
   if (error) {
     return (
@@ -266,6 +268,15 @@ export default function TVPage({ params }: { params: PageParams }) {
           </button>
           {isMenuOpen ? (
             <div className={styles.menu} role="menu">
+              <a href="/dashboard" role="menuitem">
+                Dashboard
+              </a>
+              <a href={editorHref} role="menuitem">
+                Edit Project
+              </a>
+              <a href={joinHref} role="menuitem">
+                Open Phone
+              </a>
               <button onClick={openJoinModal} role="menuitem" type="button">
                 Show Join QR
               </button>
@@ -275,9 +286,6 @@ export default function TVPage({ params }: { params: PageParams }) {
               <button onClick={openInstructionsModal} role="menuitem" type="button">
                 Instructions
               </button>
-              <a href={projectId ? `/?project=${encodeURIComponent(projectId)}` : "/"} role="menuitem">
-                Back to Editor
-              </a>
             </div>
           ) : null}
         </div>

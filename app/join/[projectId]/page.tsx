@@ -42,6 +42,8 @@ export default function JoinPage({ params }: { params: PageParams }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const projectHref = projectId ? `/dashboard?project=${encodeURIComponent(projectId)}` : "/dashboard";
+  const tvHref = projectId ? `/tv/${encodeURIComponent(projectId)}` : "/dashboard";
 
   useEffect(() => {
     void Promise.resolve(params).then(({ projectId: nextProjectId }) => setProjectId(nextProjectId));
@@ -296,6 +298,15 @@ export default function JoinPage({ params }: { params: PageParams }) {
                 <button onClick={changePlayer} role="menuitem" type="button">
                   Change Player
                 </button>
+                <a href="/dashboard" role="menuitem">
+                  Dashboard
+                </a>
+                <a href={projectHref} role="menuitem">
+                  Edit Project
+                </a>
+                <a href={tvHref} role="menuitem">
+                  Open TV
+                </a>
                 <button onClick={openInstructions} role="menuitem" type="button">
                   Instructions
                 </button>
@@ -348,7 +359,36 @@ export default function JoinPage({ params }: { params: PageParams }) {
   return (
     <main className={styles.shell} style={getPlayerAccentStyle(color)}>
       <section className={styles.card}>
-        <h1 className={styles.kicker}>{joinInfo?.project.name ?? "Join Game"}</h1>
+        <div className={styles.cardHeader}>
+          <h1 className={styles.kicker}>{joinInfo?.project.name ?? "Join Game"}</h1>
+          <div className={styles.headerActions}>
+            <button
+              aria-expanded={isMenuOpen}
+              aria-label="Open game menu"
+              className={styles.menuButton}
+              onClick={() => setIsMenuOpen((current) => !current)}
+              type="button"
+            >
+              <Menu aria-hidden="true" />
+            </button>
+            {isMenuOpen ? (
+              <div className={styles.menu} role="menu">
+                <a href="/dashboard" role="menuitem">
+                  Dashboard
+                </a>
+                <a href={projectHref} role="menuitem">
+                  Edit Project
+                </a>
+                <a href={tvHref} role="menuitem">
+                  Open TV
+                </a>
+                <button onClick={openInstructions} role="menuitem" type="button">
+                  Instructions
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
 
         <form className={styles.joinForm} onSubmit={joinGame} suppressHydrationWarning>
           <input

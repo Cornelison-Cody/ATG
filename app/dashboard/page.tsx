@@ -486,7 +486,7 @@ export default function Home() {
                   Instructions
                 </button>
                 <button onClick={returnToProjects} role="menuitem" type="button">
-                  Go Home
+                  Dashboard
                 </button>
               </div>
             ) : null}
