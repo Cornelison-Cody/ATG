@@ -411,15 +411,7 @@ function buildNewProject(name: string, slug: string, pathForSlug: (slug: string)
     status: "active",
     createdAt: now,
     updatedAt: now,
-    messages: [
-      {
-        id: randomUUID(),
-        role: "system",
-        content: `${trimmedName} is a sandboxed ATG game project. Codex can update files in this workspace. Customize the live TV and phone gameplay by editing game/tv.html, game/phone.html, game/styles.css, game/game.js, game/config.json, and game/instructions.md. Keep QR joining, phone player identity, color selection, connection state, menus, and room plumbing in the ATG platform shell unless the user explicitly asks for platform changes.`,
-        status: "done",
-        createdAt: now
-      }
-    ]
+    messages: []
   };
 }
 
