@@ -73,8 +73,10 @@ export default function Home() {
   const [isSavingInstructions, setIsSavingInstructions] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [projectPendingDelete, setProjectPendingDelete] = useState<ProjectSummary | null>(null);
   const [runFeedback, setRunFeedback] = useState<ChatRunFeedback>(idleRunFeedback);
   const [error, setError] = useState("");
   const decoderRef = useRef(new TextDecoder());
@@ -257,12 +259,13 @@ export default function Home() {
     }
   }
 
-  async function deleteProject(project: ProjectSummary) {
-    const confirmed = window.confirm(`Delete "${project.name}" from ATG? Its folder will move to local trash.`);
-    if (!confirmed) {
+  async function deleteProject() {
+    if (!projectPendingDelete || isDeleting) {
       return;
     }
 
+    const project = projectPendingDelete;
+    setIsDeleting(true);
     setError("");
 
     try {
@@ -277,8 +280,11 @@ export default function Home() {
       if (activeProject?.id === project.id) {
         returnToProjects();
       }
+      setProjectPendingDelete(null);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Unable to delete project.");
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -507,7 +513,7 @@ export default function Home() {
       ) : (
         <ProjectDashboard
           isLoadingProjects={isLoadingProjects}
-          onDeleteProject={deleteProject}
+          onDeleteProject={setProjectPendingDelete}
           onCreateProject={() => setIsCreateModalOpen(true)}
           onOpenProject={openProject}
           projects={projects}
@@ -527,6 +533,19 @@ export default function Home() {
           }}
           onCreateProject={handleCreateProject}
           onNameChange={setNewProjectName}
+        />
+      ) : null}
+
+      {projectPendingDelete ? (
+        <DeleteProjectModal
+          isDeleting={isDeleting}
+          onCancel={() => {
+            if (!isDeleting) {
+              setProjectPendingDelete(null);
+            }
+          }}
+          onConfirm={deleteProject}
+          project={projectPendingDelete}
         />
       ) : null}
 
@@ -603,6 +622,50 @@ function ProjectDashboard({
         ))}
       </section>
     </section>
+  );
+}
+
+function DeleteProjectModal({
+  isDeleting,
+  onCancel,
+  onConfirm,
+  project
+}: {
+  isDeleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  project: ProjectSummary;
+}) {
+  return (
+    <div className={styles.modalOverlay} role="presentation">
+      <section aria-labelledby="delete-project-title" className={`${styles.modal} ${styles.confirmModal}`}>
+        <div className={styles.modalHeader}>
+          <h2 id="delete-project-title">Delete Game</h2>
+          <button
+            aria-label="Close delete confirmation"
+            className={styles.closeButton}
+            disabled={isDeleting}
+            onClick={onCancel}
+            type="button"
+          >
+            <X aria-hidden="true" />
+          </button>
+        </div>
+        <div className={styles.modalBody}>
+          <p className={styles.confirmText}>
+            Delete <strong>{project.name}</strong> from ATG? Its folder will move to local trash.
+          </p>
+        </div>
+        <div className={styles.modalFooter}>
+          <button className={styles.secondaryButton} disabled={isDeleting} onClick={onCancel} type="button">
+            Cancel
+          </button>
+          <button className={styles.dangerButton} disabled={isDeleting} onClick={onConfirm} type="button">
+            {isDeleting ? "Deleting" : "Delete"}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
