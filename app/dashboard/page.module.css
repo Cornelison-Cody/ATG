@@ -302,18 +302,83 @@
   border-radius: 8px;
   box-shadow: 0 24px 70px var(--shadow);
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
   overflow: hidden;
 }
 
 .emptyChatPanel {
   align-self: start;
-  grid-template-rows: auto;
+  grid-template-rows: auto auto;
 }
 
 .emptyChatPanel .composer {
   border-top: 0;
+}
+
+.editorToolbar {
+  align-items: center;
+  background: rgba(7, 9, 13, 0.62);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px 14px;
+}
+
+.targetToggle {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.targetToggle button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  display: inline-flex;
+  font: inherit;
+  font-weight: 850;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.targetToggle button:hover,
+.targetToggle button:focus-visible,
+.targetToggle .activeTargetButton {
+  background: rgba(77, 214, 201, 0.12);
+  border-color: rgba(77, 214, 201, 0.52);
+  outline: none;
+}
+
+.targetToggle svg {
+  height: 17px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  width: 17px;
+}
+
+.targetPreview {
+  background: #07090d;
+  border: 1px solid rgba(163, 183, 210, 0.22);
+  border-radius: 8px;
+  height: 90px;
+  overflow: hidden;
+  width: 150px;
+}
+
+.targetPreview iframe {
+  border: 0;
+  display: block;
+  height: 180px;
+  pointer-events: none;
+  transform: scale(0.5);
+  transform-origin: top left;
+  width: 300px;
 }
 
 .messages {
@@ -707,6 +772,14 @@
   .createControls,
   .composer {
     grid-template-columns: 1fr;
+  }
+
+  .editorToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .targetPreview {
+    justify-self: start;
   }
 
   .modalFooter {
