@@ -1,7 +1,17 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, LoaderCircle, Menu, MessageSquareWarning, Pencil, Trash2, X } from "lucide-react";
+import {
+  CheckCircle2,
+  LoaderCircle,
+  Menu,
+  MessageSquareWarning,
+  Monitor,
+  Pencil,
+  Smartphone,
+  Trash2,
+  X
+} from "lucide-react";
 import { InstructionsViewer } from "@/components/instructions-viewer";
 import styles from "./page.module.css";
 
@@ -44,6 +54,8 @@ type ChatRunFeedback = {
   startedAt: string | null;
 };
 
+type EditingTarget = "tv" | "phone";
+
 const idleRunFeedback: ChatRunFeedback = {
   state: "idle",
   label: "Ready",
@@ -66,6 +78,7 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newProjectName, setNewProjectName] = useState("");
   const [input, setInput] = useState("");
+  const [editingTarget, setEditingTarget] = useState<EditingTarget>("tv");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const [instructions, setInstructions] = useState("");
@@ -329,7 +342,7 @@ export default function Home() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: activeProject.id, message: prompt })
+        body: JSON.stringify({ editingTarget, projectId: activeProject.id, message: prompt })
       });
 
       if (!response.ok || !response.body) {
@@ -503,10 +516,14 @@ export default function Home() {
       {activeProject ? (
         <ProjectChat
           canSubmit={canSubmit}
+          editingTarget={editingTarget}
           input={input}
           isRunning={isRunning}
           messages={messages}
           onInputChange={setInput}
+          onTargetChange={setEditingTarget}
+          projectId={activeProject.id}
+          projectName={activeProject.name}
           onSubmit={handleSubmit}
           runFeedback={runFeedback}
         />
@@ -804,23 +821,32 @@ function InstructionsModal({
 
 function ProjectChat({
   canSubmit,
+  editingTarget,
   input,
   isRunning,
   messages,
   onInputChange,
+  onTargetChange,
   onSubmit,
+  projectId,
+  projectName,
   runFeedback
 }: {
   canSubmit: boolean;
+  editingTarget: EditingTarget;
   input: string;
   isRunning: boolean;
   messages: ChatMessage[];
   onInputChange: (value: string) => void;
+  onTargetChange: (target: EditingTarget) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  projectId: string;
+  projectName: string;
   runFeedback: ChatRunFeedback;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const showFeedback = runFeedback.state !== "idle";
+  const previewPath = `/api/projects/${projectId}/game-assets/${editingTarget}.html`;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
@@ -831,6 +857,39 @@ function ProjectChat({
       className={`${styles.chatPanel} ${messages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
       aria-label="Project chat"
     >
+      <div className={styles.editorToolbar}>
+        <div className={styles.targetToggle} role="tablist" aria-label="Editing target">
+          <button
+            aria-selected={editingTarget === "tv"}
+            className={editingTarget === "tv" ? styles.activeTargetButton : undefined}
+            onClick={() => onTargetChange("tv")}
+            role="tab"
+            type="button"
+          >
+            <Monitor aria-hidden="true" />
+            TV
+          </button>
+          <button
+            aria-selected={editingTarget === "phone"}
+            className={editingTarget === "phone" ? styles.activeTargetButton : undefined}
+            onClick={() => onTargetChange("phone")}
+            role="tab"
+            type="button"
+          >
+            <Smartphone aria-hidden="true" />
+            Phone
+          </button>
+        </div>
+        <div className={styles.targetPreview} aria-label={`${editingTarget} UI preview`}>
+          <iframe
+            key={previewPath}
+            sandbox="allow-scripts"
+            src={previewPath}
+            title={`${projectName} ${editingTarget} preview`}
+          />
+        </div>
+      </div>
+
       {messages.length > 0 ? (
         <div className={styles.messages}>
           {messages.map((message) => (

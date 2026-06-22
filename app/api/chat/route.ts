@@ -14,6 +14,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type ChatRequest = {
+  editingTarget?: unknown;
   projectId?: unknown;
   message?: unknown;
 };
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
 
   const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
   const message = typeof body.message === "string" ? body.message.trim() : "";
+  const editingTarget = body.editingTarget === "phone" ? "phone" : "tv";
 
   if (!projectId) {
     return Response.json({ error: "Project id is required." }, { status: 400 });
@@ -88,6 +90,7 @@ export async function POST(request: Request) {
   if (aiWorkerUrl) {
     return streamHostedWorker({
       aiWorkerUrl,
+      editingTarget,
       message,
       projectId,
       threadId: project.codexThreadId
@@ -124,7 +127,7 @@ export async function POST(request: Request) {
         message: project.codexThreadId ? "Resuming Codex session..." : "Starting Codex session..."
       });
 
-      const args = buildCodexArgs(project.codexThreadId, buildProjectPrompt(message));
+      const args = buildCodexArgs(project.codexThreadId, buildProjectPrompt(message, editingTarget));
       const child = spawn("codex", args, {
         cwd: project.path,
         env: process.env,
@@ -221,11 +224,13 @@ export async function POST(request: Request) {
 
 async function streamHostedWorker({
   aiWorkerUrl,
+  editingTarget,
   message,
   projectId,
   threadId
 }: {
   aiWorkerUrl: string;
+  editingTarget: "tv" | "phone";
   message: string;
   projectId: string;
   threadId: string | null;
@@ -233,7 +238,7 @@ async function streamHostedWorker({
   const runningProjects = getRunningProjects();
   const response = await fetch(`${aiWorkerUrl}/chat`, {
     body: JSON.stringify({
-      message: buildProjectPrompt(message),
+      message: buildProjectPrompt(message, editingTarget),
       projectId,
       threadId
     }),
@@ -366,8 +371,11 @@ function buildCodexArgs(threadId: string | null, message: string) {
   ];
 }
 
-function buildProjectPrompt(message: string) {
-  return `You are working inside one sandboxed Azure Tides Gaming game workspace, not the ATG platform app. The live game UI is customized by editing files under game/: tv.html, phone.html, styles.css, game.js, config.json, and instructions.md. Use game/instructions.md for player-facing game rules, setup, and gameplay instructions. Do not edit the parent ATG platform app unless the user explicitly asks for platform changes. The platform owns QR joining, phone player name/color identity, color selection, WebSocket connection, connection state, menus, player roster plumbing, and the TV Back to Editor control. Use the injected window.ATG SDK from project HTML/JS for custom TV and phone interactions.\n\nUser request:\n${message}`;
+function buildProjectPrompt(message: string, editingTarget: "tv" | "phone") {
+  const targetFile = editingTarget === "tv" ? "game/tv.html" : "game/phone.html";
+  const targetRole = editingTarget === "tv" ? "TV display" : "phone player controller";
+
+  return `You are working inside one sandboxed Azure Tides Gaming game workspace, not the ATG platform app. The live game UI is customized by editing files under game/: tv.html, phone.html, styles.css, game.js, config.json, and instructions.md. The creator is currently editing the ${targetRole}. Treat this request as targeting ${targetFile} and related shared game files unless the user explicitly says otherwise. Use game/instructions.md for player-facing game rules, setup, and gameplay instructions. Do not edit the parent ATG platform app unless the user explicitly asks for platform changes. The platform owns QR joining, phone player name/color identity, color selection, WebSocket connection, connection state, menus, player roster plumbing, and the TV Back to Editor control. Use the injected window.ATG SDK from project HTML/JS for custom TV and phone interactions.\n\nUser request:\n${message}`;
 }
 
 async function persistAssistantMessage(
