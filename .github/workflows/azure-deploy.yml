@@ -86,6 +86,8 @@ jobs:
           CUSTOM_DOMAIN_NAME: ${{ vars.CUSTOM_DOMAIN_NAME }}
           AI_WORKER_URL: ${{ vars.AI_WORKER_URL }}
           AI_WORKER_TOKEN: ${{ secrets.AI_WORKER_TOKEN }}
+          ENABLE_LOCAL_COMPANION: ${{ vars.ENABLE_LOCAL_COMPANION }}
+          ATG_COMPANION_TOKEN: ${{ secrets.ATG_COMPANION_TOKEN }}
           ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
           ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
           ENTRA_API_AUDIENCE: ${{ vars.ENTRA_API_AUDIENCE }}
@@ -112,7 +114,9 @@ jobs:
                 customDomainName="${CUSTOM_DOMAIN_NAME:-}" \
                 customDomainCertificateId="${CUSTOM_DOMAIN_CERTIFICATE_ID:-}" \
                 aiWorkerUrl="${AI_WORKER_URL:-}" \
+                enableLocalCompanion="${ENABLE_LOCAL_COMPANION:-false}" \
                 aiWorkerToken="${AI_WORKER_TOKEN:-}" \
+                atgCompanionToken="${ATG_COMPANION_TOKEN:-}" \
                 openAiApiKey="${OPENAI_API_KEY:-}" \
                 ghcrUsername="${GHCR_USERNAME:-}" \
                 ghcrToken="${GHCR_TOKEN:-}" \

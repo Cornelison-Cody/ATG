@@ -26,3 +26,11 @@ export async function updateGameInstructions(project: ProjectRecord, instruction
 export async function readGameAsset(project: ProjectRecord, segments: string[]) {
   return getProjectStore().readGameAsset(project, segments);
 }
+
+export async function exportGameTextFiles(project: ProjectRecord) {
+  return getProjectStore().exportGameTextFiles(project);
+}
+
+export async function updateGameTextFiles(project: ProjectRecord, files: { content: string; path: string }[]) {
+  return getProjectStore().updateGameTextFiles(project, files);
+}

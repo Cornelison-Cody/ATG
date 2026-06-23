@@ -57,7 +57,17 @@ The Azure identity used by GitHub Actions needs permissions to create/update res
 - `/`, `/tv/*`, `/join/*`, `/ws/game`, join-info, health, and game asset routes remain public.
 - Dashboard, editor, chat, and project mutation routes require Entra-backed Container Apps auth headers in production.
 - The Bicep template enables Container Apps authentication when `ENTRA_CLIENT_SECRET` is provided. Its global validation allows anonymous traffic so TV/phone routes can stay public; the app middleware enforces editor-only auth.
-- `AI_WORKER_URL` is required for production chat editing. Local Codex CLI execution stays disabled in production.
+- `AI_WORKER_URL` remains the preferred production chat editing path. If it is unset, trusted beta deployments can set `ENABLE_LOCAL_COMPANION=true` and `ATG_COMPANION_TOKEN` to let a user-run companion process pick up editing jobs from their own machine.
+- Direct local Codex CLI execution stays disabled inside the production web container.
+- Run the local companion from a trusted machine with Codex installed:
+
+```bash
+ATG_BASE_URL=https://atg.example.com \
+ATG_COMPANION_TOKEN=change-me \
+npm run companion
+```
+
+The companion opens outbound HTTPS requests to ATG, downloads only editable `game/` text files into a temporary local workspace, runs `codex exec`, and uploads changed `game/` text files back to the app. Do not use this beta mode for untrusted public users.
 
 ## Local development
 
