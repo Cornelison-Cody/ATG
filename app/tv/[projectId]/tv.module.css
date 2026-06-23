@@ -102,16 +102,11 @@
   flex: 1;
   gap: 18px;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   padding: 12px;
 }
 
-.fullGameGrid {
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.promptPanel,
 .gameFramePanel,
 .errorPanel {
   background: rgba(16, 21, 31, 0.86);
@@ -119,11 +114,6 @@
   border-radius: 8px;
   box-shadow: 0 24px 70px var(--shadow);
   padding: 18px;
-}
-
-.promptPanel h2 {
-  font-size: 1rem;
-  margin: 0 0 12px;
 }
 
 .qrBox {
@@ -139,46 +129,6 @@
   line-height: 1.45;
   margin: 0;
   overflow-wrap: anywhere;
-}
-
-.promptPanel form {
-  display: grid;
-  gap: 12px;
-}
-
-.promptPanel textarea {
-  background: #0b1018;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--text);
-  min-height: 128px;
-  padding: 14px;
-  resize: vertical;
-}
-
-.hostActions {
-  display: flex;
-  gap: 10px;
-}
-
-.hostActions button {
-  background: var(--accent);
-  border: 0;
-  border-radius: 8px;
-  color: #04110f;
-  font-weight: 900;
-  min-height: 44px;
-  padding: 12px 16px;
-}
-
-.hostActions button + button {
-  background: var(--panel-strong);
-  border: 1px solid var(--line);
-  color: var(--text);
-}
-
-.promptPanel {
-  min-height: 220px;
 }
 
 .playerList {

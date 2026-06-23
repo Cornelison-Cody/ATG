@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, use, useEffect, useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { Menu, Unplug, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { DEFAULT_GAME_CONFIG, GameConfig, GameSocketMessage, GameState, JoinInfo } from "@/lib/game-types";
@@ -22,7 +22,6 @@ export default function TVPage({ params }: { params: PageParams }) {
   const { projectId } = isPromise(params) ? use(params) : params;
   const [joinInfo, setJoinInfo] = useState<JoinInfo | null>(null);
   const [gameState, setGameState] = useState<GameState>(EMPTY_STATE);
-  const [draftPrompt, setDraftPrompt] = useState("");
   const [connectionState, setConnectionState] = useState("Connecting");
   const [error, setError] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -90,7 +89,6 @@ export default function TVPage({ params }: { params: PageParams }) {
         const message = JSON.parse(event.data) as GameSocketMessage;
         if (message.type === "state") {
           setGameState(message.state);
-          setDraftPrompt(message.state.prompt);
         } else {
           setError(message.message);
         }
@@ -158,11 +156,6 @@ export default function TVPage({ params }: { params: PageParams }) {
 
   function send(payload: Record<string, unknown>) {
     socketRef.current?.send(JSON.stringify(payload));
-  }
-
-  function savePrompt(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    send({ prompt: draftPrompt, type: "setPrompt" });
   }
 
   async function persistConfig(configPatch: unknown) {
@@ -236,9 +229,6 @@ export default function TVPage({ params }: { params: PageParams }) {
     send({ playerId, type: "disconnectPlayer" });
   }
 
-  const promptLabel = joinInfo?.config.promptLabel.trim() ?? "";
-  const resetLabel = joinInfo?.config.resetLabel.trim() ?? "";
-  const showPromptControls = Boolean(promptLabel || resetLabel);
   const editorHref = `/dashboard?project=${encodeURIComponent(projectId)}`;
   const joinHref = `/join/${encodeURIComponent(projectId)}`;
 
@@ -291,28 +281,7 @@ export default function TVPage({ params }: { params: PageParams }) {
         </div>
       </header>
 
-      <section className={`${styles.grid} ${showPromptControls ? "" : styles.fullGameGrid}`}>
-        {showPromptControls ? (
-          <section className={styles.promptPanel}>
-            <h2>{promptLabel || "Prompt"}</h2>
-            <form onSubmit={savePrompt}>
-              <textarea
-                aria-label="Game prompt"
-                onChange={(event) => setDraftPrompt(event.target.value)}
-                value={draftPrompt}
-              />
-              <div className={styles.hostActions}>
-                {promptLabel ? <button type="submit">Set Prompt</button> : null}
-                {resetLabel ? (
-                  <button onClick={() => send({ type: "resetBuzzes" })} type="button">
-                    {resetLabel}
-                  </button>
-                ) : null}
-              </div>
-            </form>
-          </section>
-        ) : null}
-
+      <section className={styles.grid}>
         <section className={styles.gameFramePanel}>
           <iframe
             onLoad={postStateToGameFrame}
