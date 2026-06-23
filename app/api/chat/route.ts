@@ -263,7 +263,8 @@ async function streamLocalCompanion({
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let closed = false;
-      let timeout: ReturnType<typeof setTimeout> | null = null;
+      let pickupTimeout: ReturnType<typeof setTimeout> | null = null;
+      let hasCompanionEvent = false;
       let unsubscribe: () => void = () => undefined;
       const send = (payload: CompanionEvent) => {
         if (!closed) {
@@ -273,8 +274,8 @@ async function streamLocalCompanion({
       const close = () => {
         if (!closed) {
           closed = true;
-          if (timeout) {
-            clearTimeout(timeout);
+          if (pickupTimeout) {
+            clearTimeout(pickupTimeout);
           }
           unsubscribe();
           runningProjects.delete(projectId);
@@ -290,6 +291,14 @@ async function streamLocalCompanion({
       send({ type: "status", message: "Waiting for local companion..." });
 
       unsubscribe = subscribeToCompanionJob(job.id, async (event) => {
+        if (!hasCompanionEvent) {
+          hasCompanionEvent = true;
+          if (pickupTimeout) {
+            clearTimeout(pickupTimeout);
+            pickupTimeout = null;
+          }
+        }
+
         if (event.type === "session") {
           await updateProjectThread(projectId, event.sessionId);
           send(event);
@@ -313,7 +322,7 @@ async function streamLocalCompanion({
         send(event);
       });
 
-      timeout = setTimeout(() => {
+      pickupTimeout = setTimeout(() => {
         void fail("No local companion picked up this request.");
       }, 60_000);
     }

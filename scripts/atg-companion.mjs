@@ -76,6 +76,10 @@ async function runJob(job) {
 
   console.log(`Running job ${job.id} for ${job.project.name} (${job.editingTarget})`);
   console.log(`Workspace: ${workspace}`);
+  await postJobEvent(job.id, {
+    type: "status",
+    message: "Local companion picked up the request."
+  });
 
   const result = await codexExecAdapter.run({
     cwd: workspace,
