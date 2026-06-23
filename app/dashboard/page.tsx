@@ -853,84 +853,138 @@ function ProjectChat({
   }, [messages]);
 
   return (
-    <section
-      className={`${styles.chatPanel} ${messages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
-      aria-label="Project chat"
-    >
-      <div className={styles.editorToolbar}>
-        <div className={styles.targetToggle} role="tablist" aria-label="Editing target">
-          <button
-            aria-selected={editingTarget === "tv"}
-            className={editingTarget === "tv" ? styles.activeTargetButton : undefined}
-            onClick={() => onTargetChange("tv")}
-            role="tab"
-            type="button"
-          >
-            <Monitor aria-hidden="true" />
-            TV
-          </button>
-          <button
-            aria-selected={editingTarget === "phone"}
-            className={editingTarget === "phone" ? styles.activeTargetButton : undefined}
-            onClick={() => onTargetChange("phone")}
-            role="tab"
-            type="button"
-          >
-            <Smartphone aria-hidden="true" />
-            Phone
-          </button>
-        </div>
-        <div className={styles.targetPreview} aria-label={`${editingTarget} UI preview`}>
-          <iframe
-            key={previewPath}
-            sandbox="allow-scripts"
-            src={previewPath}
-            title={`${projectName} ${editingTarget} preview`}
-          />
-        </div>
-      </div>
-
-      {messages.length > 0 ? (
-        <div className={styles.messages}>
-          {messages.map((message) => (
-            <article
-              className={`${styles.message} ${styles[message.role]} ${
-                message.status === "error" ? styles.error : ""
-              }`}
-              key={message.id}
+    <section className={styles.editorWorkspace} aria-label="Project editor">
+      <section
+        className={`${styles.chatPanel} ${messages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
+        aria-label="Project chat"
+      >
+        <div className={styles.editorToolbar}>
+          <div className={styles.targetToggle} role="tablist" aria-label="Editing target">
+            <button
+              aria-selected={editingTarget === "tv"}
+              className={editingTarget === "tv" ? styles.activeTargetButton : undefined}
+              onClick={() => onTargetChange("tv")}
+              role="tab"
+              type="button"
             >
-              <div className={styles.messageMeta}>
-                <span>{message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}</span>
-                {message.status === "running" ? <span>Running</span> : null}
-              </div>
-              <p>{message.content}</p>
-            </article>
-          ))}
-          <div ref={messagesEndRef} />
+              <Monitor aria-hidden="true" />
+              TV
+            </button>
+            <button
+              aria-selected={editingTarget === "phone"}
+              className={editingTarget === "phone" ? styles.activeTargetButton : undefined}
+              onClick={() => onTargetChange("phone")}
+              role="tab"
+              type="button"
+            >
+              <Smartphone aria-hidden="true" />
+              Phone
+            </button>
+          </div>
         </div>
-      ) : null}
 
-      {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
+        {messages.length > 0 ? (
+          <div className={styles.messages}>
+            {messages.map((message) => (
+              <article
+                className={`${styles.message} ${styles[message.role]} ${
+                  message.status === "error" ? styles.error : ""
+                }`}
+                key={message.id}
+              >
+                <div className={styles.messageMeta}>
+                  <span>{message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}</span>
+                  {message.status === "running" ? <span>Running</span> : null}
+                </div>
+                <p>{message.content}</p>
+              </article>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+        ) : null}
 
-      <form className={styles.composer} onSubmit={onSubmit}>
-        <textarea
-          aria-label="Message Codex"
-          disabled={isRunning}
-          onChange={(event) => onInputChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-          placeholder="Ask Codex to update this project..."
-          rows={4}
-          value={input}
+        {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
+
+        <form className={styles.composer} onSubmit={onSubmit}>
+          <textarea
+            aria-label="Message Codex"
+            disabled={isRunning}
+            onChange={(event) => onInputChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+            placeholder="Ask Codex to update this project..."
+            rows={4}
+            value={input}
+          />
+          <button disabled={!canSubmit} type="submit">
+            {isRunning ? "Running" : "Send"}
+          </button>
+        </form>
+      </section>
+
+      <aside className={styles.previewPanel} aria-label={`${editingTarget} UI preview`}>
+        <div className={styles.previewHeader}>
+          <h2>{editingTarget === "tv" ? "TV Preview" : "Phone Preview"}</h2>
+        </div>
+        <ScaledPreviewFrame
+          editingTarget={editingTarget}
+          previewPath={previewPath}
+          title={`${projectName} ${editingTarget} preview`}
         />
-        <button disabled={!canSubmit} type="submit">
-          {isRunning ? "Running" : "Send"}
-        </button>
-      </form>
+      </aside>
     </section>
+  );
+}
+
+function ScaledPreviewFrame({
+  editingTarget,
+  previewPath,
+  title
+}: {
+  editingTarget: EditingTarget;
+  previewPath: string;
+  title: string;
+}) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+  const virtualSize = editingTarget === "tv" ? { height: 720, width: 1280 } : { height: 844, width: 390 };
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) {
+      return;
+    }
+    const currentFrame = frame;
+
+    function updateScale() {
+      const { height, width } = currentFrame.getBoundingClientRect();
+      setScale(Math.min(width / virtualSize.width, height / virtualSize.height, 1));
+    }
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(currentFrame);
+    return () => observer.disconnect();
+  }, [virtualSize.height, virtualSize.width]);
+
+  return (
+    <div className={styles.scaledPreviewFrame} ref={frameRef}>
+      <iframe
+        key={previewPath}
+        sandbox="allow-scripts"
+        scrolling="no"
+        src={previewPath}
+        style={{
+          height: `${virtualSize.height}px`,
+          transform: `translate(-50%, -50%) scale(${scale})`,
+          width: `${virtualSize.width}px`
+        }}
+        title={title}
+      />
+    </div>
   );
 }
 
