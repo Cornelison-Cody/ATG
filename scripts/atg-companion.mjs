@@ -105,7 +105,18 @@ async function runJob(job) {
 
 async function runCodexExec({ cwd, job, onEvent }) {
   const args = job.threadId
-    ? ["exec", "resume", "--json", "--skip-git-repo-check", job.threadId, job.prompt]
+    ? [
+      "exec",
+      "resume",
+      "--json",
+      "-c",
+      'sandbox_mode="workspace-write"',
+      "-c",
+      'approval_policy="never"',
+      "--skip-git-repo-check",
+      job.threadId,
+      job.prompt
+    ]
     : ["exec", "--json", "-C", ".", "--sandbox", "workspace-write", "--skip-git-repo-check", job.prompt];
 
   const child = spawn("codex", args, {

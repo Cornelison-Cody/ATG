@@ -468,6 +468,10 @@ function buildCodexArgs(threadId: string | null, message: string) {
       "exec",
       "resume",
       "--json",
+      "-c",
+      'sandbox_mode="workspace-write"',
+      "-c",
+      'approval_policy="never"',
       "--skip-git-repo-check",
       threadId,
       message
