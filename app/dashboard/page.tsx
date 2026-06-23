@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Menu, Trash2, X } from "lucide-react";
+import { Menu, Monitor, Smartphone, Trash2, X } from "lucide-react";
 import styles from "./page.module.css";
 
 type ChatMessage = {
@@ -364,6 +364,7 @@ export default function Home() {
 
       {activeProject ? (
         <ProjectChat
+          activeProject={activeProject}
           canSubmit={canSubmit}
           input={input}
           isRunning={isRunning}
@@ -513,6 +514,7 @@ function CreateProjectModal({
 }
 
 function ProjectChat({
+  activeProject,
   canSubmit,
   input,
   isRunning,
@@ -520,6 +522,7 @@ function ProjectChat({
   onInputChange,
   onSubmit
 }: {
+  activeProject: ProjectDetail;
   canSubmit: boolean;
   input: string;
   isRunning: boolean;
@@ -528,49 +531,105 @@ function ProjectChat({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [previewMode, setPreviewMode] = useState<"tv" | "phone">("tv");
+  const [compactStatusIds, setCompactStatusIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
-  return (
-    <section className={styles.chatPanel} aria-label="Project chat">
-      <div className={styles.messages}>
-        {messages.map((message) => (
-          <article
-            className={`${styles.message} ${styles[message.role]} ${
-              message.status === "error" ? styles.error : ""
-            }`}
-            key={message.id}
-          >
-            <div className={styles.messageMeta}>
-              <span>{message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}</span>
-              {message.status === "running" ? <span>Running</span> : null}
-            </div>
-            <p>{message.content}</p>
-          </article>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
+  useEffect(() => {
+    const runningMessages = messages.filter((message) => message.status === "running");
+    const runningIds = new Set(runningMessages.map((message) => message.id));
 
-      <form className={styles.composer} onSubmit={onSubmit}>
-        <textarea
-          aria-label="Message Codex"
-          disabled={isRunning}
-          onChange={(event) => onInputChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-          placeholder="Ask Codex to update this project..."
-          rows={4}
-          value={input}
-        />
-        <button disabled={!canSubmit} type="submit">
-          {isRunning ? "Running" : "Send"}
-        </button>
-      </form>
+    setCompactStatusIds((current) =>
+      Object.fromEntries(Object.entries(current).filter(([id]) => runningIds.has(id)))
+    );
+
+    const timers = runningMessages.map((message) =>
+      window.setTimeout(() => {
+        setCompactStatusIds((current) => ({ ...current, [message.id]: true }));
+      }, 4200)
+    );
+
+    return () => timers.forEach(window.clearTimeout);
+  }, [messages]);
+
+  const previewUrl = previewMode === "tv" ? `/tv/${activeProject.id}` : `/join/${activeProject.id}`;
+
+  return (
+    <section className={styles.editorWorkspace} aria-label="Project editor">
+      <section className={styles.chatPanel} aria-label="Project chat">
+        <div className={styles.messages}>
+          {messages.map((message) => {
+            const isCompactStatus = message.status === "running" && compactStatusIds[message.id];
+
+            return (
+              <article
+                className={`${styles.message} ${styles[message.role]} ${
+                  message.status === "error" ? styles.error : ""
+                } ${isCompactStatus ? styles.compactStatus : ""}`}
+                key={message.id}
+              >
+                <div className={styles.messageMeta}>
+                  <span>{message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}</span>
+                  {message.status === "running" ? <span>Running</span> : null}
+                </div>
+                <p>{message.content}</p>
+              </article>
+            );
+          })}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <form className={styles.composer} onSubmit={onSubmit}>
+          <textarea
+            aria-label="Message Codex"
+            disabled={isRunning}
+            onChange={(event) => onInputChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+            placeholder="Ask Codex to update this project..."
+            rows={4}
+            value={input}
+          />
+          <button disabled={!canSubmit} type="submit">
+            {isRunning ? "Running" : "Send"}
+          </button>
+        </form>
+      </section>
+
+      <aside className={styles.previewPanel} aria-label="Game preview">
+        <div className={styles.previewHeader}>
+          <h2>Preview</h2>
+          <div className={styles.previewTabs} role="group" aria-label="Preview mode">
+            <button
+              aria-pressed={previewMode === "tv"}
+              className={previewMode === "tv" ? styles.activePreviewTab : undefined}
+              onClick={() => setPreviewMode("tv")}
+              title="TV preview"
+              type="button"
+            >
+              <Monitor aria-hidden="true" />
+            </button>
+            <button
+              aria-pressed={previewMode === "phone"}
+              className={previewMode === "phone" ? styles.activePreviewTab : undefined}
+              onClick={() => setPreviewMode("phone")}
+              title="Phone preview"
+              type="button"
+            >
+              <Smartphone aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+        <div className={`${styles.previewFrame} ${previewMode === "phone" ? styles.phonePreviewFrame : ""}`}>
+          <iframe key={previewUrl} src={previewUrl} title={`${activeProject.name} ${previewMode} preview`} />
+        </div>
+      </aside>
     </section>
   );
 }
