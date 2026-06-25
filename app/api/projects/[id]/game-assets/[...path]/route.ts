@@ -58,6 +58,9 @@ function injectAtgSdk(html: string) {
     sendAction(actionType, payload = {}) {
       window.parent.postMessage({ source: "atg-game", type: "gameAction", actionType, payload }, "*");
     },
+    setState(state) {
+      window.parent.postMessage({ source: "atg-game", type: "setState", state }, "*");
+    },
     setConfig(config) {
       window.parent.postMessage({ source: "atg-game", type: "setConfig", config }, "*");
     }

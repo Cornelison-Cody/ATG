@@ -128,6 +128,7 @@ export default function TVPage({ params }: { params: PageParams }) {
         config?: unknown;
         payload?: unknown;
         source?: unknown;
+        state?: unknown;
         type?: unknown;
       };
       if (message?.source !== "atg-game") {
@@ -141,6 +142,11 @@ export default function TVPage({ params }: { params: PageParams }) {
 
       if (message.type === "gameAction" && typeof message.actionType === "string") {
         send({ actionType: message.actionType, payload: message.payload ?? {}, type: "gameAction" });
+        return;
+      }
+
+      if (message.type === "setState") {
+        send({ state: message.state, type: "setState" });
         return;
       }
 

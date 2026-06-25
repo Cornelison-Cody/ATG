@@ -45,6 +45,7 @@ export type GameState = {
   buzzes: GameBuzz[];
   config: GameConfig;
   actions: GameAction[];
+  [key: string]: unknown;
 };
 
 export type JoinInfo = {
