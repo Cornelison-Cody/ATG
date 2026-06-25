@@ -1,7 +1,9 @@
 import { spawn } from "child_process";
 import { randomUUID } from "crypto";
 import { requireEditorAuth } from "@/lib/api-auth";
-import { canUseLocalCodex, getAiWorkerUrl } from "@/lib/env";
+import { enqueueCompanionJob, subscribeToCompanionJob, type CompanionEvent } from "@/lib/companion-jobs";
+import { canUseLocalCodex, canUseLocalCompanion, getAiWorkerUrl } from "@/lib/env";
+import { exportGameTextFiles } from "@/lib/project-game";
 import {
   appendProjectMessages,
   ChatMessage,
@@ -97,9 +99,23 @@ export async function POST(request: Request) {
     });
   }
 
+  if (!canUseLocalCodex() && canUseLocalCompanion()) {
+    try {
+      return await streamLocalCompanion({
+        editingTarget,
+        message,
+        project,
+        projectId
+      });
+    } catch (error) {
+      runningProjects.delete(projectId);
+      return projectStoreErrorResponse(error, "Unable to create local companion job.");
+    }
+  }
+
   if (!canUseLocalCodex()) {
     runningProjects.delete(projectId);
-    const errorMessage = "AI_WORKER_URL is required in production. Local Codex CLI execution is disabled.";
+    const errorMessage = "Production chat editing requires AI_WORKER_URL or ENABLE_LOCAL_COMPANION=true with a connected local companion.";
     await persistAssistantMessage(projectId, errorMessage, "error");
     return Response.json({ error: errorMessage }, { status: 501 });
   }
@@ -210,6 +226,105 @@ export async function POST(request: Request) {
           finalMessage = final;
         }
       }
+    }
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Cache-Control": "no-cache, no-transform",
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "X-Accel-Buffering": "no"
+    }
+  });
+}
+
+async function streamLocalCompanion({
+  editingTarget,
+  message,
+  project,
+  projectId
+}: {
+  editingTarget: "tv" | "phone";
+  message: string;
+  project: NonNullable<Awaited<ReturnType<typeof getProject>>>;
+  projectId: string;
+}) {
+  const runningProjects = getRunningProjects();
+  const files = await exportGameTextFiles(project);
+  const job = enqueueCompanionJob({
+    editingTarget,
+    files,
+    message,
+    project,
+    prompt: buildProjectPrompt(message, editingTarget)
+  });
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let closed = false;
+      let pickupTimeout: ReturnType<typeof setTimeout> | null = null;
+      let hasCompanionEvent = false;
+      let unsubscribe: () => void = () => undefined;
+      const send = (payload: CompanionEvent) => {
+        if (!closed) {
+          controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+        }
+      };
+      const close = () => {
+        if (!closed) {
+          closed = true;
+          if (pickupTimeout) {
+            clearTimeout(pickupTimeout);
+          }
+          unsubscribe();
+          runningProjects.delete(projectId);
+          controller.close();
+        }
+      };
+      const fail = async (message: string) => {
+        await persistAssistantMessage(projectId, message, "error");
+        send({ type: "error", message });
+        close();
+      };
+
+      send({ type: "status", message: "Waiting for local companion..." });
+
+      unsubscribe = subscribeToCompanionJob(job.id, async (event) => {
+        if (!hasCompanionEvent) {
+          hasCompanionEvent = true;
+          if (pickupTimeout) {
+            clearTimeout(pickupTimeout);
+            pickupTimeout = null;
+          }
+        }
+
+        if (event.type === "session") {
+          await updateProjectThread(projectId, event.sessionId);
+          send(event);
+          return;
+        }
+
+        if (event.type === "final") {
+          await persistAssistantMessage(projectId, event.message, "done");
+          send(event);
+          close();
+          return;
+        }
+
+        if (event.type === "error") {
+          await persistAssistantMessage(projectId, event.message, "error");
+          send(event);
+          close();
+          return;
+        }
+
+        send(event);
+      });
+
+      pickupTimeout = setTimeout(() => {
+        void fail("No local companion picked up this request.");
+      }, 60_000);
     }
   });
 
@@ -353,6 +468,10 @@ function buildCodexArgs(threadId: string | null, message: string) {
       "exec",
       "resume",
       "--json",
+      "-c",
+      'sandbox_mode="workspace-write"',
+      "-c",
+      'approval_policy="never"',
       "--skip-git-repo-check",
       threadId,
       message

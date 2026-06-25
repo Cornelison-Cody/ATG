@@ -1,9 +1,10 @@
 import { CosmosClient, type Container } from "@azure/cosmos";
 import { BlobServiceClient, type ContainerClient } from "@azure/storage-blob";
 import { randomUUID } from "crypto";
-import { mkdir, readFile, rename, stat, writeFile } from "fs/promises";
+import { mkdir, readFile, readdir, rename, stat, writeFile } from "fs/promises";
 import path from "path";
 import { ATG_ROOT, PROJECTS_ROOT, TRASH_ROOT, useAzureStorageBackend } from "./env";
+import { isAllowedGameTextPath, normalizeGameTextFiles, validateGameTextPath } from "./game-file-rules.mjs";
 import { DEFAULT_GAME_CONFIG, GameConfig } from "./game-types";
 import type { ChatMessage, ProjectDatabase, ProjectRecord, PublicProject } from "./project-types";
 
@@ -19,6 +20,11 @@ type GameAsset = {
   contentType: string;
 };
 
+export type GameTextFile = {
+  content: string;
+  path: string;
+};
+
 interface ProjectStore {
   listProjects(): Promise<PublicProject[]>;
   getProject(projectId: string): Promise<ProjectRecord | null>;
@@ -31,6 +37,8 @@ interface ProjectStore {
   readGameInstructions(project: ProjectRecord): Promise<string>;
   updateGameInstructions(project: ProjectRecord, instructions: string): Promise<string>;
   readGameAsset(project: ProjectRecord, segments: string[]): Promise<GameAsset>;
+  exportGameTextFiles(project: ProjectRecord): Promise<GameTextFile[]>;
+  updateGameTextFiles(project: ProjectRecord, files: GameTextFile[]): Promise<GameTextFile[]>;
 }
 
 export function getProjectStore(): ProjectStore {
@@ -163,6 +171,35 @@ class LocalProjectStore implements ProjectStore {
       content,
       contentType: contentTypeForPath(assetPath)
     };
+  }
+
+  async exportGameTextFiles(project: ProjectRecord) {
+    await this.ensureGameFiles(project);
+    const gamePath = getGamePath(project);
+    const files = await listLocalGameTextFiles(gamePath);
+    return Promise.all(
+      files.map(async (filePath) => ({
+        content: await readFile(path.join(gamePath, filePath), "utf8"),
+        path: filePath
+      }))
+    );
+  }
+
+  async updateGameTextFiles(project: ProjectRecord, files: GameTextFile[]) {
+    const normalizedFiles = normalizeGameTextFiles(files);
+    await this.ensureGameFiles(project);
+    const gamePath = getGamePath(project);
+
+    for (const file of normalizedFiles) {
+      const targetPath = resolveLocalGameAsset(project, file.path.split("/"));
+      await mkdir(path.dirname(targetPath), { recursive: true });
+      await writeFile(targetPath, file.content, "utf8");
+    }
+
+    await this.updateProject(project.id, (item) => {
+      item.updatedAt = new Date().toISOString();
+    });
+    return normalizedFiles;
   }
 
   private async ensureGameFiles(project: ProjectRecord) {
@@ -325,6 +362,44 @@ class AzureProjectStore implements ProjectStore {
       content,
       contentType: contentTypeForPath(assetPath)
     };
+  }
+
+  async exportGameTextFiles(project: ProjectRecord) {
+    await this.ensureGameFiles(project);
+    const prefix = blobName(project, `${GAME_DIR}/`);
+    const files: GameTextFile[] = [];
+
+    for await (const blob of this.getBlobContainer().listBlobsFlat({ prefix })) {
+      const filePath = blob.name.slice(prefix.length);
+      if (!isAllowedGameTextPath(filePath)) {
+        continue;
+      }
+
+      files.push({
+        content: await this.readTextBlob(blob.name),
+        path: filePath
+      });
+    }
+
+    return files.sort((left, right) => left.path.localeCompare(right.path));
+  }
+
+  async updateGameTextFiles(project: ProjectRecord, files: GameTextFile[]) {
+    const normalizedFiles = normalizeGameTextFiles(files);
+    await this.ensureGameFiles(project);
+
+    for (const file of normalizedFiles) {
+      await this.writeBlob(
+        blobName(project, `${GAME_DIR}/${file.path}`),
+        file.content,
+        contentTypeForPath(file.path)
+      );
+    }
+
+    await this.updateProject(project.id, (item) => {
+      item.updatedAt = new Date().toISOString();
+    });
+    return normalizedFiles;
   }
 
   private async ensureGameFiles(project: ProjectRecord) {
@@ -596,6 +671,22 @@ function normalizeGameAssetPath(segments: string[]) {
   }
 
   return cleanSegments.join("/");
+}
+
+async function listLocalGameTextFiles(rootPath: string, relativePath = ""): Promise<string[]> {
+  const entries = await readdir(path.join(rootPath, relativePath), { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const nextPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      files.push(...await listLocalGameTextFiles(rootPath, nextPath));
+    } else if (entry.isFile() && isAllowedGameTextPath(nextPath)) {
+      files.push(validateGameTextPath(nextPath));
+    }
+  }
+
+  return files.sort((left, right) => left.localeCompare(right));
 }
 
 function resolveLocalGameAsset(project: ProjectRecord, segments: string[]) {

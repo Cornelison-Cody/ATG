@@ -23,7 +23,13 @@
     "aiWorkerUrl": {
       "value": "https://worker.example.com"
     },
+    "enableLocalCompanion": {
+      "value": false
+    },
     "aiWorkerToken": {
+      "value": "set-with-github-secret"
+    },
+    "atgCompanionToken": {
       "value": "set-with-github-secret"
     },
     "openAiApiKey": {
