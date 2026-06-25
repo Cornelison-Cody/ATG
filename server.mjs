@@ -1,6 +1,7 @@
 import { createServer } from "http";
 import next from "next";
 import { WebSocketServer } from "ws";
+import { normalizeGameStatePatch } from "./lib/game-state-rules.mjs";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
@@ -78,6 +79,22 @@ wss.on("connection", (ws) => {
     if (message.type === "setConfig" && client.role === "tv") {
       room.config = normalizeConfig({ ...room.config, ...message.config });
       broadcastRoom(room);
+      return;
+    }
+
+    if (message.type === "setState") {
+      try {
+        room.gameState = {
+          ...room.gameState,
+          ...normalizeGameStatePatch(message.state)
+        };
+        broadcastRoom(room);
+      } catch (error) {
+        send(ws, {
+          type: "error",
+          message: error instanceof Error ? error.message : "Game state is invalid."
+        });
+      }
       return;
     }
 
@@ -185,6 +202,7 @@ function getRoom(projectId) {
       buzzes: [],
       actions: [],
       config: defaultConfig,
+      gameState: {},
       playerClients: new Map(),
       players: new Map(),
       projectId,
@@ -205,6 +223,7 @@ function broadcastRoom(room) {
 
 function serializeRoom(room) {
   return {
+    ...room.gameState,
     actions: room.actions,
     buzzes: room.buzzes,
     config: room.config,

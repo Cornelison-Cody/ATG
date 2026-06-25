@@ -215,6 +215,7 @@ export default function JoinPage({ params }: { params: PageParams }) {
         actionType?: unknown;
         payload?: unknown;
         source?: unknown;
+        state?: unknown;
         type?: unknown;
       };
       if (message?.source !== "atg-game") {
@@ -234,6 +235,11 @@ export default function JoinPage({ params }: { params: PageParams }) {
             type: "gameAction"
           })
         );
+        return;
+      }
+
+      if (message.type === "setState") {
+        socketRef.current?.send(JSON.stringify({ state: message.state, type: "setState" }));
       }
     }
 
