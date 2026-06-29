@@ -42,8 +42,6 @@ export default function JoinPage({ params }: { params: PageParams }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
-  const projectHref = projectId ? `/dashboard?project=${encodeURIComponent(projectId)}` : "/dashboard";
-  const tvHref = projectId ? `/tv/${encodeURIComponent(projectId)}` : "/dashboard";
 
   useEffect(() => {
     void Promise.resolve(params).then(({ projectId: nextProjectId }) => setProjectId(nextProjectId));
@@ -304,15 +302,6 @@ export default function JoinPage({ params }: { params: PageParams }) {
                 <button onClick={changePlayer} role="menuitem" type="button">
                   Change Player
                 </button>
-                <a href="/dashboard" role="menuitem">
-                  Dashboard
-                </a>
-                <a href={projectHref} role="menuitem">
-                  Edit Project
-                </a>
-                <a href={tvHref} role="menuitem">
-                  Open TV
-                </a>
                 <button onClick={openInstructions} role="menuitem" type="button">
                   Instructions
                 </button>
@@ -379,15 +368,6 @@ export default function JoinPage({ params }: { params: PageParams }) {
             </button>
             {isMenuOpen ? (
               <div className={styles.menu} role="menu">
-                <a href="/dashboard" role="menuitem">
-                  Dashboard
-                </a>
-                <a href={projectHref} role="menuitem">
-                  Edit Project
-                </a>
-                <a href={tvHref} role="menuitem">
-                  Open TV
-                </a>
                 <button onClick={openInstructions} role="menuitem" type="button">
                   Instructions
                 </button>
