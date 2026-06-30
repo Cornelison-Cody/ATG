@@ -1,4 +1,5 @@
 import { requireCompanionAuth } from "@/lib/companion-auth";
+import { applyCompanionCompletion, CompanionCompletionError } from "@/lib/companion-completion.mjs";
 import { completeCompanionJob, getCompanionJob } from "@/lib/companion-jobs";
 import { updateGameTextFiles } from "@/lib/project-game";
 import { getProject, ProjectStoreError } from "@/lib/projects";
@@ -45,24 +46,20 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json({ ok: true });
   }
 
-  const project = await getProject(job.project.id);
-  if (!project || project.status === "deleted") {
-    completeCompanionJob(jobId, { type: "error", message: "Project was not found." });
-    return Response.json({ error: "Project was not found." }, { status: 404 });
-  }
-
   try {
     const files = Array.isArray(body.files) ? body.files : [];
-    await updateGameTextFiles(project, files as { content: string; path: string }[]);
-    const message = typeof body.finalMessage === "string" && body.finalMessage.trim()
-      ? body.finalMessage.trim()
-      : "Local companion finished updating the project.";
-    completeCompanionJob(jobId, { type: "final", message });
-    return Response.json({ ok: true });
+    const result = await applyCompanionCompletion({
+      completeJob: completeCompanionJob,
+      files: files as { content: string; path: string }[],
+      finalMessage: body.finalMessage,
+      job,
+      loadProject: getProject,
+      saveFiles: updateGameTextFiles
+    });
+    return Response.json({ message: result.message, ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to apply local companion changes.";
-    completeCompanionJob(jobId, { type: "error", message });
-    const status = error instanceof ProjectStoreError
+    const status = error instanceof CompanionCompletionError || error instanceof ProjectStoreError
       ? error.status
       : typeof error === "object" && error !== null && "status" in error && typeof error.status === "number"
         ? error.status

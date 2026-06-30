@@ -14,6 +14,7 @@ import {
   X
 } from "lucide-react";
 import { InstructionsViewer } from "@/components/instructions-viewer";
+import { buildGameAssetUrl } from "@/lib/game-asset-url.mjs";
 import styles from "./page.module.css";
 
 type ChatMessage = {
@@ -525,6 +526,7 @@ export default function Home() {
           onTargetChange={setEditingTarget}
           projectId={activeProject.id}
           projectName={activeProject.name}
+          projectRevision={activeProject.updatedAt}
           onSubmit={handleSubmit}
           runFeedback={runFeedback}
         />
@@ -831,6 +833,7 @@ function ProjectChat({
   onSubmit,
   projectId,
   projectName,
+  projectRevision,
   runFeedback
 }: {
   canSubmit: boolean;
@@ -843,11 +846,12 @@ function ProjectChat({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   projectId: string;
   projectName: string;
+  projectRevision: string;
   runFeedback: ChatRunFeedback;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const showFeedback = runFeedback.state !== "idle";
-  const previewPath = `/api/projects/${projectId}/game-assets/${editingTarget}.html`;
+  const previewPath = buildGameAssetUrl(projectId, editingTarget, projectRevision);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
