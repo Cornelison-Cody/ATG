@@ -380,11 +380,18 @@
   overflow: hidden;
 }
 
+.previewPanel:focus-within {
+  border-color: rgba(77, 214, 201, 0.52);
+  box-shadow: 0 24px 70px var(--shadow), 0 0 0 3px rgba(77, 214, 201, 0.12);
+}
+
 .previewHeader {
   align-items: center;
   background: rgba(7, 9, 13, 0.62);
   border-bottom: 1px solid var(--line);
   display: flex;
+  gap: 12px;
+  justify-content: space-between;
   min-height: 63px;
   padding: 12px 16px;
 }
@@ -392,6 +399,26 @@
 .previewHeader h2 {
   font-size: 0.95rem;
   margin: 0;
+}
+
+.interactivePreviewLabel {
+  align-items: center;
+  color: var(--accent);
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 800;
+  gap: 7px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.interactivePreviewLabel::before {
+  background: currentColor;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(77, 214, 201, 0.65);
+  content: "";
+  height: 7px;
+  width: 7px;
 }
 
 .scaledPreviewFrame {
@@ -405,7 +432,6 @@
   border: 0;
   display: block;
   left: 50%;
-  pointer-events: none;
   position: absolute;
   top: 50%;
   transform-origin: center;
