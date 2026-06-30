@@ -493,27 +493,40 @@
 .runFeedback {
   background: rgba(7, 9, 13, 0.72);
   border-top: 1px solid var(--line);
-  display: grid;
-  gap: 10px;
-  padding: 14px 16px;
 }
 
 .runFeedbackHeader {
   align-items: center;
   color: var(--text);
+  cursor: pointer;
   display: flex;
   font-size: 0.86rem;
   font-weight: 850;
   gap: 10px;
+  min-height: 46px;
+  padding: 9px 16px;
 }
 
-.runFeedbackHeader > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
+.runFeedbackHeader::-webkit-details-marker {
+  display: none;
 }
 
-.runFeedbackHeader svg {
+.runFeedbackHeader::marker {
+  content: "";
+}
+
+.runFeedbackHeader:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(77, 214, 201, 0.48);
+  outline: none;
+}
+
+.runFeedbackLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runFeedbackHeader > svg {
   color: var(--accent);
   flex: 0 0 auto;
   height: 18px;
@@ -522,15 +535,46 @@
 
 .runFeedbackMeta {
   color: var(--muted);
+  flex: 0 0 auto;
   font-size: 0.76rem;
   font-weight: 700;
+}
+
+.runFeedbackAction {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.76rem;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.runFeedbackAction svg {
+  height: 15px;
+  transition: transform 160ms ease;
+  width: 15px;
+}
+
+.runFeedback[open] .runFeedbackAction svg {
+  transform: rotate(180deg);
+}
+
+.runFeedbackDetails {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: grid;
+  gap: 8px;
+  max-height: 132px;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 10px 16px 12px;
 }
 
 .quietStep {
   color: var(--text);
   font-size: 0.86rem;
   line-height: 1.35;
-  margin: 0 0 0 28px;
+  margin: 0;
 }
 
 .runFeedback ol {
@@ -541,24 +585,24 @@
   line-height: 1.35;
   list-style: none;
   margin: 0;
-  padding: 0 0 0 28px;
+  padding: 0;
 }
 
 .runFeedback li {
   overflow-wrap: anywhere;
 }
 
-.connecting .runFeedbackHeader svg,
-.running .runFeedbackHeader svg {
+.connecting .runFeedbackHeader > svg,
+.running .runFeedbackHeader > svg {
   color: var(--accent);
 }
 
-.done .runFeedbackHeader svg {
+.done .runFeedbackHeader > svg {
   color: #8ee9b3;
 }
 
 .error .runFeedbackHeader,
-.error .runFeedbackHeader svg,
+.error .runFeedbackHeader > svg,
 .error ol {
   color: var(--danger);
 }

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
+  ChevronDown,
   LoaderCircle,
   Menu,
   MessageSquareWarning,
@@ -1013,28 +1014,37 @@ function RunFeedback({ feedback }: { feedback: ChatRunFeedback }) {
   }, [isActive]);
 
   return (
-    <section className={`${styles.runFeedback} ${styles[feedback.state]}`} aria-live="polite">
-      <div className={styles.runFeedbackHeader}>
-        <Icon aria-hidden="true" className={feedback.state === "running" || feedback.state === "connecting" ? styles.spin : undefined} />
-        <div>
-          <span>{feedback.label}</span>
-          {startedAt ? (
-            <span className={styles.runFeedbackMeta}>
-              {formatDuration(elapsedSeconds)} elapsed
-              {isActive && quietSeconds >= 10 ? ` · ${formatDuration(quietSeconds)} since the last Codex update` : ""}
-            </span>
-          ) : null}
-        </div>
+    <details
+      className={`${styles.runFeedback} ${styles[feedback.state]}`}
+      open={feedback.state === "error" ? true : undefined}
+    >
+      <summary className={styles.runFeedbackHeader} aria-live="polite">
+        <Icon aria-hidden="true" className={isActive ? styles.spin : undefined} />
+        <span className={styles.runFeedbackLabel}>{feedback.label}</span>
+        {startedAt ? (
+          <span className={styles.runFeedbackMeta}>
+            {formatDuration(elapsedSeconds)}
+            {isActive && quietSeconds >= 10 ? ` · quiet ${formatDuration(quietSeconds)}` : ""}
+          </span>
+        ) : null}
+        <span className={styles.runFeedbackAction}>
+          Details
+          <ChevronDown aria-hidden="true" />
+        </span>
+      </summary>
+      <div className={styles.runFeedbackDetails}>
+        {isActive ? <p className={styles.quietStep}>{quietStep}</p> : null}
+        {feedback.details.length > 0 ? (
+          <ol>
+            {feedback.details.map((detail, index) => (
+              <li key={`${detail}-${index}`}>{detail}</li>
+            ))}
+          </ol>
+        ) : (
+          <p className={styles.quietStep}>No additional updates yet.</p>
+        )}
       </div>
-      {isActive ? <p className={styles.quietStep}>{quietStep}</p> : null}
-      {feedback.details.length > 0 ? (
-        <ol>
-          {feedback.details.map((detail, index) => (
-            <li key={`${detail}-${index}`}>{detail}</li>
-          ))}
-        </ol>
-      ) : null}
-    </section>
+    </details>
   );
 }
 
