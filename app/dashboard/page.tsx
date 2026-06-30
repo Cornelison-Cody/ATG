@@ -928,6 +928,7 @@ function ProjectChat({
       <aside className={styles.previewPanel} aria-label={`${editingTarget} UI preview`}>
         <div className={styles.previewHeader}>
           <h2>{editingTarget === "tv" ? "TV Preview" : "Phone Preview"}</h2>
+          <span className={styles.interactivePreviewLabel}>Interactive</span>
         </div>
         <ScaledPreviewFrame
           editingTarget={editingTarget}
@@ -975,7 +976,6 @@ function ScaledPreviewFrame({
       <iframe
         key={previewPath}
         sandbox="allow-scripts"
-        scrolling="no"
         src={previewPath}
         style={{
           height: `${virtualSize.height}px`,
