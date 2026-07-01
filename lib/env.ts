@@ -28,6 +28,19 @@ export function canUseLocalCodex() {
   return process.env.ENABLE_LOCAL_CODEX === "true" || process.env.NODE_ENV !== "production";
 }
 
+export function canUseCodexSdkPrototype() {
+  return process.env.ENABLE_CODEX_SDK_PROTOTYPE === "true" || process.env.NODE_ENV !== "production";
+}
+
+export function getCodexSdkWorkspaceRoot() {
+  return process.env.ATG_CODEX_SDK_WORKSPACE_ROOT || "";
+}
+
+export function getCodexSdkTimeoutMs() {
+  const configured = Number(process.env.ATG_CODEX_SDK_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured >= 1_000 ? configured : 300_000;
+}
+
 export function isProduction() {
   return process.env.NODE_ENV === "production";
 }
