@@ -2,8 +2,10 @@ import { randomUUID } from "crypto";
 import type { ThreadEvent, Usage } from "@openai/codex-sdk";
 import { getAuthenticatedUserId } from "@/lib/auth";
 import { requireEditorAuth } from "@/lib/api-auth";
+import { createCodexJob, getCodexJob, completeCodexJob } from "@/lib/codex-job-store.mjs";
+import { startAzureCodexJob } from "@/lib/codex-job-launcher";
 import { runCodexSdkPrototype } from "@/lib/codex-sdk-prototype.mjs";
-import { canUseCodexSdkPrototype, getCodexSdkTimeoutMs, getCodexSdkWorkspaceRoot } from "@/lib/env";
+import { canUseCodexSdkPrototype, getCodexSdkTimeoutMs, getCodexSdkWorkspaceRoot, isProduction } from "@/lib/env";
 import { exportGameTextFiles, updateGameTextFiles } from "@/lib/project-game";
 import { buildProjectPrompt } from "@/lib/project-prompt";
 import { getUserApiKey } from "@/lib/user-settings.mjs";
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
   let files;
   let userApiKey = "";
   try {
-    userApiKey = await getUserApiKey(userId);
+    userApiKey = isProduction() ? "" : await getUserApiKey(userId);
     files = await exportGameTextFiles(project);
     await appendProjectMessages(projectId, [{
       content: message,
@@ -90,6 +92,18 @@ export async function POST(request: Request) {
   } catch (error) {
     runningProjects.delete(projectId);
     return projectStoreErrorResponse(error, "Unable to prepare the Codex SDK workspace.");
+  }
+
+  if (isProduction()) {
+    return streamAzureJob({
+      editingTarget,
+      files,
+      message,
+      project,
+      projectId,
+      runningProjects,
+      userId
+    });
   }
 
   const encoder = new TextEncoder();
@@ -136,6 +150,10 @@ export async function POST(request: Request) {
           message: buildProjectPrompt(message, editingTarget),
           model: process.env.ATG_CODEX_SDK_MODEL,
           onEvent: (event) => forwardEvent(event, send),
+          onStaleThread: () => send({
+            message: "The previous Codex session expired. Starting a fresh session...",
+            type: "status"
+          }),
           signal: abortController.signal,
           threadId: project.codexThreadId,
           workspaceRoot: getCodexSdkWorkspaceRoot()
@@ -183,6 +201,79 @@ export async function POST(request: Request) {
       "X-Accel-Buffering": "no"
     }
   });
+}
+
+async function streamAzureJob({
+  editingTarget, files, message, project, projectId, runningProjects, userId
+}: {
+  editingTarget: "tv" | "phone";
+  files: { path: string; content: string }[];
+  message: string;
+  project: NonNullable<Awaited<ReturnType<typeof getProject>>>;
+  projectId: string;
+  runningProjects: Set<string>;
+  userId: string;
+}) {
+  const recentContext = project.messages.slice(-8)
+    .map((item) => `${item.role}: ${item.content}`)
+    .join("\n");
+  const { job, token } = await createCodexJob({
+    editingTarget,
+    files,
+    projectId,
+    prompt: `${buildProjectPrompt(message, editingTarget)}${recentContext ? `\n\nRecent project conversation:\n${recentContext}` : ""}`,
+    userId
+  });
+  const encoder = new TextEncoder();
+
+  try {
+    await startAzureCodexJob(job.id, token);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unable to start isolated Codex job.";
+    await completeCodexJob(job.id, token, { ok: false, errorMessage });
+    runningProjects.delete(projectId);
+    await persistAssistantMessage(projectId, errorMessage, "error");
+    return Response.json({ error: errorMessage }, { status: 502 });
+  }
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let eventIndex = 0;
+      const deadline = Date.now() + getCodexSdkTimeoutMs();
+      try {
+        while (Date.now() < deadline) {
+          const snapshot = await getCodexJob(job.id);
+          if (!snapshot) throw new Error("Codex job disappeared.");
+          for (const event of snapshot.events.slice(eventIndex)) {
+            controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+          }
+          eventIndex = snapshot.events.length;
+          if (snapshot.status === "done" || snapshot.status === "error") break;
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        const final = await getCodexJob(job.id);
+        if (final && final.status !== "done" && final.status !== "error") {
+          controller.enqueue(encoder.encode(`${JSON.stringify({ type: "error", message: "Isolated Codex job timed out." })}\n`));
+        }
+      } catch (error) {
+        controller.enqueue(encoder.encode(`${JSON.stringify({
+          type: "error", message: error instanceof Error ? error.message : "Unable to monitor Codex job."
+        })}\n`));
+      } finally {
+        runningProjects.delete(projectId);
+        controller.close();
+      }
+    }
+  });
+  return new Response(stream, { headers: streamHeaders() });
+}
+
+function streamHeaders() {
+  return {
+    "Cache-Control": "no-cache, no-transform",
+    "Content-Type": "application/x-ndjson; charset=utf-8",
+    "X-Accel-Buffering": "no"
+  };
 }
 
 function forwardEvent(

@@ -21,6 +21,8 @@ export function runCodexSdkPrototype(options: {
   message: string;
   model?: string;
   onEvent?: (event: ThreadEvent) => void | Promise<void>;
+  onStaleThread?: () => void | Promise<void>;
+  sandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
   signal?: AbortSignal;
   threadId?: string | null;
   workspaceRoot?: string;
@@ -41,3 +43,4 @@ export function readWorkspaceChanges(
   workspacePath: string,
   initialFiles: GameTextFile[]
 ): Promise<{ changedFiles: GameTextFile[] }>;
+export function isMissingRolloutError(error: unknown): boolean;

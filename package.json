@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@azure/cosmos": "^4.9.3",
+    "@azure/identity": "^4.13.1",
     "@azure/storage-blob": "^12.31.0",
     "@openai/codex-sdk": "^0.142.5",
     "jose": "^6.2.3",
