@@ -30,6 +30,18 @@ export function hasBearerToken(request: Request) {
   return Boolean(authorization?.startsWith("Bearer "));
 }
 
+export function getAuthenticatedUserId(request: Request) {
+  if (!isProduction()) {
+    return "local-development-user";
+  }
+
+  return (
+    request.headers.get("x-ms-client-principal-id") ||
+    request.headers.get("x-ms-client-principal-name") ||
+    ""
+  ).trim();
+}
+
 export function requireEditorAuth(request: Request) {
   if (!isProduction()) {
     return null;

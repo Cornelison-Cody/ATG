@@ -26,6 +26,7 @@ Create a GitHub `production` environment and configure these repository or envir
 - `AZURE_ENVIRONMENT_NAME` set to `prod`
 - `APP_BASE_URL` optional on first deploy; leave blank to use the generated Container Apps URL.
 - `AI_WORKER_URL`
+- `ENABLE_CODEX_SDK_PROTOTYPE` set to `true` to route dashboard chat through the server-side SDK.
 - `ENTRA_TENANT_ID`
 - `ENTRA_CLIENT_ID`
 - `GHCR_USERNAME` if the GHCR package is private
@@ -36,6 +37,7 @@ Configure these secrets:
 - `ENTRA_CLIENT_SECRET`
 - `GHCR_TOKEN` with `read:packages` if the GHCR package is private
 - `OPENAI_API_KEY`
+- `ATG_USER_SETTINGS_ENCRYPTION_KEY`, generated once with `openssl rand -base64 32`.
 
 The Azure identity used by GitHub Actions needs permissions to create/update resources in the target resource group. Configure it with an OIDC federated credential for:
 
@@ -59,6 +61,8 @@ The Azure identity used by GitHub Actions needs permissions to create/update res
 - The Bicep template enables Container Apps authentication when `ENTRA_CLIENT_SECRET` is provided. Its global validation allows anonymous traffic so TV/phone routes can stay public; the app middleware enforces editor-only auth.
 - `AI_WORKER_URL` remains the preferred production chat editing path. If it is unset, trusted beta deployments can set `ENABLE_LOCAL_COMPANION=true` and `ATG_COMPANION_TOKEN` to let a user-run companion process pick up editing jobs from their own machine.
 - Direct local Codex CLI execution stays disabled inside the production web container.
+- When `ENABLE_CODEX_SDK_PROTOTYPE=true`, dashboard chat uses the Codex SDK endpoint. A user's encrypted account API key takes precedence over the optional process-wide `OPENAI_API_KEY`.
+- Per-user OpenAI API keys are stored in the dedicated Cosmos DB `user-settings` container. Keep `ATG_USER_SETTINGS_ENCRYPTION_KEY` stable across deployments; rotating it requires re-encrypting or clearing existing keys.
 - Run the local companion from a trusted machine with Codex installed:
 
 ```bash

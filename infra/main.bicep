@@ -26,6 +26,9 @@ param aiWorkerUrl string = ''
 @description('Enable trusted local companion job polling when no hosted AI worker is configured.')
 param enableLocalCompanion bool = false
 
+@description('Enable the server-side Codex SDK dashboard chat endpoint.')
+param enableCodexSdkPrototype bool = false
+
 @secure()
 @description('Bearer token for the hosted AI editing worker.')
 param aiWorkerToken string = ''
@@ -37,6 +40,10 @@ param atgCompanionToken string = ''
 @secure()
 @description('OpenAI API key for hosted AI/worker integration.')
 param openAiApiKey string = ''
+
+@secure()
+@description('Base64-encoded 32-byte key used to encrypt per-user OpenAI API keys.')
+param userSettingsEncryptionKey string = ''
 
 @description('Optional GitHub username for pulling private GHCR images.')
 param ghcrUsername string = ''
@@ -82,6 +89,7 @@ var containerAppName = '${prefix}-app'
 var cosmosAccountName = 'atg-${take(normalizedEnvironment, 12)}-${nameSeed}-cosmos'
 var cosmosDatabaseName = 'atg'
 var cosmosProjectsContainerName = 'projects'
+var cosmosUserSettingsContainerName = 'user-settings'
 var storageAccountName = 'atg${take(normalizedEnvironment, 6)}${nameSeed}st'
 var gameAssetsContainerName = 'game-assets'
 var customDomains = empty(customDomainName) || empty(customDomainCertificateId) ? [] : [
@@ -118,6 +126,12 @@ var containerAppSecrets = concat(
     {
       name: 'openai-api-key'
       value: openAiApiKey
+    }
+  ],
+  empty(userSettingsEncryptionKey) ? [] : [
+    {
+      name: 'user-settings-encryption-key'
+      value: userSettingsEncryptionKey
     }
   ],
   empty(ghcrToken) ? [] : [
@@ -164,6 +178,10 @@ var containerAppEnv = concat(
       value: cosmosProjectsContainerName
     }
     {
+      name: 'AZURE_COSMOS_USER_SETTINGS_CONTAINER'
+      value: cosmosUserSettingsContainerName
+    }
+    {
       name: 'AZURE_COSMOS_KEY'
       secretRef: 'cosmos-key'
     }
@@ -203,6 +221,10 @@ var containerAppEnv = concat(
       name: 'ENABLE_LOCAL_CODEX'
       value: 'false'
     }
+    {
+      name: 'ENABLE_CODEX_SDK_PROTOTYPE'
+      value: enableCodexSdkPrototype ? 'true' : 'false'
+    }
   ],
   empty(aiWorkerToken) ? [] : [
     {
@@ -220,6 +242,12 @@ var containerAppEnv = concat(
     {
       name: 'OPENAI_API_KEY'
       secretRef: 'openai-api-key'
+    }
+  ],
+  empty(userSettingsEncryptionKey) ? [] : [
+    {
+      name: 'ATG_USER_SETTINGS_ENCRYPTION_KEY'
+      secretRef: 'user-settings-encryption-key'
     }
   ]
 )
@@ -286,6 +314,36 @@ resource projectsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/c
   properties: {
     resource: {
       id: cosmosProjectsContainerName
+      partitionKey: {
+        paths: [
+          '/id'
+        ]
+        kind: 'Hash'
+      }
+      indexingPolicy: {
+        indexingMode: 'consistent'
+        automatic: true
+        includedPaths: [
+          {
+            path: '/*'
+          }
+        ]
+        excludedPaths: [
+          {
+            path: '/"_etag"/?'
+          }
+        ]
+      }
+    }
+  }
+}
+
+resource userSettingsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  name: cosmosUserSettingsContainerName
+  parent: cosmosDatabase
+  properties: {
+    resource: {
+      id: cosmosUserSettingsContainerName
       partitionKey: {
         paths: [
           '/id'

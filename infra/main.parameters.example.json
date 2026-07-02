@@ -26,6 +26,9 @@
     "enableLocalCompanion": {
       "value": false
     },
+    "enableCodexSdkPrototype": {
+      "value": false
+    },
     "aiWorkerToken": {
       "value": "set-with-github-secret"
     },
@@ -33,6 +36,9 @@
       "value": "set-with-github-secret"
     },
     "openAiApiKey": {
+      "value": "set-with-github-secret"
+    },
+    "userSettingsEncryptionKey": {
       "value": "set-with-github-secret"
     },
     "ghcrUsername": {

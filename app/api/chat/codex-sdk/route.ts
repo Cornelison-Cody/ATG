@@ -1,10 +1,12 @@
 import { randomUUID } from "crypto";
 import type { ThreadEvent, Usage } from "@openai/codex-sdk";
+import { getAuthenticatedUserId } from "@/lib/auth";
 import { requireEditorAuth } from "@/lib/api-auth";
 import { runCodexSdkPrototype } from "@/lib/codex-sdk-prototype.mjs";
 import { canUseCodexSdkPrototype, getCodexSdkTimeoutMs, getCodexSdkWorkspaceRoot } from "@/lib/env";
 import { exportGameTextFiles, updateGameTextFiles } from "@/lib/project-game";
 import { buildProjectPrompt } from "@/lib/project-prompt";
+import { getUserApiKey } from "@/lib/user-settings.mjs";
 import {
   appendProjectMessages,
   type ChatMessage,
@@ -39,6 +41,11 @@ export async function POST(request: Request) {
     );
   }
 
+  const userId = getAuthenticatedUserId(request);
+  if (!userId) {
+    return Response.json({ error: "A user identity is required." }, { status: 401 });
+  }
+
   let body: ChatRequest;
   try {
     body = (await request.json()) as ChatRequest;
@@ -69,7 +76,9 @@ export async function POST(request: Request) {
   runningProjects.add(projectId);
 
   let files;
+  let userApiKey = "";
   try {
+    userApiKey = await getUserApiKey(userId);
     files = await exportGameTextFiles(project);
     await appendProjectMessages(projectId, [{
       content: message,
@@ -122,7 +131,7 @@ export async function POST(request: Request) {
 
       try {
         const result = await runCodexSdkPrototype({
-          apiKey: process.env.OPENAI_API_KEY || undefined,
+          apiKey: userApiKey || process.env.OPENAI_API_KEY || undefined,
           files,
           message: buildProjectPrompt(message, editingTarget),
           model: process.env.ATG_CODEX_SDK_MODEL,
