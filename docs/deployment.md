@@ -45,11 +45,25 @@ The Azure identity used by GitHub Actions needs permissions to create/update res
 - Branch: `main`
 - Environment: `production`, if using environment-scoped federation.
 
-The deployment identity also needs permission to create the custom
-`ATG Codex Job Starter` role and assign it to the web app managed identity.
-Use Owner or User Access Administrator plus Contributor at the resource-group
-scope during deployment. The runtime identity receives only the job
-read/start/execution-read actions.
+Routine deployments do not create Azure role definitions or assignments, so the
+GitHub deployment identity does not need elevated RBAC-administration access.
+
+After the first deployment that creates the Codex Container Apps Job, an Azure
+Owner or User Access Administrator must run the one-time command printed by the
+`Show one-time Codex job RBAC bootstrap` workflow step:
+
+```bash
+az role assignment create \
+  --assignee-object-id "<container-app-principal-id>" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Container Apps Contributor" \
+  --scope "<codex-job-resource-id>"
+```
+
+The assignment is scoped to the single Codex Job resource. It lets the web app
+start and inspect that job without granting it access to other Container Apps
+resources. Re-running the assignment is unnecessary unless the Container App
+managed identity or job resource is replaced.
 
 ## Deployment flow
 
@@ -70,9 +84,9 @@ read/start/execution-read actions.
 - When `ENABLE_CODEX_SDK_PROTOTYPE=true`, dashboard chat uses the Codex SDK endpoint. A user's encrypted account API key takes precedence over the optional process-wide `OPENAI_API_KEY`.
 - Per-user OpenAI API keys are stored in the dedicated Cosmos DB `user-settings` container. Keep `ATG_USER_SETTINGS_ENCRYPTION_KEY` stable across deployments; rotating it requires re-encrypting or clearing existing keys.
 - Deployed Codex edits run in a manual Container Apps Job. The web app managed
-  identity has a custom role limited to reading, starting, and inspecting that
-  job. The execution receives a short-lived job token rather than Cosmos, Blob,
-  Entra, or account-key encryption secrets.
+  identity receives `Container Apps Contributor` scoped only to that job through
+  the one-time RBAC bootstrap. The execution receives a short-lived job token
+  rather than Cosmos, Blob, Entra, or account-key encryption secrets.
 - Run the local companion from a trusted machine with Codex installed:
 
 ```bash
