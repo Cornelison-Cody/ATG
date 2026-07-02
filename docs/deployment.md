@@ -45,6 +45,12 @@ The Azure identity used by GitHub Actions needs permissions to create/update res
 - Branch: `main`
 - Environment: `production`, if using environment-scoped federation.
 
+The deployment identity also needs permission to create the custom
+`ATG Codex Job Starter` role and assign it to the web app managed identity.
+Use Owner or User Access Administrator plus Contributor at the resource-group
+scope during deployment. The runtime identity receives only the job
+read/start/execution-read actions.
+
 ## Deployment flow
 
 - Pull requests run `npm run check`, validate Bicep syntax, and build the Docker image.
@@ -63,6 +69,10 @@ The Azure identity used by GitHub Actions needs permissions to create/update res
 - Direct local Codex CLI execution stays disabled inside the production web container.
 - When `ENABLE_CODEX_SDK_PROTOTYPE=true`, dashboard chat uses the Codex SDK endpoint. A user's encrypted account API key takes precedence over the optional process-wide `OPENAI_API_KEY`.
 - Per-user OpenAI API keys are stored in the dedicated Cosmos DB `user-settings` container. Keep `ATG_USER_SETTINGS_ENCRYPTION_KEY` stable across deployments; rotating it requires re-encrypting or clearing existing keys.
+- Deployed Codex edits run in a manual Container Apps Job. The web app managed
+  identity has a custom role limited to reading, starting, and inspecting that
+  job. The execution receives a short-lived job token rather than Cosmos, Blob,
+  Entra, or account-key encryption secrets.
 - Run the local companion from a trusted machine with Codex installed:
 
 ```bash

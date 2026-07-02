@@ -103,6 +103,49 @@ test("workspace validation rejects symlinks in the game directory", async (t) =>
   );
 });
 
+test("missing rollout resumes once with a fresh Codex thread", async (t) => {
+  const root = await makeTestRoot(t);
+  let staleRecoveries = 0;
+  let freshStarts = 0;
+  const codex = {
+    resumeThread() {
+      return {
+        id: "stale-thread",
+        async runStreamed() {
+          async function* events() {
+            yield {
+              type: "turn.failed",
+              error: { message: "thread/resume failed: no rollout found for thread id stale-thread" }
+            };
+          }
+          return { events: events() };
+        }
+      };
+    },
+    startThread(options) {
+      freshStarts += 1;
+      return fakeThread(options.workingDirectory, async (workingDirectory) => {
+        await writeFile(path.join(workingDirectory, "game", "tv.html"), "<main>Recovered</main>\n");
+      });
+    }
+  };
+
+  const result = await runCodexSdkPrototype({
+    codexFactory: () => codex,
+    files: fixtureFiles,
+    message: "Recover.",
+    onStaleThread() {
+      staleRecoveries += 1;
+    },
+    threadId: "stale-thread",
+    workspaceRoot: root
+  });
+
+  assert.equal(staleRecoveries, 1);
+  assert.equal(freshStarts, 1);
+  assert.equal(result.changedFiles[0].content, "<main>Recovered</main>\n");
+});
+
 test(
   "live Codex SDK smoke test edits only the fixture workspace",
   { skip: process.env.ATG_RUN_CODEX_SDK_LIVE !== "true", timeout: 180_000 },

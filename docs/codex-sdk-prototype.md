@@ -104,14 +104,30 @@ long-running and multi-replica behavior.
 
 ## Azure gaps
 
-- Replace the in-process project lock with a distributed lease or durable queue.
+- The production endpoint now records work in the dedicated `codex-jobs` Cosmos
+  container and starts a disposable manual Container Apps Job through the web
+  app's managed identity.
+- Each execution receives only a random job ID and short-lived job token. It
+  fetches the selected project bundle and user API key over HTTPS, runs Codex
+  with full access inside the disposable outer container boundary, and uploads
+  candidate files for validation and persistence by the main service.
+- Job records expire from Cosmos after one day. Tokens are stored only as hashes
+  and rotate at terminal completion.
+- Azure executions intentionally start fresh Codex threads and include recent
+  project chat context because rollout files do not survive disposable jobs.
+- Local direct execution retains thread resume and retries once with a fresh
+  thread only for the specific `no rollout found` failure.
+
+Remaining production hardening:
+
+- Replace the in-process project lock with a distributed project lease.
 - Add encrypted per-user API-key storage, rotation, revocation, and redaction.
 - Verify the Codex Linux binary and sandbox behavior in the final Container Apps
   image.
 - Decide how Codex session files survive replica replacement.
 - Define job idempotency so a retried request cannot persist twice.
-- Move execution to Container Apps Jobs or a dedicated worker if request
-  duration, cancellation, or scale-to-zero proves unreliable.
+- Add an explicit dashboard cancellation action that stops the Azure execution;
+  replica timeout currently provides the terminal safety bound.
 - Add structured logs containing project ID, job ID, workspace ID, thread ID,
   duration, result, and token usage, without prompts, file contents, or secrets.
 - Measure cold start, workspace materialization, turn, and persistence latency in

@@ -90,6 +90,8 @@ var cosmosAccountName = 'atg-${take(normalizedEnvironment, 12)}-${nameSeed}-cosm
 var cosmosDatabaseName = 'atg'
 var cosmosProjectsContainerName = 'projects'
 var cosmosUserSettingsContainerName = 'user-settings'
+var cosmosCodexJobsContainerName = 'codex-jobs'
+var codexJobName = '${prefix}-codex-job'
 var storageAccountName = 'atg${take(normalizedEnvironment, 6)}${nameSeed}st'
 var gameAssetsContainerName = 'game-assets'
 var customDomains = empty(customDomainName) || empty(customDomainCertificateId) ? [] : [
@@ -180,6 +182,26 @@ var containerAppEnv = concat(
     {
       name: 'AZURE_COSMOS_USER_SETTINGS_CONTAINER'
       value: cosmosUserSettingsContainerName
+    }
+    {
+      name: 'AZURE_COSMOS_CODEX_JOBS_CONTAINER'
+      value: cosmosCodexJobsContainerName
+    }
+    {
+      name: 'AZURE_SUBSCRIPTION_ID'
+      value: subscription().subscriptionId
+    }
+    {
+      name: 'AZURE_RESOURCE_GROUP'
+      value: resourceGroup().name
+    }
+    {
+      name: 'ATG_CODEX_JOB_NAME'
+      value: codexJobName
+    }
+    {
+      name: 'ATG_CODEX_JOB_IMAGE'
+      value: containerImage
     }
     {
       name: 'AZURE_COSMOS_KEY'
@@ -368,6 +390,23 @@ resource userSettingsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabas
   }
 }
 
+resource codexJobsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  name: cosmosCodexJobsContainerName
+  parent: cosmosDatabase
+  properties: {
+    resource: {
+      id: cosmosCodexJobsContainerName
+      defaultTtl: 86400
+      partitionKey: {
+        paths: [
+          '/id'
+        ]
+        kind: 'Hash'
+      }
+    }
+  }
+}
+
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
@@ -446,6 +485,98 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     projectsContainer
     gameAssetsContainer
   ]
+}
+
+resource codexJob 'Microsoft.App/jobs@2024-03-01' = {
+  name: codexJobName
+  location: location
+  properties: {
+    environmentId: managedEnvironment.id
+    configuration: {
+      triggerType: 'Manual'
+      replicaTimeout: 600
+      replicaRetryLimit: 0
+      manualTriggerConfig: {
+        parallelism: 1
+        replicaCompletionCount: 1
+      }
+      registries: empty(ghcrToken) ? [] : [
+        {
+          server: 'ghcr.io'
+          username: ghcrUsername
+          passwordSecretRef: 'ghcr-token'
+        }
+      ]
+      secrets: empty(ghcrToken) ? [] : [
+        {
+          name: 'ghcr-token'
+          value: ghcrToken
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'codex-job'
+          image: containerImage
+          command: [
+            'node'
+            'scripts/atg-codex-job.mjs'
+          ]
+          env: [
+            {
+              name: 'ATG_BASE_URL'
+              value: appBaseUrl
+            }
+            {
+              name: 'ATG_CODEX_JOB_ID'
+              value: 'pending'
+            }
+            {
+              name: 'ATG_CODEX_JOB_TOKEN'
+              value: 'pending'
+            }
+          ]
+          resources: {
+            cpu: json('1')
+            memory: '2Gi'
+          }
+        }
+      ]
+    }
+  }
+}
+
+resource codexJobStarterRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
+  name: guid(subscription().id, 'atg-codex-job-starter')
+  properties: {
+    roleName: 'ATG Codex Job Starter'
+    description: 'Start and inspect the isolated ATG Codex job.'
+    type: 'CustomRole'
+    assignableScopes: [
+      resourceGroup().id
+    ]
+    permissions: [
+      {
+        actions: [
+          'Microsoft.App/jobs/read'
+          'Microsoft.App/jobs/start/action'
+          'Microsoft.App/jobs/executions/read'
+        ]
+        notActions: []
+      }
+    ]
+  }
+}
+
+resource codexJobStarterAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(codexJob.id, containerApp.id, codexJobStarterRole.id)
+  scope: codexJob
+  properties: {
+    principalId: containerApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: codexJobStarterRole.id
+  }
 }
 
 resource containerAppAuth 'Microsoft.App/containerApps/authConfigs@2024-03-01' = if (!empty(entraClientSecret)) {
