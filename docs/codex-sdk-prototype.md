@@ -64,13 +64,11 @@ If `OPENAI_API_KEY` is present, the endpoint passes it directly to the SDK. This
 is useful for a single trusted local or service identity, but it is not the
 recommended final multi-user design.
 
-For Azure, add encrypted per-user API-key storage tied to the authenticated Entra
-identity. Resolve the key server-side for each request and never return it to the
-browser, logs, chat history, project files, or Codex workspace. A platform-owned
-key can be supported later as an explicit billing mode.
-
-ATG does not currently have account-level API-key storage. The existing
-`OPENAI_API_KEY` setting is a process-wide deployment secret.
+For Azure, account settings store each user's API key encrypted with AES-256-GCM
+and bind it to the authenticated Entra identity. The key is resolved server-side
+for each request and is never returned to the browser, logs, chat history,
+project files, or Codex workspace. The optional process-wide `OPENAI_API_KEY`
+remains a fallback billing mode.
 
 ## Isolation and persistence
 

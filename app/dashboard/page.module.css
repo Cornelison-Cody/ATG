@@ -17,6 +17,7 @@
 .headerActions {
   align-items: center;
   display: flex;
+  gap: 12px;
   justify-content: flex-end;
   position: relative;
 }
@@ -110,6 +111,25 @@
     box-shadow 160ms ease,
     filter 160ms ease,
     transform 160ms ease;
+}
+
+.settingsButton {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  display: inline-flex;
+  font: inherit;
+  font-weight: 800;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 14px;
+}
+
+.settingsButton svg {
+  height: 18px;
+  width: 18px;
 }
 
 .primaryButton:hover,
@@ -694,6 +714,46 @@
 
 .modalBody {
   padding: 22px 20px;
+}
+
+.accountSettingsBody {
+  display: grid;
+  gap: 12px;
+}
+
+.accountSettingsBody p {
+  margin: 0;
+}
+
+.accountSettingsBody label {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.accountSettingsBody input {
+  background: #0b1018;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  min-height: 46px;
+  padding: 12px 14px;
+}
+
+.accountSettingsBody input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(77, 214, 201, 0.14);
+  outline: none;
+}
+
+.settingsStatus {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.settingsMessage {
+  color: var(--accent);
+  font-size: 0.9rem;
 }
 
 .confirmText {

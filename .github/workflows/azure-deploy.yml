@@ -87,6 +87,7 @@ jobs:
           AI_WORKER_URL: ${{ vars.AI_WORKER_URL }}
           AI_WORKER_TOKEN: ${{ secrets.AI_WORKER_TOKEN }}
           ENABLE_LOCAL_COMPANION: ${{ vars.ENABLE_LOCAL_COMPANION }}
+          ENABLE_CODEX_SDK_PROTOTYPE: ${{ vars.ENABLE_CODEX_SDK_PROTOTYPE }}
           ATG_COMPANION_TOKEN: ${{ secrets.ATG_COMPANION_TOKEN }}
           ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
           ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
@@ -96,6 +97,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ATG_USER_SETTINGS_ENCRYPTION_KEY: ${{ secrets.ATG_USER_SETTINGS_ENCRYPTION_KEY }}
         with:
           inlineScript: |
             set -euo pipefail
@@ -115,9 +117,11 @@ jobs:
                 customDomainCertificateId="${CUSTOM_DOMAIN_CERTIFICATE_ID:-}" \
                 aiWorkerUrl="${AI_WORKER_URL:-}" \
                 enableLocalCompanion="${ENABLE_LOCAL_COMPANION:-false}" \
+                enableCodexSdkPrototype="${ENABLE_CODEX_SDK_PROTOTYPE:-false}" \
                 aiWorkerToken="${AI_WORKER_TOKEN:-}" \
                 atgCompanionToken="${ATG_COMPANION_TOKEN:-}" \
                 openAiApiKey="${OPENAI_API_KEY:-}" \
+                userSettingsEncryptionKey="${ATG_USER_SETTINGS_ENCRYPTION_KEY:-}" \
                 ghcrUsername="${GHCR_USERNAME:-}" \
                 ghcrToken="${GHCR_TOKEN:-}" \
                 entraTenantId="${ENTRA_TENANT_ID:-}" \

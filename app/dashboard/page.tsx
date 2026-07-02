@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
+  KeyRound,
   LoaderCircle,
   Menu,
   MessageSquareWarning,
@@ -83,6 +84,13 @@ export default function Home() {
   const [editingTarget, setEditingTarget] = useState<EditingTarget>("tv");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
+  const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
+  const [accountApiKey, setAccountApiKey] = useState("");
+  const [isAccountKeyConfigured, setIsAccountKeyConfigured] = useState(false);
+  const [isServerKeyConfigured, setIsServerKeyConfigured] = useState(false);
+  const [isLoadingAccountSettings, setIsLoadingAccountSettings] = useState(false);
+  const [isSavingAccountSettings, setIsSavingAccountSettings] = useState(false);
+  const [accountSettingsMessage, setAccountSettingsMessage] = useState("");
   const [instructions, setInstructions] = useState("");
   const [isLoadingInstructions, setIsLoadingInstructions] = useState(false);
   const [isSavingInstructions, setIsSavingInstructions] = useState(false);
@@ -274,6 +282,84 @@ export default function Home() {
     }
   }
 
+  async function openAccountSettings() {
+    setIsProjectMenuOpen(false);
+    setIsAccountSettingsOpen(true);
+    setAccountApiKey("");
+    setAccountSettingsMessage("");
+    setIsLoadingAccountSettings(true);
+
+    try {
+      const response = await fetch("/api/account/openai-key", { cache: "no-store" });
+      const data = (await response.json()) as {
+        configured?: boolean;
+        error?: string;
+        serverFallbackConfigured?: boolean;
+      };
+      if (!response.ok) {
+        throw new Error(data.error || `Failed to load account settings (${response.status})`);
+      }
+      setIsAccountKeyConfigured(Boolean(data.configured));
+      setIsServerKeyConfigured(Boolean(data.serverFallbackConfigured));
+    } catch (settingsError) {
+      setAccountSettingsMessage(
+        settingsError instanceof Error ? settingsError.message : "Unable to load account settings."
+      );
+    } finally {
+      setIsLoadingAccountSettings(false);
+    }
+  }
+
+  async function saveAccountApiKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!accountApiKey.trim() || isSavingAccountSettings) {
+      return;
+    }
+    setIsSavingAccountSettings(true);
+    setAccountSettingsMessage("");
+    try {
+      const response = await fetch("/api/account/openai-key", {
+        body: JSON.stringify({ apiKey: accountApiKey }),
+        headers: { "Content-Type": "application/json" },
+        method: "PUT"
+      });
+      const data = (await response.json()) as { configured?: boolean; error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || `Failed to save API key (${response.status})`);
+      }
+      setIsAccountKeyConfigured(true);
+      setAccountApiKey("");
+      setAccountSettingsMessage("Your OpenAI API key is configured.");
+    } catch (settingsError) {
+      setAccountSettingsMessage(
+        settingsError instanceof Error ? settingsError.message : "Unable to save the API key."
+      );
+    } finally {
+      setIsSavingAccountSettings(false);
+    }
+  }
+
+  async function clearAccountApiKey() {
+    setIsSavingAccountSettings(true);
+    setAccountSettingsMessage("");
+    try {
+      const response = await fetch("/api/account/openai-key", { method: "DELETE" });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || `Failed to remove API key (${response.status})`);
+      }
+      setIsAccountKeyConfigured(false);
+      setAccountApiKey("");
+      setAccountSettingsMessage("Your saved OpenAI API key was removed.");
+    } catch (settingsError) {
+      setAccountSettingsMessage(
+        settingsError instanceof Error ? settingsError.message : "Unable to remove the API key."
+      );
+    } finally {
+      setIsSavingAccountSettings(false);
+    }
+  }
+
   async function deleteProject() {
     if (!projectPendingDelete || isDeleting) {
       return;
@@ -341,7 +427,7 @@ export default function Home() {
     });
 
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch("/api/chat/codex-sdk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ editingTarget, projectId: activeProject.id, message: prompt })
@@ -500,6 +586,9 @@ export default function Home() {
                 <button onClick={openInstructions} role="menuitem" type="button">
                   Instructions
                 </button>
+                <button onClick={openAccountSettings} role="menuitem" type="button">
+                  Account Settings
+                </button>
                 <button onClick={returnToProjects} role="menuitem" type="button">
                   Dashboard
                 </button>
@@ -507,9 +596,15 @@ export default function Home() {
             ) : null}
           </div>
         ) : (
-          <button className={styles.primaryButton} onClick={() => setIsCreateModalOpen(true)} type="button">
-            New Game
-          </button>
+          <div className={styles.headerActions}>
+            <button className={styles.settingsButton} onClick={openAccountSettings} type="button">
+              <KeyRound aria-hidden="true" />
+              Account Settings
+            </button>
+            <button className={styles.primaryButton} onClick={() => setIsCreateModalOpen(true)} type="button">
+              New Game
+            </button>
+          </div>
         )}
       </section>
 
@@ -556,6 +651,27 @@ export default function Home() {
         />
       ) : null}
 
+      {isAccountSettingsOpen ? (
+        <AccountSettingsModal
+          apiKey={accountApiKey}
+          configured={isAccountKeyConfigured}
+          isLoading={isLoadingAccountSettings}
+          isSaving={isSavingAccountSettings}
+          message={accountSettingsMessage}
+          onApiKeyChange={setAccountApiKey}
+          onClear={clearAccountApiKey}
+          onClose={() => {
+            if (!isSavingAccountSettings) {
+              setIsAccountSettingsOpen(false);
+              setAccountApiKey("");
+              setAccountSettingsMessage("");
+            }
+          }}
+          onSave={saveAccountApiKey}
+          serverFallbackConfigured={isServerKeyConfigured}
+        />
+      ) : null}
+
       {projectPendingDelete ? (
         <DeleteProjectModal
           isDeleting={isDeleting}
@@ -581,6 +697,93 @@ export default function Home() {
         />
       ) : null}
     </main>
+  );
+}
+
+function AccountSettingsModal({
+  apiKey,
+  configured,
+  isLoading,
+  isSaving,
+  message,
+  onApiKeyChange,
+  onClear,
+  onClose,
+  onSave,
+  serverFallbackConfigured
+}: {
+  apiKey: string;
+  configured: boolean;
+  isLoading: boolean;
+  isSaving: boolean;
+  message: string;
+  onApiKeyChange: (value: string) => void;
+  onClear: () => void;
+  onClose: () => void;
+  onSave: (event: FormEvent<HTMLFormElement>) => void;
+  serverFallbackConfigured: boolean;
+}) {
+  return (
+    <div className={styles.modalOverlay} role="presentation">
+      <form className={styles.modal} onSubmit={onSave}>
+        <div className={styles.modalHeader}>
+          <h2>Account Settings</h2>
+          <button
+            aria-label="Close account settings"
+            className={styles.closeButton}
+            disabled={isSaving}
+            onClick={onClose}
+            type="button"
+          >
+            <X aria-hidden="true" />
+          </button>
+        </div>
+        <div className={`${styles.modalBody} ${styles.accountSettingsBody}`}>
+          <p>
+            Add your OpenAI API key to run dashboard AI edits with the Codex SDK.
+            The key is encrypted server-side and is never shown again.
+          </p>
+          <label htmlFor="openai-api-key">OpenAI API key</label>
+          <input
+            autoComplete="off"
+            disabled={isLoading || isSaving}
+            id="openai-api-key"
+            onChange={(event) => onApiKeyChange(event.target.value)}
+            placeholder={configured ? "A personal key is configured" : "sk-..."}
+            type="password"
+            value={apiKey}
+          />
+          <p className={styles.settingsStatus}>
+            {isLoading
+              ? "Loading settings..."
+              : configured
+                ? "Personal API key configured."
+                : serverFallbackConfigured
+                  ? "Using the server API key until you add a personal key."
+                  : "No API key configured. Local development can use your Codex login."}
+          </p>
+          {message ? <p className={styles.settingsMessage}>{message}</p> : null}
+        </div>
+        <div className={styles.modalFooter}>
+          {configured ? (
+            <button
+              className={styles.dangerButton}
+              disabled={isSaving}
+              onClick={onClear}
+              type="button"
+            >
+              Remove Key
+            </button>
+          ) : null}
+          <button className={styles.secondaryButton} disabled={isSaving} onClick={onClose} type="button">
+            Close
+          </button>
+          <button disabled={!apiKey.trim() || isLoading || isSaving} type="submit">
+            {isSaving ? "Saving..." : configured ? "Replace Key" : "Save Key"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
