@@ -135,9 +135,22 @@ jobs:
               --output json > deployment-outputs.json
             app_url="$(jq -r '.appUrl.value' deployment-outputs.json)"
             container_app_name="$(jq -r '.containerAppName.value' deployment-outputs.json)"
+            container_app_principal_id="$(jq -r '.containerAppPrincipalId.value' deployment-outputs.json)"
+            codex_job_id="$(jq -r '.codexJobId.value' deployment-outputs.json)"
             echo "app_url=$app_url" >> "$GITHUB_OUTPUT"
             echo "container_app_name=$container_app_name" >> "$GITHUB_OUTPUT"
+            echo "container_app_principal_id=$container_app_principal_id" >> "$GITHUB_OUTPUT"
+            echo "codex_job_id=$codex_job_id" >> "$GITHUB_OUTPUT"
             echo "Deployed ATG to $app_url"
+
+      - name: Show one-time Codex job RBAC bootstrap
+        run: |
+          echo "Run this once as an Azure Owner or User Access Administrator:"
+          echo "az role assignment create \\"
+          echo "  --assignee-object-id '${{ steps.deploy.outputs.container_app_principal_id }}' \\"
+          echo "  --assignee-principal-type ServicePrincipal \\"
+          echo "  --role 'Container Apps Contributor' \\"
+          echo "  --scope '${{ steps.deploy.outputs.codex_job_id }}'"
 
       - name: Set generated app base URL
         if: ${{ vars.APP_BASE_URL == '' }}

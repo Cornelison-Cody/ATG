@@ -547,38 +547,6 @@ resource codexJob 'Microsoft.App/jobs@2024-03-01' = {
   }
 }
 
-resource codexJobStarterRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
-  name: guid(subscription().id, 'atg-codex-job-starter')
-  properties: {
-    roleName: 'ATG Codex Job Starter'
-    description: 'Start and inspect the isolated ATG Codex job.'
-    type: 'CustomRole'
-    assignableScopes: [
-      resourceGroup().id
-    ]
-    permissions: [
-      {
-        actions: [
-          'Microsoft.App/jobs/read'
-          'Microsoft.App/jobs/start/action'
-          'Microsoft.App/jobs/executions/read'
-        ]
-        notActions: []
-      }
-    ]
-  }
-}
-
-resource codexJobStarterAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(codexJob.id, containerApp.id, codexJobStarterRole.id)
-  scope: codexJob
-  properties: {
-    principalId: containerApp.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: codexJobStarterRole.id
-  }
-}
-
 resource containerAppAuth 'Microsoft.App/containerApps/authConfigs@2024-03-01' = if (!empty(entraClientSecret)) {
   name: 'current'
   parent: containerApp
@@ -608,7 +576,10 @@ resource containerAppAuth 'Microsoft.App/containerApps/authConfigs@2024-03-01' =
 }
 
 output containerAppName string = containerApp.name
+output containerAppPrincipalId string = containerApp.identity.principalId
 output containerAppFqdn string = containerApp.properties.configuration.ingress.fqdn
 output appUrl string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
+output codexJobId string = codexJob.id
+output codexJobName string = codexJob.name
 output cosmosAccountName string = cosmosAccount.name
 output storageAccountName string = storageAccount.name
