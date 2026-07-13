@@ -6,6 +6,7 @@ import path from "path";
 import { ATG_ROOT, PROJECTS_ROOT, TRASH_ROOT, useAzureStorageBackend } from "./env";
 import { isAllowedGameTextPath, normalizeGameTextFiles, validateGameTextPath } from "./game-file-rules.mjs";
 import { DEFAULT_GAME_CONFIG, GameConfig } from "./game-types";
+import { validateProjectName } from "./project-name-rules.mjs";
 import type { ChatMessage, ProjectDatabase, ProjectRecord, PublicProject } from "./project-types";
 
 export const GAME_DIR = "game";
@@ -29,6 +30,7 @@ interface ProjectStore {
   listProjects(): Promise<PublicProject[]>;
   getProject(projectId: string): Promise<ProjectRecord | null>;
   createProject(name: string): Promise<ProjectRecord>;
+  updateProjectDetails(projectId: string, patch: { name: string }): Promise<ProjectRecord>;
   softDeleteProject(projectId: string): Promise<ProjectRecord>;
   appendProjectMessages(projectId: string, messages: ChatMessage[]): Promise<ProjectRecord>;
   updateProjectThread(projectId: string, codexThreadId: string): Promise<ProjectRecord>;
@@ -86,6 +88,13 @@ class LocalProjectStore implements ProjectStore {
     db.projects.push(project);
     await this.writeDatabase(db);
     return project;
+  }
+
+  async updateProjectDetails(projectId: string, patch: { name: string }) {
+    return this.updateProject(projectId, (project) => {
+      project.name = requiredProjectName(patch.name);
+      project.updatedAt = new Date().toISOString();
+    });
   }
 
   async softDeleteProject(projectId: string) {
@@ -287,6 +296,13 @@ class AzureProjectStore implements ProjectStore {
     return project;
   }
 
+  async updateProjectDetails(projectId: string, patch: { name: string }) {
+    return this.updateProject(projectId, (project) => {
+      project.name = requiredProjectName(patch.name);
+      project.updatedAt = new Date().toISOString();
+    });
+  }
+
   async softDeleteProject(projectId: string) {
     const project = await this.getRequiredActiveProject(projectId);
     project.status = "deleted";
@@ -471,10 +487,7 @@ class AzureProjectStore implements ProjectStore {
 }
 
 function buildNewProject(name: string, slug: string, pathForSlug: (slug: string) => string): ProjectRecord {
-  const trimmedName = name.trim();
-  if (!trimmedName) {
-    throw new ProjectStoreError("Project name is required.", 400);
-  }
+  const trimmedName = requiredProjectName(name);
 
   const now = new Date().toISOString();
   return {
@@ -488,6 +501,15 @@ function buildNewProject(name: string, slug: string, pathForSlug: (slug: string)
     updatedAt: now,
     messages: []
   };
+}
+
+function requiredProjectName(value: string) {
+  const result = validateProjectName(value);
+  if (!result.ok) {
+    throw new ProjectStoreError(result.error, 400);
+  }
+
+  return result.name;
 }
 
 function renderReadme(project: ProjectRecord) {

@@ -16,6 +16,10 @@ export async function createProject(name: string) {
   return getProjectStore().createProject(name);
 }
 
+export async function updateProjectDetails(projectId: string, patch: { name: string }) {
+  return getProjectStore().updateProjectDetails(projectId, patch);
+}
+
 export async function softDeleteProject(projectId: string) {
   return getProjectStore().softDeleteProject(projectId);
 }
