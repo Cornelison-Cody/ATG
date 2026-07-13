@@ -10,12 +10,14 @@ import {
   MessageSquareWarning,
   Monitor,
   Pencil,
+  Settings,
   Smartphone,
   Trash2,
   X
 } from "lucide-react";
 import { InstructionsViewer } from "@/components/instructions-viewer";
 import { buildGameAssetUrl } from "@/lib/game-asset-url.mjs";
+import { PROJECT_NAME_MAX_LENGTH } from "@/lib/project-name-rules.mjs";
 import styles from "./page.module.css";
 
 type ChatMessage = {
@@ -80,9 +82,11 @@ export default function Home() {
   const [activeProject, setActiveProject] = useState<ProjectDetail | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newProjectName, setNewProjectName] = useState("");
+  const [projectSettingsName, setProjectSettingsName] = useState("");
   const [input, setInput] = useState("");
   const [editingTarget, setEditingTarget] = useState<EditingTarget>("tv");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const [accountApiKey, setAccountApiKey] = useState("");
@@ -97,11 +101,13 @@ export default function Home() {
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingProjectSettings, setIsSavingProjectSettings] = useState(false);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [projectPendingDelete, setProjectPendingDelete] = useState<ProjectSummary | null>(null);
   const [runFeedback, setRunFeedback] = useState<ChatRunFeedback>(idleRunFeedback);
   const [error, setError] = useState("");
+  const [projectSettingsMessage, setProjectSettingsMessage] = useState("");
   const decoderRef = useRef(new TextDecoder());
 
   const canCreate = useMemo(
@@ -112,6 +118,16 @@ export default function Home() {
     () => input.trim().length > 0 && !isRunning && Boolean(activeProject),
     [activeProject, input, isRunning]
   );
+  const canSaveProjectSettings = useMemo(() => {
+    const name = projectSettingsName.trim();
+    return (
+      Boolean(activeProject) &&
+      name.length > 0 &&
+      name.length <= PROJECT_NAME_MAX_LENGTH &&
+      name !== activeProject?.name &&
+      !isSavingProjectSettings
+    );
+  }, [activeProject, isSavingProjectSettings, projectSettingsName]);
 
   useEffect(() => {
     void loadProjects();
@@ -221,12 +237,75 @@ export default function Home() {
 
   function returnToProjects() {
     setIsProjectMenuOpen(false);
+    setIsProjectSettingsOpen(false);
     setIsInstructionsOpen(false);
     setActiveProject(null);
     setMessages([]);
     setInput("");
     setRunFeedback(idleRunFeedback);
     window.history.pushState(null, "", "/dashboard");
+  }
+
+  function openProjectSettings() {
+    if (!activeProject) {
+      return;
+    }
+
+    setIsProjectMenuOpen(false);
+    setProjectSettingsName(activeProject.name);
+    setProjectSettingsMessage("");
+    setIsProjectSettingsOpen(true);
+  }
+
+  async function saveProjectSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeProject || isSavingProjectSettings) {
+      return;
+    }
+
+    const name = projectSettingsName.trim();
+    if (!name) {
+      setProjectSettingsMessage("Project name is required.");
+      return;
+    }
+
+    if (name.length > PROJECT_NAME_MAX_LENGTH) {
+      setProjectSettingsMessage(`Project name must be ${PROJECT_NAME_MAX_LENGTH} characters or fewer.`);
+      return;
+    }
+
+    setIsSavingProjectSettings(true);
+    setProjectSettingsMessage("");
+    setError("");
+
+    try {
+      const response = await fetch(`/api/projects/${activeProject.id}`, {
+        body: JSON.stringify({ name }),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH"
+      });
+      const data = (await response.json()) as { project?: ProjectSummary; error?: string };
+      if (!response.ok || !data.project) {
+        throw new Error(data.error || `Failed to update project (${response.status})`);
+      }
+
+      setProjects((current) =>
+        current.map((project) => (project.id === data.project?.id ? data.project : project))
+      );
+      setActiveProject((current) =>
+        current && data.project && current.id === data.project.id
+          ? { ...current, ...data.project, messages: current.messages }
+          : current
+      );
+      setProjectSettingsName(data.project.name);
+      setProjectSettingsMessage("Project details saved.");
+    } catch (settingsError) {
+      setProjectSettingsMessage(
+        settingsError instanceof Error ? settingsError.message : "Unable to save project details."
+      );
+    } finally {
+      setIsSavingProjectSettings(false);
+    }
   }
 
   async function openInstructions() {
@@ -586,6 +665,9 @@ export default function Home() {
                 <button onClick={openInstructions} role="menuitem" type="button">
                   Instructions
                 </button>
+                <button onClick={openProjectSettings} role="menuitem" type="button">
+                  Project Settings
+                </button>
                 <button onClick={openAccountSettings} role="menuitem" type="button">
                   Account Settings
                 </button>
@@ -672,6 +754,24 @@ export default function Home() {
         />
       ) : null}
 
+      {isProjectSettingsOpen && activeProject ? (
+        <ProjectSettingsModal
+          canSave={canSaveProjectSettings}
+          isSaving={isSavingProjectSettings}
+          message={projectSettingsMessage}
+          name={projectSettingsName}
+          onClose={() => {
+            if (!isSavingProjectSettings) {
+              setIsProjectSettingsOpen(false);
+              setProjectSettingsMessage("");
+              setProjectSettingsName("");
+            }
+          }}
+          onNameChange={setProjectSettingsName}
+          onSave={saveProjectSettings}
+        />
+      ) : null}
+
       {projectPendingDelete ? (
         <DeleteProjectModal
           isDeleting={isDeleting}
@@ -697,6 +797,75 @@ export default function Home() {
         />
       ) : null}
     </main>
+  );
+}
+
+function ProjectSettingsModal({
+  canSave,
+  isSaving,
+  message,
+  name,
+  onClose,
+  onNameChange,
+  onSave
+}: {
+  canSave: boolean;
+  isSaving: boolean;
+  message: string;
+  name: string;
+  onClose: () => void;
+  onNameChange: (value: string) => void;
+  onSave: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const trimmedLength = name.trim().length;
+  const isOverLimit = trimmedLength > PROJECT_NAME_MAX_LENGTH;
+
+  return (
+    <div className={styles.modalOverlay} role="presentation">
+      <form className={styles.modal} onSubmit={onSave}>
+        <div className={styles.modalHeader}>
+          <h2>Project Settings</h2>
+          <button
+            aria-label="Close project settings"
+            className={styles.closeButton}
+            disabled={isSaving}
+            onClick={onClose}
+            type="button"
+          >
+            <X aria-hidden="true" />
+          </button>
+        </div>
+        <div className={`${styles.modalBody} ${styles.projectSettingsBody}`}>
+          <label htmlFor="project-name">Project name</label>
+          <div className={styles.projectNameField}>
+            <Settings aria-hidden="true" />
+            <input
+              autoComplete="off"
+              disabled={isSaving}
+              id="project-name"
+              maxLength={PROJECT_NAME_MAX_LENGTH + 20}
+              onChange={(event) => onNameChange(event.target.value)}
+              type="text"
+              value={name}
+            />
+          </div>
+          <div className={styles.fieldMeta}>
+            <span className={isOverLimit ? styles.fieldError : undefined}>
+              {trimmedLength}/{PROJECT_NAME_MAX_LENGTH}
+            </span>
+          </div>
+          {message ? <p className={styles.settingsMessage}>{message}</p> : null}
+        </div>
+        <div className={styles.modalFooter}>
+          <button className={styles.secondaryButton} disabled={isSaving} onClick={onClose} type="button">
+            Cancel
+          </button>
+          <button disabled={!canSave} type="submit">
+            {isSaving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
