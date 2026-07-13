@@ -7,6 +7,7 @@ import { startAzureCodexJob } from "@/lib/codex-job-launcher";
 import { runCodexSdkPrototype } from "@/lib/codex-sdk-prototype.mjs";
 import { canUseCodexSdkPrototype, getCodexSdkTimeoutMs, getCodexSdkWorkspaceRoot, isProduction } from "@/lib/env";
 import { exportGameTextFiles, updateGameTextFiles } from "@/lib/project-game";
+import { buildPlanningRequest, normalizeChatMode } from "@/lib/chat-mode.mjs";
 import { buildProjectPrompt } from "@/lib/project-prompt";
 import { getUserApiKey } from "@/lib/user-settings.mjs";
 import {
@@ -22,6 +23,7 @@ export const dynamic = "force-dynamic";
 
 type ChatRequest = {
   editingTarget?: unknown;
+  chatMode?: unknown;
   message?: unknown;
   projectId?: unknown;
 };
@@ -58,6 +60,7 @@ export async function POST(request: Request) {
   const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
   const message = typeof body.message === "string" ? body.message.trim() : "";
   const editingTarget = body.editingTarget === "phone" ? "phone" : "tv";
+  const chatMode = normalizeChatMode(body.chatMode);
 
   if (!projectId) {
     return Response.json({ error: "Project id is required." }, { status: 400 });
@@ -96,6 +99,7 @@ export async function POST(request: Request) {
 
   if (isProduction()) {
     return streamAzureJob({
+      chatMode,
       editingTarget,
       files,
       message,
@@ -147,7 +151,10 @@ export async function POST(request: Request) {
         const result = await runCodexSdkPrototype({
           apiKey: userApiKey || process.env.OPENAI_API_KEY || undefined,
           files,
-          message: buildProjectPrompt(message, editingTarget),
+          message: buildProjectPrompt(
+            chatMode === "plan" ? buildPlanningRequest(message, editingTarget) : message,
+            editingTarget
+          ),
           model: process.env.ATG_CODEX_SDK_MODEL,
           onEvent: (event) => forwardEvent(event, send),
           onStaleThread: () => send({
@@ -204,8 +211,9 @@ export async function POST(request: Request) {
 }
 
 async function streamAzureJob({
-  editingTarget, files, message, project, projectId, runningProjects, userId
+  chatMode, editingTarget, files, message, project, projectId, runningProjects, userId
 }: {
+  chatMode: "build" | "plan";
   editingTarget: "tv" | "phone";
   files: { path: string; content: string }[];
   message: string;
@@ -221,7 +229,10 @@ async function streamAzureJob({
     editingTarget,
     files,
     projectId,
-    prompt: `${buildProjectPrompt(message, editingTarget)}${recentContext ? `\n\nRecent project conversation:\n${recentContext}` : ""}`,
+    prompt: `${buildProjectPrompt(
+      chatMode === "plan" ? buildPlanningRequest(message, editingTarget) : message,
+      editingTarget
+    )}${recentContext ? `\n\nRecent project conversation:\n${recentContext}` : ""}`,
     userId
   });
   const encoder = new TextEncoder();

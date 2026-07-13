@@ -353,14 +353,16 @@
   padding: 12px 14px;
 }
 
-.targetToggle {
+.targetToggle,
+.modeToggle {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.targetToggle button {
+.targetToggle button,
+.modeToggle button {
   align-items: center;
   background: transparent;
   border: 1px solid var(--line);
@@ -376,17 +378,25 @@
 
 .targetToggle button:hover,
 .targetToggle button:focus-visible,
-.targetToggle .activeTargetButton {
+.targetToggle .activeTargetButton,
+.modeToggle button:hover,
+.modeToggle button:focus-visible,
+.modeToggle .activeModeButton {
   background: rgba(77, 214, 201, 0.12);
   border-color: rgba(77, 214, 201, 0.52);
   outline: none;
 }
 
-.targetToggle svg {
+.targetToggle svg,
+.modeToggle svg {
   height: 17px;
   stroke: currentColor;
   stroke-width: 2.2;
   width: 17px;
+}
+
+.modeToggle {
+  justify-content: flex-end;
 }
 
 .previewPanel {

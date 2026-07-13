@@ -4,7 +4,9 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
+  Hammer,
   KeyRound,
+  Lightbulb,
   LoaderCircle,
   Menu,
   MessageSquareWarning,
@@ -60,6 +62,7 @@ type ChatRunFeedback = {
 };
 
 type EditingTarget = "tv" | "phone";
+type ChatMode = "build" | "plan";
 
 const idleRunFeedback: ChatRunFeedback = {
   state: "idle",
@@ -85,6 +88,7 @@ export default function Home() {
   const [projectSettingsName, setProjectSettingsName] = useState("");
   const [input, setInput] = useState("");
   const [editingTarget, setEditingTarget] = useState<EditingTarget>("tv");
+  const [chatMode, setChatMode] = useState<ChatMode>("build");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
@@ -500,7 +504,7 @@ export default function Home() {
     setRunFeedback({
       state: "connecting",
       label: "Connecting to Codex",
-      details: ["Queued your edit request."],
+      details: [chatMode === "plan" ? "Queued your planning request." : "Queued your edit request."],
       lastUpdateAt: now,
       startedAt: now
     });
@@ -509,7 +513,7 @@ export default function Home() {
       const response = await fetch("/api/chat/codex-sdk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ editingTarget, projectId: activeProject.id, message: prompt })
+        body: JSON.stringify({ chatMode, editingTarget, projectId: activeProject.id, message: prompt })
       });
 
       if (!response.ok || !response.body) {
@@ -695,11 +699,13 @@ export default function Home() {
       {activeProject ? (
         <ProjectChat
           canSubmit={canSubmit}
+          chatMode={chatMode}
           editingTarget={editingTarget}
           input={input}
           isRunning={isRunning}
           messages={messages}
           onInputChange={setInput}
+          onModeChange={setChatMode}
           onTargetChange={setEditingTarget}
           projectId={activeProject.id}
           projectName={activeProject.name}
@@ -1196,11 +1202,13 @@ function InstructionsModal({
 
 function ProjectChat({
   canSubmit,
+  chatMode,
   editingTarget,
   input,
   isRunning,
   messages,
   onInputChange,
+  onModeChange,
   onTargetChange,
   onSubmit,
   projectId,
@@ -1209,11 +1217,13 @@ function ProjectChat({
   runFeedback
 }: {
   canSubmit: boolean;
+  chatMode: ChatMode;
   editingTarget: EditingTarget;
   input: string;
   isRunning: boolean;
   messages: ChatMessage[];
   onInputChange: (value: string) => void;
+  onModeChange: (mode: ChatMode) => void;
   onTargetChange: (target: EditingTarget) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   projectId: string;
@@ -1258,6 +1268,30 @@ function ProjectChat({
               Phone
             </button>
           </div>
+          <div className={styles.modeToggle} role="tablist" aria-label="Chat mode">
+            <button
+              aria-selected={chatMode === "build"}
+              className={chatMode === "build" ? styles.activeModeButton : undefined}
+              disabled={isRunning}
+              onClick={() => onModeChange("build")}
+              role="tab"
+              type="button"
+            >
+              <Hammer aria-hidden="true" />
+              Build
+            </button>
+            <button
+              aria-selected={chatMode === "plan"}
+              className={chatMode === "plan" ? styles.activeModeButton : undefined}
+              disabled={isRunning}
+              onClick={() => onModeChange("plan")}
+              role="tab"
+              type="button"
+            >
+              <Lightbulb aria-hidden="true" />
+              Plan
+            </button>
+          </div>
         </div>
 
         {messages.length > 0 ? (
@@ -1292,12 +1326,16 @@ function ProjectChat({
                 event.currentTarget.form?.requestSubmit();
               }
             }}
-            placeholder="Ask Codex to update this project..."
+            placeholder={
+              chatMode === "plan"
+                ? "Ask Codex to help plan gameplay choices..."
+                : "Ask Codex to update this project..."
+            }
             rows={4}
             value={input}
           />
           <button disabled={!canSubmit} type="submit">
-            {isRunning ? "Running" : "Send"}
+            {isRunning ? "Running" : chatMode === "plan" ? "Plan" : "Send"}
           </button>
         </form>
       </section>
