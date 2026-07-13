@@ -9,3 +9,5 @@ After creating the issue, add it to the GitHub project `TV Platform` owned by `C
 ## GitHub Issue Workflows
 
 When asked to find or pick a ticket/issue to work on, ask clarifying questions as needed before implementing. After completing the work, submit a pull request ready for review, not in draft mode, and move the issue's `TV Platform` project status to `In Review`.
+
+After opening the pull request, restart the local development server and share the local URL so the user can test the changes locally.
