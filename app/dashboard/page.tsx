@@ -472,10 +472,8 @@ export default function Home() {
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const prompt = input.trim();
+  async function submitChat(promptValue?: string) {
+    const prompt = (promptValue ?? input).trim();
     if (!prompt || isRunning || !activeProject) {
       return;
     }
@@ -565,6 +563,11 @@ export default function Home() {
     } finally {
       setIsRunning(false);
     }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitChat();
   }
 
   async function refreshOpenProject(projectId: string) {
@@ -706,6 +709,7 @@ export default function Home() {
           messages={messages}
           onInputChange={setInput}
           onModeChange={setChatMode}
+          onQuickAnswer={(answer) => void submitChat(answer)}
           onTargetChange={setEditingTarget}
           projectId={activeProject.id}
           projectName={activeProject.name}
@@ -1209,6 +1213,7 @@ function ProjectChat({
   messages,
   onInputChange,
   onModeChange,
+  onQuickAnswer,
   onTargetChange,
   onSubmit,
   projectId,
@@ -1224,6 +1229,7 @@ function ProjectChat({
   messages: ChatMessage[];
   onInputChange: (value: string) => void;
   onModeChange: (mode: ChatMode) => void;
+  onQuickAnswer: (answer: string) => void;
   onTargetChange: (target: EditingTarget) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   projectId: string;
@@ -1234,6 +1240,11 @@ function ProjectChat({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const showFeedback = runFeedback.state !== "idle";
   const previewPath = buildGameAssetUrl(projectId, editingTarget, projectRevision);
+  const latestAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant" && message.status === "done");
+  const quickAnswers =
+    chatMode === "plan" && latestAssistantMessage ? extractPlanningChoices(latestAssistantMessage.content) : [];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
@@ -1316,6 +1327,21 @@ function ProjectChat({
 
         {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
 
+        {quickAnswers.length > 0 && !isRunning ? (
+          <div className={styles.quickAnswers} aria-label="Planning answer choices">
+            {quickAnswers.map((answer) => (
+              <button
+                key={answer.label}
+                onClick={() => onQuickAnswer(`${answer.label}. ${answer.text}`)}
+                type="button"
+              >
+                <span>{answer.label}</span>
+                {answer.text}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <form className={styles.composer} onSubmit={onSubmit}>
           <textarea
             aria-label="Message Codex"
@@ -1353,6 +1379,16 @@ function ProjectChat({
       </aside>
     </section>
   );
+}
+
+function extractPlanningChoices(content: string) {
+  return content
+    .split("\n")
+    .map((line) => {
+      const match = line.match(/^\s*(?:[-*]\s*)?([A-D])[\).:-]\s+(.{1,180})\s*$/i);
+      return match ? { label: match[1].toUpperCase(), text: match[2].trim() } : null;
+    })
+    .filter((choice): choice is { label: string; text: string } => Boolean(choice));
 }
 
 function ScaledPreviewFrame({

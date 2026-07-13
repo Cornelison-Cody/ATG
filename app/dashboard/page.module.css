@@ -622,6 +622,42 @@
   overflow-wrap: anywhere;
 }
 
+.quickAnswers {
+  background: rgba(7, 9, 13, 0.72);
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px 0;
+}
+
+.quickAnswers button {
+  align-items: start;
+  background: rgba(77, 214, 201, 0.08);
+  border: 1px solid rgba(77, 214, 201, 0.28);
+  border-radius: 8px;
+  color: var(--text);
+  display: grid;
+  font: inherit;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  line-height: 1.35;
+  min-height: 42px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.quickAnswers button:hover,
+.quickAnswers button:focus-visible {
+  background: rgba(77, 214, 201, 0.15);
+  border-color: rgba(77, 214, 201, 0.55);
+  outline: none;
+}
+
+.quickAnswers span {
+  color: var(--accent);
+  font-weight: 900;
+}
+
 .connecting .runFeedbackHeader > svg,
 .running .runFeedbackHeader > svg {
   color: var(--accent);
