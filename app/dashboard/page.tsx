@@ -98,6 +98,7 @@ export default function Home() {
   const [isServerKeyConfigured, setIsServerKeyConfigured] = useState(false);
   const [isLoadingAccountSettings, setIsLoadingAccountSettings] = useState(false);
   const [isSavingAccountSettings, setIsSavingAccountSettings] = useState(false);
+  const [isTestingAccountKey, setIsTestingAccountKey] = useState(false);
   const [accountSettingsMessage, setAccountSettingsMessage] = useState("");
   const [instructions, setInstructions] = useState("");
   const [isLoadingInstructions, setIsLoadingInstructions] = useState(false);
@@ -423,6 +424,33 @@ export default function Home() {
     }
   }
 
+  async function testAccountApiKey() {
+    if (isTestingAccountKey || isSavingAccountSettings) {
+      return;
+    }
+
+    setIsTestingAccountKey(true);
+    setAccountSettingsMessage("");
+    try {
+      const response = await fetch("/api/account/openai-key", {
+        body: JSON.stringify({ apiKey: accountApiKey.trim() || undefined }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+      const data = (await response.json()) as { message?: string; error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || `Validation failed (${response.status})`);
+      }
+      setAccountSettingsMessage(data.message || "OpenAI API key validated.");
+    } catch (settingsError) {
+      setAccountSettingsMessage(
+        settingsError instanceof Error ? settingsError.message : "Unable to validate the API key."
+      );
+    } finally {
+      setIsTestingAccountKey(false);
+    }
+  }
+
   async function clearAccountApiKey() {
     setIsSavingAccountSettings(true);
     setAccountSettingsMessage("");
@@ -726,17 +754,19 @@ export default function Home() {
           configured={isAccountKeyConfigured}
           isLoading={isLoadingAccountSettings}
           isSaving={isSavingAccountSettings}
+          isTesting={isTestingAccountKey}
           message={accountSettingsMessage}
           onApiKeyChange={setAccountApiKey}
           onClear={clearAccountApiKey}
           onClose={() => {
-            if (!isSavingAccountSettings) {
+            if (!isSavingAccountSettings && !isTestingAccountKey) {
               setIsAccountSettingsOpen(false);
               setAccountApiKey("");
               setAccountSettingsMessage("");
             }
           }}
           onSave={saveAccountApiKey}
+          onTest={testAccountApiKey}
           serverFallbackConfigured={isServerKeyConfigured}
         />
       ) : null}
@@ -861,24 +891,31 @@ function AccountSettingsModal({
   configured,
   isLoading,
   isSaving,
+  isTesting,
   message,
   onApiKeyChange,
   onClear,
   onClose,
   onSave,
+  onTest,
   serverFallbackConfigured
 }: {
   apiKey: string;
   configured: boolean;
   isLoading: boolean;
   isSaving: boolean;
+  isTesting: boolean;
   message: string;
   onApiKeyChange: (value: string) => void;
   onClear: () => void;
   onClose: () => void;
   onSave: (event: FormEvent<HTMLFormElement>) => void;
+  onTest: () => void;
   serverFallbackConfigured: boolean;
 }) {
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const isBusy = isLoading || isSaving || isTesting;
+
   return (
     <div className={styles.modalOverlay} role="presentation">
       <form className={styles.modal} onSubmit={onSave}>
@@ -899,10 +936,56 @@ function AccountSettingsModal({
             Add your OpenAI API key to run dashboard AI edits with the Codex SDK.
             The key is encrypted server-side and is never shown again.
           </p>
+          <button
+            className={styles.inlineLinkButton}
+            onClick={() => setIsGuideOpen((current) => !current)}
+            type="button"
+          >
+            Learn how to create an OpenAI API key
+          </button>
+          {isGuideOpen ? (
+            <section className={styles.byokGuide} aria-label="OpenAI API key guide">
+              <ol>
+                <li>
+                  Create or choose a dedicated OpenAI project for Azure Tides Gaming in the{" "}
+                  <a href="https://platform.openai.com/settings/organization/projects" rel="noreferrer" target="_blank">
+                    OpenAI project settings
+                  </a>
+                  .
+                </li>
+                <li>
+                  Confirm billing and usage in the{" "}
+                  <a href="https://platform.openai.com/usage" rel="noreferrer" target="_blank">
+                    OpenAI Usage Dashboard
+                  </a>
+                  . Project budgets are alerts for tracking, not hard spending limits.
+                </li>
+                <li>
+                  Create a project API key from the{" "}
+                  <a href="https://platform.openai.com/api-keys" rel="noreferrer" target="_blank">
+                    OpenAI API keys page
+                  </a>
+                  . Use a normal project key for ATG, not an organization Admin API key.
+                </li>
+                <li>
+                  Restrict the key where practical, then paste it here. ATG encrypts it server-side,
+                  never displays it again, and uses it only for your AI editing jobs.
+                </li>
+                <li>
+                  Save and test the key. If it is invalid, revoked, unauthorized, or rate-limited,
+                  ATG shows a redacted validation message.
+                </li>
+              </ol>
+              <p>
+                Rotate a key by creating a replacement in OpenAI, saving it here, testing it, and revoking
+                the old key in OpenAI. Remove it here any time to return to the available fallback mode.
+              </p>
+            </section>
+          ) : null}
           <label htmlFor="openai-api-key">OpenAI API key</label>
           <input
             autoComplete="off"
-            disabled={isLoading || isSaving}
+            disabled={isBusy}
             id="openai-api-key"
             onChange={(event) => onApiKeyChange(event.target.value)}
             placeholder={configured ? "A personal key is configured" : "sk-..."}
@@ -924,17 +1007,25 @@ function AccountSettingsModal({
           {configured ? (
             <button
               className={styles.dangerButton}
-              disabled={isSaving}
+              disabled={isBusy}
               onClick={onClear}
               type="button"
             >
               Remove Key
             </button>
           ) : null}
-          <button className={styles.secondaryButton} disabled={isSaving} onClick={onClose} type="button">
+          <button className={styles.secondaryButton} disabled={isBusy} onClick={onClose} type="button">
             Close
           </button>
-          <button disabled={!apiKey.trim() || isLoading || isSaving} type="submit">
+          <button
+            className={styles.secondaryButton}
+            disabled={isBusy || (!apiKey.trim() && !configured)}
+            onClick={onTest}
+            type="button"
+          >
+            {isTesting ? "Testing..." : "Test Key"}
+          </button>
+          <button disabled={!apiKey.trim() || isBusy} type="submit">
             {isSaving ? "Saving..." : configured ? "Replace Key" : "Save Key"}
           </button>
         </div>

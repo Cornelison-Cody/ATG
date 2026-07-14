@@ -1,7 +1,9 @@
 import { getAuthenticatedUserId } from "@/lib/auth";
 import { requireEditorAuth } from "@/lib/api-auth";
+import { validateOpenAiApiKey } from "@/lib/openai-key-validation.mjs";
 import {
   deleteUserApiKey,
+  getUserApiKey,
   hasUserApiKey,
   saveUserApiKey,
   UserSettingsError
@@ -31,6 +33,27 @@ export async function PUT(request: Request) {
     const body = (await request.json()) as { apiKey?: unknown };
     await saveUserApiKey(auth, body.apiKey);
     return Response.json({ configured: true });
+  } catch (error) {
+    return settingsErrorResponse(error);
+  }
+}
+
+export async function POST(request: Request) {
+  const auth = await authenticateUser(request);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  try {
+    const body = (await request.json().catch(() => ({}))) as { apiKey?: unknown };
+    const apiKey = typeof body.apiKey === "string" && body.apiKey.trim()
+      ? body.apiKey
+      : await getUserApiKey(auth);
+    if (!apiKey) {
+      throw new UserSettingsError("Save an OpenAI API key before testing it.", 400);
+    }
+    const result = await validateOpenAiApiKey(apiKey);
+    return Response.json(result);
   } catch (error) {
     return settingsErrorResponse(error);
   }
