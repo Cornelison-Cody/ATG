@@ -4,7 +4,7 @@ import { requireEditorAuth } from "@/lib/api-auth";
 import { enqueueCompanionJob, subscribeToCompanionJob, type CompanionEvent } from "@/lib/companion-jobs";
 import { canUseLocalCodex, canUseLocalCompanion, getAiWorkerUrl } from "@/lib/env";
 import { exportGameTextFiles } from "@/lib/project-game";
-import { buildProjectPrompt } from "@/lib/project-prompt";
+import { buildProjectPrompt } from "@/lib/project-prompt.mjs";
 import {
   appendProjectMessages,
   ChatMessage,

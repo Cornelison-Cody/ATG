@@ -8,7 +8,7 @@ import { runCodexSdkPrototype } from "@/lib/codex-sdk-prototype.mjs";
 import { canUseCodexSdkPrototype, getCodexSdkTimeoutMs, getCodexSdkWorkspaceRoot, isProduction } from "@/lib/env";
 import { exportGameTextFiles, updateGameTextFiles } from "@/lib/project-game";
 import { buildPlanningRequest, normalizeChatMode } from "@/lib/chat-mode.mjs";
-import { buildProjectPrompt } from "@/lib/project-prompt";
+import { buildProjectPrompt } from "@/lib/project-prompt.mjs";
 import { getUserApiKey } from "@/lib/user-settings.mjs";
 import {
   appendProjectMessages,
