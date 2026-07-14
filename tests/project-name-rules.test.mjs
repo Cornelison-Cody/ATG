@@ -25,12 +25,32 @@ test("project name validation enforces a maximum length", () => {
 
 test("project detail patches reject unsupported fields", () => {
   assert.deepEqual(validateProjectDetailsPatch({ name: "Updated" }), { ok: true, name: "Updated" });
-  assert.deepEqual(validateProjectDetailsPatch({ name: "Updated", slug: "updated" }), {
+  assert.deepEqual(validateProjectDetailsPatch({ visibility: "private" }), {
+    ok: true,
+    visibility: "private"
+  });
+  assert.deepEqual(validateProjectDetailsPatch({ name: "Updated", visibility: "public" }), {
+    ok: true,
+    name: "Updated",
+    visibility: "public"
+  });
+  assert.deepEqual(validateProjectDetailsPatch({ name: "Updated", visibility: "private", slug: "updated" }), {
     ok: false,
     error: "Unsupported project detail field: slug."
   });
   assert.deepEqual(validateProjectDetailsPatch([]), {
     ok: false,
     error: "Project details must be an object."
+  });
+});
+
+test("project detail patches require supported visibility", () => {
+  assert.deepEqual(validateProjectDetailsPatch({ name: "Updated", visibility: "team" }), {
+    ok: false,
+    error: "Project visibility must be public or private."
+  });
+  assert.deepEqual(validateProjectDetailsPatch({}), {
+    ok: false,
+    error: "Project details must include a name or visibility."
   });
 });

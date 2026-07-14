@@ -64,7 +64,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const project = await updateProjectDetails(id, { name: validation.name });
+    const project = await updateProjectDetails(id, {
+      name: validation.name,
+      visibility: validation.visibility
+    });
     return Response.json({ project: toPublicProject(project) });
   } catch (error) {
     if (error instanceof SyntaxError) {

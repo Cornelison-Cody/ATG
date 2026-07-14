@@ -12,6 +12,7 @@ export type ProjectRecord = {
   slug: string;
   path: string;
   codexThreadId: string | null;
+  visibility: "private" | "public";
   status: "active" | "deleted";
   createdAt: string;
   updatedAt: string;

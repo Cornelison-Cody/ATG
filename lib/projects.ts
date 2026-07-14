@@ -16,7 +16,10 @@ export async function createProject(name: string) {
   return getProjectStore().createProject(name);
 }
 
-export async function updateProjectDetails(projectId: string, patch: { name: string }) {
+export async function updateProjectDetails(
+  projectId: string,
+  patch: { name?: string; visibility?: ProjectRecord["visibility"] }
+) {
   return getProjectStore().updateProjectDetails(projectId, patch);
 }
 

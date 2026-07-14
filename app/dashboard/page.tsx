@@ -4,10 +4,12 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
+  Globe2,
   Hammer,
   KeyRound,
   Lightbulb,
   LoaderCircle,
+  Lock,
   Menu,
   MessageSquareWarning,
   Monitor,
@@ -36,6 +38,7 @@ type ProjectSummary = {
   slug: string;
   path: string;
   codexThreadId: string | null;
+  visibility: "private" | "public";
   status: "active" | "deleted";
   createdAt: string;
   updatedAt: string;
@@ -86,6 +89,7 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newProjectName, setNewProjectName] = useState("");
   const [projectSettingsName, setProjectSettingsName] = useState("");
+  const [projectSettingsVisibility, setProjectSettingsVisibility] = useState<ProjectSummary["visibility"]>("private");
   const [input, setInput] = useState("");
   const [editingTarget, setEditingTarget] = useState<EditingTarget>("tv");
   const [chatMode, setChatMode] = useState<ChatMode>("plan");
@@ -129,10 +133,10 @@ export default function Home() {
       Boolean(activeProject) &&
       name.length > 0 &&
       name.length <= PROJECT_NAME_MAX_LENGTH &&
-      name !== activeProject?.name &&
+      (name !== activeProject?.name || projectSettingsVisibility !== activeProject?.visibility) &&
       !isSavingProjectSettings
     );
-  }, [activeProject, isSavingProjectSettings, projectSettingsName]);
+  }, [activeProject, isSavingProjectSettings, projectSettingsName, projectSettingsVisibility]);
 
   useEffect(() => {
     void loadProjects();
@@ -259,6 +263,7 @@ export default function Home() {
 
     setIsProjectMenuOpen(false);
     setProjectSettingsName(activeProject.name);
+    setProjectSettingsVisibility(activeProject.visibility);
     setProjectSettingsMessage("");
     setIsProjectSettingsOpen(true);
   }
@@ -286,7 +291,7 @@ export default function Home() {
 
     try {
       const response = await fetch(`/api/projects/${activeProject.id}`, {
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, visibility: projectSettingsVisibility }),
         headers: { "Content-Type": "application/json" },
         method: "PATCH"
       });
@@ -304,6 +309,7 @@ export default function Home() {
           : current
       );
       setProjectSettingsName(data.project.name);
+      setProjectSettingsVisibility(data.project.visibility);
       setProjectSettingsMessage("Project details saved.");
     } catch (settingsError) {
       setProjectSettingsMessage(
@@ -782,10 +788,13 @@ export default function Home() {
               setIsProjectSettingsOpen(false);
               setProjectSettingsMessage("");
               setProjectSettingsName("");
+              setProjectSettingsVisibility("private");
             }
           }}
           onNameChange={setProjectSettingsName}
           onSave={saveProjectSettings}
+          onVisibilityChange={setProjectSettingsVisibility}
+          visibility={projectSettingsVisibility}
         />
       ) : null}
 
@@ -824,7 +833,9 @@ function ProjectSettingsModal({
   name,
   onClose,
   onNameChange,
-  onSave
+  onSave,
+  onVisibilityChange,
+  visibility
 }: {
   canSave: boolean;
   isSaving: boolean;
@@ -833,6 +844,8 @@ function ProjectSettingsModal({
   onClose: () => void;
   onNameChange: (value: string) => void;
   onSave: (event: FormEvent<HTMLFormElement>) => void;
+  onVisibilityChange: (value: ProjectSummary["visibility"]) => void;
+  visibility: ProjectSummary["visibility"];
 }) {
   const trimmedLength = name.trim().length;
   const isOverLimit = trimmedLength > PROJECT_NAME_MAX_LENGTH;
@@ -871,6 +884,29 @@ function ProjectSettingsModal({
               {trimmedLength}/{PROJECT_NAME_MAX_LENGTH}
             </span>
           </div>
+          <fieldset className={styles.visibilityField} disabled={isSaving}>
+            <legend>Project visibility</legend>
+            <div className={styles.visibilityToggle}>
+              <button
+                aria-pressed={visibility === "private"}
+                className={visibility === "private" ? styles.activeVisibility : undefined}
+                onClick={() => onVisibilityChange("private")}
+                type="button"
+              >
+                <Lock aria-hidden="true" />
+                <span>Private</span>
+              </button>
+              <button
+                aria-pressed={visibility === "public"}
+                className={visibility === "public" ? styles.activeVisibility : undefined}
+                onClick={() => onVisibilityChange("public")}
+                type="button"
+              >
+                <Globe2 aria-hidden="true" />
+                <span>Public</span>
+              </button>
+            </div>
+          </fieldset>
           {message ? <p className={styles.settingsMessage}>{message}</p> : null}
         </div>
         <div className={styles.modalFooter}>
@@ -1070,6 +1106,14 @@ function ProjectDashboard({
                 <h2>{project.name}</h2>
                 <span>{formatUpdatedAt(project.updatedAt)}</span>
               </div>
+              <span className={styles.visibilityBadge}>
+                {project.visibility === "public" ? (
+                  <Globe2 aria-hidden="true" />
+                ) : (
+                  <Lock aria-hidden="true" />
+                )}
+                {project.visibility === "public" ? "Public" : "Private"}
+              </span>
             </a>
             <button
               aria-label={`Edit ${project.name}`}

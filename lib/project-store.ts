@@ -31,7 +31,10 @@ interface ProjectStore {
   listProjects(): Promise<PublicProject[]>;
   getProject(projectId: string): Promise<ProjectRecord | null>;
   createProject(name: string): Promise<ProjectRecord>;
-  updateProjectDetails(projectId: string, patch: { name: string }): Promise<ProjectRecord>;
+  updateProjectDetails(
+    projectId: string,
+    patch: { name?: string; visibility?: ProjectRecord["visibility"] }
+  ): Promise<ProjectRecord>;
   softDeleteProject(projectId: string): Promise<ProjectRecord>;
   appendProjectMessages(projectId: string, messages: ChatMessage[]): Promise<ProjectRecord>;
   updateProjectThread(projectId: string, codexThreadId: string): Promise<ProjectRecord>;
@@ -49,7 +52,7 @@ export function getProjectStore(): ProjectStore {
 }
 
 export function toPublicProject(project: ProjectRecord): PublicProject {
-  const { messages, ...rest } = project;
+  const { messages, ...rest } = withProjectDefaults(project);
   return {
     ...rest,
     messageCount: messages.length
@@ -73,7 +76,8 @@ class LocalProjectStore implements ProjectStore {
 
   async getProject(projectId: string) {
     const db = await this.readDatabase();
-    return db.projects.find((project) => project.id === projectId) ?? null;
+    const project = db.projects.find((item) => item.id === projectId) ?? null;
+    return project ? withProjectDefaults(project) : null;
   }
 
   async createProject(name: string) {
@@ -91,9 +95,14 @@ class LocalProjectStore implements ProjectStore {
     return project;
   }
 
-  async updateProjectDetails(projectId: string, patch: { name: string }) {
+  async updateProjectDetails(projectId: string, patch: { name?: string; visibility?: ProjectRecord["visibility"] }) {
     return this.updateProject(projectId, (project) => {
-      project.name = requiredProjectName(patch.name);
+      if (patch.name !== undefined) {
+        project.name = requiredProjectName(patch.name);
+      }
+      if (patch.visibility !== undefined) {
+        project.visibility = patch.visibility;
+      }
       project.updatedAt = new Date().toISOString();
     });
   }
@@ -242,7 +251,7 @@ class LocalProjectStore implements ProjectStore {
 
     try {
       const raw = await readFile(DB_PATH, "utf8");
-      return JSON.parse(raw) as ProjectDatabase;
+      return normalizeDatabase(JSON.parse(raw) as ProjectDatabase);
     } catch (error) {
       if (!isMissingFileError(error)) {
         throw error;
@@ -277,7 +286,7 @@ class AzureProjectStore implements ProjectStore {
   async getProject(projectId: string) {
     try {
       const { resource } = await this.getCosmosContainer().item(projectId, projectId).read<ProjectRecord>();
-      return resource ?? null;
+      return resource ? withProjectDefaults(resource) : null;
     } catch (error) {
       if (isCosmosNotFound(error)) {
         return null;
@@ -297,9 +306,14 @@ class AzureProjectStore implements ProjectStore {
     return project;
   }
 
-  async updateProjectDetails(projectId: string, patch: { name: string }) {
+  async updateProjectDetails(projectId: string, patch: { name?: string; visibility?: ProjectRecord["visibility"] }) {
     return this.updateProject(projectId, (project) => {
-      project.name = requiredProjectName(patch.name);
+      if (patch.name !== undefined) {
+        project.name = requiredProjectName(patch.name);
+      }
+      if (patch.visibility !== undefined) {
+        project.visibility = patch.visibility;
+      }
       project.updatedAt = new Date().toISOString();
     });
   }
@@ -497,10 +511,24 @@ function buildNewProject(name: string, slug: string, pathForSlug: (slug: string)
     slug,
     path: pathForSlug(slug),
     codexThreadId: null,
+    visibility: "private",
     status: "active",
     createdAt: now,
     updatedAt: now,
     messages: []
+  };
+}
+
+function normalizeDatabase(db: ProjectDatabase): ProjectDatabase {
+  return {
+    projects: db.projects.map(withProjectDefaults)
+  };
+}
+
+function withProjectDefaults(project: ProjectRecord): ProjectRecord {
+  return {
+    ...project,
+    visibility: project.visibility === "public" ? "public" : "private"
   };
 }
 

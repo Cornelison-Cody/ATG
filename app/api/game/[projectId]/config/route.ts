@@ -1,5 +1,6 @@
 import { requireEditorAuth } from "@/lib/api-auth";
 import { getProject } from "@/lib/projects";
+import { requireProjectRuntimeAccess } from "@/lib/project-access";
 import { readGameConfig, updateGameConfig } from "@/lib/project-game";
 
 export const runtime = "nodejs";
@@ -9,10 +10,15 @@ type RouteContext = {
   params: Promise<{ projectId: string }>;
 };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const project = await getActiveProject(context);
   if (!project) {
     return Response.json({ error: "Project was not found." }, { status: 404 });
+  }
+
+  const authResponse = await requireProjectRuntimeAccess(request, project);
+  if (authResponse) {
+    return authResponse;
   }
 
   return Response.json({ config: await readGameConfig(project) });
