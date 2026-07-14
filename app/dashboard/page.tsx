@@ -88,7 +88,7 @@ export default function Home() {
   const [projectSettingsName, setProjectSettingsName] = useState("");
   const [input, setInput] = useState("");
   const [editingTarget, setEditingTarget] = useState<EditingTarget>("tv");
-  const [chatMode, setChatMode] = useState<ChatMode>("build");
+  const [chatMode, setChatMode] = useState<ChatMode>("plan");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
@@ -226,6 +226,7 @@ export default function Home() {
       setActiveProject(data.project);
       setMessages(data.project.messages);
       setInput("");
+      setChatMode("plan");
       if (shouldUpdateUrl) {
         window.history.pushState(null, "", `/dashboard?project=${encodeURIComponent(projectId)}`);
       }
@@ -643,48 +644,14 @@ export default function Home() {
   }
 
   return (
-    <main className={styles.shell}>
+    <main className={`${styles.shell} ${activeProject ? styles.editorShell : ""}`}>
       <section className={styles.header}>
-        <div>
-          <h1 className={activeProject ? undefined : styles.appTitle}>
-            {activeProject ? activeProject.name : "Azure Tides Gaming"}
-          </h1>
-        </div>
-        {activeProject ? (
-          <div className={styles.headerActions}>
-            <button
-              aria-expanded={isProjectMenuOpen}
-              aria-label="Open game menu"
-              className={styles.menuButton}
-              onClick={() => setIsProjectMenuOpen((current) => !current)}
-              type="button"
-            >
-              <Menu aria-hidden="true" />
-            </button>
-            {isProjectMenuOpen ? (
-              <div className={styles.menu} role="menu">
-                <a href={`/tv/${activeProject.id}`} role="menuitem">
-                  Open TV
-                </a>
-                <a href={`/join/${activeProject.id}`} role="menuitem">
-                  Open Phone
-                </a>
-                <button onClick={openInstructions} role="menuitem" type="button">
-                  Instructions
-                </button>
-                <button onClick={openProjectSettings} role="menuitem" type="button">
-                  Project Settings
-                </button>
-                <button onClick={openAccountSettings} role="menuitem" type="button">
-                  Account Settings
-                </button>
-                <button onClick={returnToProjects} role="menuitem" type="button">
-                  Dashboard
-                </button>
-              </div>
-            ) : null}
+        {!activeProject ? (
+          <div>
+            <h1 className={styles.appTitle}>Azure Tides Gaming</h1>
           </div>
-        ) : (
+        ) : null}
+        {activeProject ? null : (
           <div className={styles.headerActions}>
             <button className={styles.settingsButton} onClick={openAccountSettings} type="button">
               <KeyRound aria-hidden="true" />
@@ -708,10 +675,16 @@ export default function Home() {
           isRunning={isRunning}
           messages={messages}
           onInputChange={setInput}
+          onOpenAccountSettings={openAccountSettings}
+          onOpenInstructions={openInstructions}
+          onOpenProjectSettings={openProjectSettings}
           onModeChange={setChatMode}
           onQuickAnswer={(answer) => void submitChat(answer)}
+          onReturnToProjects={returnToProjects}
           onTargetChange={setEditingTarget}
+          onToggleProjectMenu={() => setIsProjectMenuOpen((current) => !current)}
           projectId={activeProject.id}
+          isProjectMenuOpen={isProjectMenuOpen}
           projectName={activeProject.name}
           projectRevision={activeProject.updatedAt}
           onSubmit={handleSubmit}
@@ -1210,11 +1183,17 @@ function ProjectChat({
   editingTarget,
   input,
   isRunning,
+  isProjectMenuOpen,
   messages,
   onInputChange,
   onModeChange,
+  onOpenAccountSettings,
+  onOpenInstructions,
+  onOpenProjectSettings,
   onQuickAnswer,
+  onReturnToProjects,
   onTargetChange,
+  onToggleProjectMenu,
   onSubmit,
   projectId,
   projectName,
@@ -1226,11 +1205,17 @@ function ProjectChat({
   editingTarget: EditingTarget;
   input: string;
   isRunning: boolean;
+  isProjectMenuOpen: boolean;
   messages: ChatMessage[];
   onInputChange: (value: string) => void;
   onModeChange: (mode: ChatMode) => void;
+  onOpenAccountSettings: () => void;
+  onOpenInstructions: () => void;
+  onOpenProjectSettings: () => void;
   onQuickAnswer: (answer: string) => void;
+  onReturnToProjects: () => void;
   onTargetChange: (target: EditingTarget) => void;
+  onToggleProjectMenu: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   projectId: string;
   projectName: string;
@@ -1245,10 +1230,14 @@ function ProjectChat({
     .find((message) => message.role === "assistant" && message.status === "done");
   const quickAnswers =
     chatMode === "plan" && latestAssistantMessage ? extractPlanningChoices(latestAssistantMessage.content) : [];
+  const planningQuestion =
+    chatMode === "plan" && latestAssistantMessage ? extractPlanningQuestion(latestAssistantMessage.content) : "";
+  const quickAnswersKey = quickAnswers.map((answer) => `${answer.label}:${answer.text}`).join("|");
+  const hasConversation = messages.length > 0 || quickAnswers.length > 0;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
+  }, [messages, quickAnswers.length, quickAnswersKey]);
 
   return (
     <section className={styles.editorWorkspace} aria-label="Project editor">
@@ -1305,22 +1294,27 @@ function ProjectChat({
           </div>
         </div>
 
-        {messages.length > 0 ? (
+        {hasConversation ? (
           <div className={styles.messages}>
-            {messages.map((message) => (
-              <article
-                className={`${styles.message} ${styles[message.role]} ${
-                  message.status === "error" ? styles.error : ""
-                }`}
-                key={message.id}
-              >
-                <div className={styles.messageMeta}>
-                  <span>{message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}</span>
-                  {message.status === "running" ? <span>Running</span> : null}
+            {messages.map((message) => {
+              return (
+                <div className={styles.messageGroup} key={message.id}>
+                  <article
+                    className={`${styles.message} ${styles[message.role]} ${
+                      message.status === "error" ? styles.error : ""
+                    }`}
+                  >
+                    <div className={styles.messageMeta}>
+                      <span>
+                        {message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}
+                      </span>
+                      {message.status === "running" ? <span>Running</span> : null}
+                    </div>
+                    <p>{message.content}</p>
+                  </article>
                 </div>
-                <p>{message.content}</p>
-              </article>
-            ))}
+              );
+            })}
             <div ref={messagesEndRef} />
           </div>
         ) : null}
@@ -1329,6 +1323,10 @@ function ProjectChat({
 
         {quickAnswers.length > 0 && !isRunning ? (
           <div className={styles.quickAnswers} aria-label="Planning answer choices">
+            <div className={styles.planningQuestion}>
+              <span>Codex asks</span>
+              <p>{planningQuestion || "Choose the next planning direction."}</p>
+            </div>
             {quickAnswers.map((answer) => (
               <button
                 key={answer.label}
@@ -1368,8 +1366,43 @@ function ProjectChat({
 
       <aside className={styles.previewPanel} aria-label={`${editingTarget} UI preview`}>
         <div className={styles.previewHeader}>
-          <h2>{editingTarget === "tv" ? "TV Preview" : "Phone Preview"}</h2>
-          <span className={styles.interactivePreviewLabel}>Interactive</span>
+          <div className={styles.previewTitleGroup}>
+            <h2>{projectName}</h2>
+            <span>{editingTarget === "tv" ? "TV Preview" : "Phone Preview"}</span>
+          </div>
+          <div className={styles.previewMenuActions}>
+            <button
+              aria-expanded={isProjectMenuOpen}
+              aria-label="Open game menu"
+              className={styles.menuButton}
+              onClick={onToggleProjectMenu}
+              type="button"
+            >
+              <Menu aria-hidden="true" />
+            </button>
+            {isProjectMenuOpen ? (
+              <div className={styles.menu} role="menu">
+                <a href={`/tv/${projectId}`} role="menuitem">
+                  Open TV
+                </a>
+                <a href={`/join/${projectId}`} role="menuitem">
+                  Open Phone
+                </a>
+                <button onClick={onOpenInstructions} role="menuitem" type="button">
+                  Instructions
+                </button>
+                <button onClick={onOpenProjectSettings} role="menuitem" type="button">
+                  Project Settings
+                </button>
+                <button onClick={onOpenAccountSettings} role="menuitem" type="button">
+                  Account Settings
+                </button>
+                <button onClick={onReturnToProjects} role="menuitem" type="button">
+                  Dashboard
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
         <ScaledPreviewFrame
           editingTarget={editingTarget}
@@ -1389,6 +1422,16 @@ function extractPlanningChoices(content: string) {
       return match ? { label: match[1].toUpperCase(), text: match[2].trim() } : null;
     })
     .filter((choice): choice is { label: string; text: string } => Boolean(choice));
+}
+
+function extractPlanningQuestion(content: string) {
+  const compactContent = content.replace(/\s+/g, " ").trim();
+  const beforeChoices = compactContent.match(/^(.*?)(?=\s(?:[-*]\s*)?[A-D][).:-]\s+)/i)?.[1] ?? compactContent;
+
+  return beforeChoices
+    .replace(/^Question\s*[:\-]\s*/i, "")
+    .replace(/^Codex asks\s*[:\-]\s*/i, "")
+    .trim();
 }
 
 function ScaledPreviewFrame({
