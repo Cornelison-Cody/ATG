@@ -9,9 +9,16 @@ import { canUseCodexSdkPrototype, getCodexSdkTimeoutMs, getCodexSdkWorkspaceRoot
 import { exportGameTextFiles, updateGameTextFiles } from "@/lib/project-game";
 import { buildPlanningRequest, normalizeChatMode } from "@/lib/chat-mode.mjs";
 import { buildProjectPrompt } from "@/lib/project-prompt.mjs";
+import {
+  canEditProject,
+  getProjectPrincipal,
+  principalRequiredResponse,
+  projectAccessResponse
+} from "@/lib/project-access";
 import { getUserApiKey } from "@/lib/user-settings.mjs";
 import {
   appendProjectMessages,
+  claimProject,
   type ChatMessage,
   getProject,
   ProjectStoreError,
@@ -74,6 +81,15 @@ export async function POST(request: Request) {
     return Response.json({ error: "Project was not found." }, { status: 404 });
   }
 
+  const principal = getProjectPrincipal(request);
+  if (!principal) {
+    return principalRequiredResponse();
+  }
+  const projectForAccess = project.ownerUserId ? project : await claimProject(projectId, principal);
+  if (!canEditProject(projectForAccess, principal)) {
+    return projectAccessResponse();
+  }
+
   const runningProjects = getRunningProjects();
   if (runningProjects.has(projectId)) {
     return Response.json({ error: "Codex SDK is already running for this project." }, { status: 409 });
@@ -84,7 +100,7 @@ export async function POST(request: Request) {
   let userApiKey = "";
   try {
     userApiKey = isProduction() ? "" : await getUserApiKey(userId);
-    files = await exportGameTextFiles(project);
+    files = await exportGameTextFiles(projectForAccess);
     await appendProjectMessages(projectId, [{
       content: message,
       createdAt: new Date().toISOString(),
@@ -103,7 +119,7 @@ export async function POST(request: Request) {
       editingTarget,
       files,
       message,
-      project,
+      project: projectForAccess,
       projectId,
       runningProjects,
       userId
@@ -141,7 +157,7 @@ export async function POST(request: Request) {
       };
 
       send({
-        message: project.codexThreadId
+        message: projectForAccess.codexThreadId
           ? "Resuming Codex SDK thread in an isolated workspace..."
           : "Starting Codex SDK thread in an isolated workspace...",
         type: "status"
@@ -162,7 +178,7 @@ export async function POST(request: Request) {
             type: "status"
           }),
           signal: abortController.signal,
-          threadId: project.codexThreadId,
+          threadId: projectForAccess.codexThreadId,
           workspaceRoot: getCodexSdkWorkspaceRoot()
         });
 
@@ -171,7 +187,7 @@ export async function POST(request: Request) {
             message: `Validating and saving ${result.changedFiles.length} changed game file${result.changedFiles.length === 1 ? "" : "s"}...`,
             type: "status"
           });
-          await updateGameTextFiles(project, result.changedFiles);
+          await updateGameTextFiles(projectForAccess, result.changedFiles);
         }
 
         if (result.threadId) {

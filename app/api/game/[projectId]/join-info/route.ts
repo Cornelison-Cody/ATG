@@ -1,4 +1,5 @@
 import { getGameUrls } from "@/lib/network";
+import { requireProjectRuntimeAccess } from "@/lib/project-access";
 import { getProject } from "@/lib/projects";
 import { readGameConfig } from "@/lib/project-game";
 
@@ -9,12 +10,17 @@ type RouteContext = {
   params: Promise<{ projectId: string }>;
 };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const { projectId } = await context.params;
   const project = await getProject(projectId);
 
   if (!project || project.status === "deleted") {
     return Response.json({ error: "Project was not found." }, { status: 404 });
+  }
+
+  const authResponse = await requireProjectRuntimeAccess(request, project);
+  if (authResponse) {
+    return authResponse;
   }
 
   const config = await readGameConfig(project);

@@ -251,6 +251,7 @@
   color: var(--text);
   cursor: pointer;
   display: grid;
+  gap: 14px;
   height: 100%;
   min-height: 160px;
   padding: 18px 18px 74px;
@@ -274,6 +275,28 @@
 .projectCard span {
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.projectCard .visibilityBadge {
+  align-items: center;
+  align-self: end;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 850;
+  gap: 6px;
+  justify-self: start;
+  min-height: 30px;
+  padding: 6px 10px;
+}
+
+.visibilityBadge svg {
+  color: var(--accent);
+  height: 15px;
+  width: 15px;
 }
 
 .editButton,
@@ -908,6 +931,141 @@
   color: var(--accent);
   height: 20px;
   width: 20px;
+}
+
+.visibilityField {
+  border: 0;
+  display: grid;
+  gap: 10px;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.visibilityField legend {
+  color: var(--text);
+  font-weight: 800;
+  padding: 0;
+}
+
+.visibilityToggle {
+  background: #0b1018;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 6px;
+}
+
+.visibilityToggle button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  display: inline-flex;
+  font: inherit;
+  font-weight: 850;
+  gap: 8px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.visibilityToggle button:hover,
+.visibilityToggle button:focus-visible,
+.visibilityToggle .activeVisibility {
+  background: rgba(77, 214, 201, 0.12);
+  border-color: rgba(77, 214, 201, 0.48);
+  color: var(--text);
+  outline: none;
+}
+
+.visibilityToggle svg {
+  height: 17px;
+  width: 17px;
+}
+
+.collaboratorsSection {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 16px;
+}
+
+.collaboratorsSection h3 {
+  font-size: 0.98rem;
+  margin: 0;
+}
+
+.collaboratorsSection p {
+  margin: 4px 0 0;
+}
+
+.collaboratorForm {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.collaboratorForm button,
+.collaboratorList button {
+  background: rgba(77, 214, 201, 0.12);
+  border: 1px solid rgba(77, 214, 201, 0.4);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 850;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.collaboratorForm button:hover,
+.collaboratorForm button:focus-visible,
+.collaboratorList button:hover,
+.collaboratorList button:focus-visible {
+  background: rgba(77, 214, 201, 0.2);
+  border-color: rgba(77, 214, 201, 0.7);
+  outline: none;
+}
+
+.collaboratorForm button:disabled,
+.collaboratorList button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.collaboratorList {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.collaboratorList li {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 8px;
+}
+
+.collaboratorList span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyCollaborators {
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .accountSettingsBody input:focus,

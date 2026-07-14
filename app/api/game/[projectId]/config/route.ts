@@ -1,5 +1,12 @@
 import { requireEditorAuth } from "@/lib/api-auth";
-import { getProject } from "@/lib/projects";
+import { claimProject, getProject } from "@/lib/projects";
+import {
+  canEditProject,
+  getProjectPrincipal,
+  principalRequiredResponse,
+  projectAccessResponse,
+  requireProjectRuntimeAccess
+} from "@/lib/project-access";
 import { readGameConfig, updateGameConfig } from "@/lib/project-game";
 
 export const runtime = "nodejs";
@@ -9,10 +16,15 @@ type RouteContext = {
   params: Promise<{ projectId: string }>;
 };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const project = await getActiveProject(context);
   if (!project) {
     return Response.json({ error: "Project was not found." }, { status: 404 });
+  }
+
+  const authResponse = await requireProjectRuntimeAccess(request, project);
+  if (authResponse) {
+    return authResponse;
   }
 
   return Response.json({ config: await readGameConfig(project) });
@@ -29,6 +41,15 @@ export async function PATCH(request: Request, context: RouteContext) {
     return Response.json({ error: "Project was not found." }, { status: 404 });
   }
 
+  const principal = getProjectPrincipal(request);
+  if (!principal) {
+    return principalRequiredResponse();
+  }
+  const projectForAccess = project.ownerUserId ? project : await claimProject(project.id, principal);
+  if (!canEditProject(projectForAccess, principal)) {
+    return projectAccessResponse();
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -41,7 +62,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       ? (body as { config?: unknown }).config
       : body;
 
-  return Response.json({ config: await updateGameConfig(project, configPatch) });
+  return Response.json({ config: await updateGameConfig(projectForAccess, configPatch) });
 }
 
 async function getActiveProject(context: RouteContext) {

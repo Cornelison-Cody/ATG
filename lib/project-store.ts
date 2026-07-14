@@ -8,7 +8,7 @@ import { isAllowedGameTextPath, normalizeGameTextFiles, validateGameTextPath } f
 import { renderGameInstructionsTemplate } from "./game-instructions-template.mjs";
 import { DEFAULT_GAME_CONFIG, GameConfig } from "./game-types";
 import { validateProjectName } from "./project-name-rules.mjs";
-import type { ChatMessage, ProjectDatabase, ProjectRecord, PublicProject } from "./project-types";
+import type { ChatMessage, ProjectCollaborator, ProjectDatabase, ProjectRecord, PublicProject } from "./project-types";
 
 export const GAME_DIR = "game";
 export const GAME_CONFIG_FILE = "config.json";
@@ -28,10 +28,16 @@ export type GameTextFile = {
 };
 
 interface ProjectStore {
-  listProjects(): Promise<PublicProject[]>;
+  listProjects(principal?: ProjectOwnerInput): Promise<PublicProject[]>;
   getProject(projectId: string): Promise<ProjectRecord | null>;
-  createProject(name: string): Promise<ProjectRecord>;
-  updateProjectDetails(projectId: string, patch: { name: string }): Promise<ProjectRecord>;
+  createProject(name: string, owner: ProjectOwnerInput): Promise<ProjectRecord>;
+  claimProject(projectId: string, owner: ProjectOwnerInput): Promise<ProjectRecord>;
+  updateProjectDetails(
+    projectId: string,
+    patch: { name?: string; visibility?: ProjectRecord["visibility"] }
+  ): Promise<ProjectRecord>;
+  addProjectCollaborator(projectId: string, principalName: string): Promise<ProjectRecord>;
+  removeProjectCollaborator(projectId: string, principalName: string): Promise<ProjectRecord>;
   softDeleteProject(projectId: string): Promise<ProjectRecord>;
   appendProjectMessages(projectId: string, messages: ChatMessage[]): Promise<ProjectRecord>;
   updateProjectThread(projectId: string, codexThreadId: string): Promise<ProjectRecord>;
@@ -44,14 +50,20 @@ interface ProjectStore {
   updateGameTextFiles(project: ProjectRecord, files: GameTextFile[]): Promise<GameTextFile[]>;
 }
 
+export type ProjectOwnerInput = {
+  principalName: string;
+  userId: string;
+};
+
 export function getProjectStore(): ProjectStore {
   return useAzureStorageBackend() ? new AzureProjectStore() : new LocalProjectStore();
 }
 
-export function toPublicProject(project: ProjectRecord): PublicProject {
-  const { messages, ...rest } = project;
+export function toPublicProject(project: ProjectRecord, principal?: ProjectOwnerInput): PublicProject {
+  const { messages, ...rest } = withProjectDefaults(project);
   return {
     ...rest,
+    accessRole: principal ? accessRoleForProject(project, principal) ?? undefined : undefined,
     messageCount: messages.length
   };
 }
@@ -66,19 +78,23 @@ export class ProjectStoreError extends Error {
 }
 
 class LocalProjectStore implements ProjectStore {
-  async listProjects() {
+  async listProjects(principal?: ProjectOwnerInput) {
     const db = await this.readDatabase();
-    return db.projects.filter((project) => project.status === "active").map(toPublicProject);
+    return db.projects
+      .filter((project) => project.status === "active")
+      .filter((project) => isVisibleInDashboard(project, principal))
+      .map((project) => toPublicProject(project, principal));
   }
 
   async getProject(projectId: string) {
     const db = await this.readDatabase();
-    return db.projects.find((project) => project.id === projectId) ?? null;
+    const project = db.projects.find((item) => item.id === projectId) ?? null;
+    return project ? withProjectDefaults(project) : null;
   }
 
-  async createProject(name: string) {
+  async createProject(name: string, owner: ProjectOwnerInput) {
     const db = await this.readDatabase();
-    const project = buildNewProject(name, uniqueSlug(slugifyRequired(name), db.projects), (slug) =>
+    const project = buildNewProject(name, owner, uniqueSlug(slugifyRequired(name), db.projects), (slug) =>
       path.join(PROJECTS_ROOT, slug)
     );
 
@@ -91,9 +107,24 @@ class LocalProjectStore implements ProjectStore {
     return project;
   }
 
-  async updateProjectDetails(projectId: string, patch: { name: string }) {
+  async claimProject(projectId: string, owner: ProjectOwnerInput) {
     return this.updateProject(projectId, (project) => {
-      project.name = requiredProjectName(patch.name);
+      if (!project.ownerUserId) {
+        project.ownerUserId = owner.userId;
+        project.ownerName = owner.principalName;
+        project.updatedAt = new Date().toISOString();
+      }
+    });
+  }
+
+  async updateProjectDetails(projectId: string, patch: { name?: string; visibility?: ProjectRecord["visibility"] }) {
+    return this.updateProject(projectId, (project) => {
+      if (patch.name !== undefined) {
+        project.name = requiredProjectName(patch.name);
+      }
+      if (patch.visibility !== undefined) {
+        project.visibility = patch.visibility;
+      }
       project.updatedAt = new Date().toISOString();
     });
   }
@@ -123,6 +154,32 @@ class LocalProjectStore implements ProjectStore {
     project.updatedAt = now;
     await this.writeDatabase(db);
     return project;
+  }
+
+  async addProjectCollaborator(projectId: string, principalName: string) {
+    return this.updateProject(projectId, (project) => {
+      const normalized = requiredPrincipalName(principalName);
+      if (normalized === normalizePrincipalName(project.ownerName)) {
+        throw new ProjectStoreError("Project owner is already a collaborator.", 400);
+      }
+      if (!project.collaborators.some((collaborator) => normalizePrincipalName(collaborator.principalName) === normalized)) {
+        project.collaborators.push({ principalName: normalized, invitedAt: new Date().toISOString() });
+        project.updatedAt = new Date().toISOString();
+      }
+    });
+  }
+
+  async removeProjectCollaborator(projectId: string, principalName: string) {
+    return this.updateProject(projectId, (project) => {
+      const normalized = requiredPrincipalName(principalName);
+      const next = project.collaborators.filter(
+        (collaborator) => normalizePrincipalName(collaborator.principalName) !== normalized
+      );
+      if (next.length !== project.collaborators.length) {
+        project.collaborators = next;
+        project.updatedAt = new Date().toISOString();
+      }
+    });
   }
 
   async appendProjectMessages(projectId: string, messages: ChatMessage[]) {
@@ -242,7 +299,7 @@ class LocalProjectStore implements ProjectStore {
 
     try {
       const raw = await readFile(DB_PATH, "utf8");
-      return JSON.parse(raw) as ProjectDatabase;
+      return normalizeDatabase(JSON.parse(raw) as ProjectDatabase);
     } catch (error) {
       if (!isMissingFileError(error)) {
         throw error;
@@ -262,7 +319,7 @@ class AzureProjectStore implements ProjectStore {
   private cosmos?: Container;
   private blobs?: ContainerClient;
 
-  async listProjects() {
+  async listProjects(principal?: ProjectOwnerInput) {
     const container = this.getCosmosContainer();
     const { resources } = await container.items
       .query<ProjectRecord>({
@@ -271,13 +328,16 @@ class AzureProjectStore implements ProjectStore {
       })
       .fetchAll();
 
-    return resources.map(toPublicProject);
+    return resources
+      .map(withProjectDefaults)
+      .filter((project) => isVisibleInDashboard(project, principal))
+      .map((project) => toPublicProject(project, principal));
   }
 
   async getProject(projectId: string) {
     try {
       const { resource } = await this.getCosmosContainer().item(projectId, projectId).read<ProjectRecord>();
-      return resource ?? null;
+      return resource ? withProjectDefaults(resource) : null;
     } catch (error) {
       if (isCosmosNotFound(error)) {
         return null;
@@ -286,10 +346,10 @@ class AzureProjectStore implements ProjectStore {
     }
   }
 
-  async createProject(name: string) {
+  async createProject(name: string, owner: ProjectOwnerInput) {
     const trimmedName = name.trim();
     const slug = uniqueSlug(slugifyRequired(trimmedName), await this.listAllProjects());
-    const project = buildNewProject(trimmedName, slug, () => `azure://projects/${slug}`);
+    const project = buildNewProject(trimmedName, owner, slug, () => `azure://projects/${slug}`);
 
     await this.writeBlob(blobName(project, "README.md"), renderReadme(project), "text/markdown; charset=utf-8");
     await this.ensureGameFiles(project);
@@ -297,9 +357,24 @@ class AzureProjectStore implements ProjectStore {
     return project;
   }
 
-  async updateProjectDetails(projectId: string, patch: { name: string }) {
+  async claimProject(projectId: string, owner: ProjectOwnerInput) {
     return this.updateProject(projectId, (project) => {
-      project.name = requiredProjectName(patch.name);
+      if (!project.ownerUserId) {
+        project.ownerUserId = owner.userId;
+        project.ownerName = owner.principalName;
+        project.updatedAt = new Date().toISOString();
+      }
+    });
+  }
+
+  async updateProjectDetails(projectId: string, patch: { name?: string; visibility?: ProjectRecord["visibility"] }) {
+    return this.updateProject(projectId, (project) => {
+      if (patch.name !== undefined) {
+        project.name = requiredProjectName(patch.name);
+      }
+      if (patch.visibility !== undefined) {
+        project.visibility = patch.visibility;
+      }
       project.updatedAt = new Date().toISOString();
     });
   }
@@ -311,6 +386,32 @@ class AzureProjectStore implements ProjectStore {
     project.updatedAt = project.deletedAt;
     await this.getCosmosContainer().item(project.id, project.id).replace(project);
     return project;
+  }
+
+  async addProjectCollaborator(projectId: string, principalName: string) {
+    return this.updateProject(projectId, (project) => {
+      const normalized = requiredPrincipalName(principalName);
+      if (normalized === normalizePrincipalName(project.ownerName)) {
+        throw new ProjectStoreError("Project owner is already a collaborator.", 400);
+      }
+      if (!project.collaborators.some((collaborator) => normalizePrincipalName(collaborator.principalName) === normalized)) {
+        project.collaborators.push({ principalName: normalized, invitedAt: new Date().toISOString() });
+        project.updatedAt = new Date().toISOString();
+      }
+    });
+  }
+
+  async removeProjectCollaborator(projectId: string, principalName: string) {
+    return this.updateProject(projectId, (project) => {
+      const normalized = requiredPrincipalName(principalName);
+      const next = project.collaborators.filter(
+        (collaborator) => normalizePrincipalName(collaborator.principalName) !== normalized
+      );
+      if (next.length !== project.collaborators.length) {
+        project.collaborators = next;
+        project.updatedAt = new Date().toISOString();
+      }
+    });
   }
 
   async appendProjectMessages(projectId: string, messages: ChatMessage[]) {
@@ -487,7 +588,12 @@ class AzureProjectStore implements ProjectStore {
   }
 }
 
-function buildNewProject(name: string, slug: string, pathForSlug: (slug: string) => string): ProjectRecord {
+function buildNewProject(
+  name: string,
+  owner: ProjectOwnerInput,
+  slug: string,
+  pathForSlug: (slug: string) => string
+): ProjectRecord {
   const trimmedName = requiredProjectName(name);
 
   const now = new Date().toISOString();
@@ -497,11 +603,86 @@ function buildNewProject(name: string, slug: string, pathForSlug: (slug: string)
     slug,
     path: pathForSlug(slug),
     codexThreadId: null,
+    ownerUserId: owner.userId,
+    ownerName: owner.principalName,
+    collaborators: [],
+    visibility: "private",
     status: "active",
     createdAt: now,
     updatedAt: now,
     messages: []
   };
+}
+
+function normalizeDatabase(db: ProjectDatabase): ProjectDatabase {
+  return {
+    projects: db.projects.map(withProjectDefaults)
+  };
+}
+
+function withProjectDefaults(project: ProjectRecord): ProjectRecord {
+  return {
+    ...project,
+    collaborators: normalizeCollaborators(project.collaborators),
+    visibility: project.visibility === "public" ? "public" : "private"
+  };
+}
+
+function isVisibleInDashboard(project: ProjectRecord, principal?: ProjectOwnerInput) {
+  if (!principal) {
+    return false;
+  }
+
+  return !project.ownerUserId || Boolean(accessRoleForProject(project, principal));
+}
+
+function accessRoleForProject(project: ProjectRecord, principal: ProjectOwnerInput) {
+  if (!project.ownerUserId || project.ownerUserId === principal.userId) {
+    return "owner";
+  }
+
+  const principalName = normalizePrincipalName(principal.principalName);
+  if (project.collaborators.some((collaborator) => normalizePrincipalName(collaborator.principalName) === principalName)) {
+    return "collaborator";
+  }
+
+  return null;
+}
+
+function normalizeCollaborators(value: ProjectCollaborator[] | undefined) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const collaborators: ProjectCollaborator[] = [];
+  for (const collaborator of value) {
+    const principalName = requiredPrincipalName(collaborator?.principalName);
+    if (seen.has(principalName)) {
+      continue;
+    }
+    seen.add(principalName);
+    collaborators.push({
+      principalName,
+      invitedAt: typeof collaborator?.invitedAt === "string" ? collaborator.invitedAt : new Date(0).toISOString()
+    });
+  }
+  return collaborators;
+}
+
+function requiredPrincipalName(value: unknown) {
+  const principalName = normalizePrincipalName(value);
+  if (!principalName) {
+    throw new ProjectStoreError("Collaborator email or login is required.", 400);
+  }
+  if (principalName.length > 320) {
+    throw new ProjectStoreError("Collaborator email or login must be 320 characters or fewer.", 400);
+  }
+  return principalName;
+}
+
+function normalizePrincipalName(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
 function requiredProjectName(value: string) {

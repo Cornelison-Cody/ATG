@@ -1,4 +1,5 @@
 import { requireEditorAuth } from "@/lib/api-auth";
+import { getProjectPrincipal, principalRequiredResponse } from "@/lib/project-access";
 import { createProject, listProjects, ProjectStoreError, toPublicProject } from "@/lib/projects";
 
 export const runtime = "nodejs";
@@ -10,7 +11,12 @@ export async function GET(request: Request) {
     return authResponse;
   }
 
-  const projects = await listProjects();
+  const principal = getProjectPrincipal(request);
+  if (!principal) {
+    return principalRequiredResponse();
+  }
+
+  const projects = await listProjects(principal);
   return Response.json({ projects });
 }
 
@@ -20,11 +26,16 @@ export async function POST(request: Request) {
     return authResponse;
   }
 
+  const principal = getProjectPrincipal(request);
+  if (!principal) {
+    return principalRequiredResponse();
+  }
+
   try {
     const body = (await request.json()) as { name?: unknown };
     const name = typeof body.name === "string" ? body.name : "";
-    const project = await createProject(name);
-    return Response.json({ project: toPublicProject(project) }, { status: 201 });
+    const project = await createProject(name, principal);
+    return Response.json({ project: toPublicProject(project, principal) }, { status: 201 });
   } catch (error) {
     if (error instanceof ProjectStoreError) {
       return Response.json({ error: error.message }, { status: error.status });

@@ -4,10 +4,12 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
+  Globe2,
   Hammer,
   KeyRound,
   Lightbulb,
   LoaderCircle,
+  Lock,
   Menu,
   MessageSquareWarning,
   Monitor,
@@ -15,6 +17,7 @@ import {
   Settings,
   Smartphone,
   Trash2,
+  UserPlus,
   X
 } from "lucide-react";
 import { InstructionsViewer } from "@/components/instructions-viewer";
@@ -36,6 +39,11 @@ type ProjectSummary = {
   slug: string;
   path: string;
   codexThreadId: string | null;
+  ownerUserId?: string;
+  ownerName?: string;
+  collaborators: ProjectCollaborator[];
+  accessRole?: "owner" | "collaborator";
+  visibility: "private" | "public";
   status: "active" | "deleted";
   createdAt: string;
   updatedAt: string;
@@ -45,6 +53,11 @@ type ProjectSummary = {
 
 type ProjectDetail = Omit<ProjectSummary, "messageCount"> & {
   messages: ChatMessage[];
+};
+
+type ProjectCollaborator = {
+  principalName: string;
+  invitedAt: string;
 };
 
 type StreamEvent =
@@ -86,6 +99,8 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newProjectName, setNewProjectName] = useState("");
   const [projectSettingsName, setProjectSettingsName] = useState("");
+  const [projectSettingsVisibility, setProjectSettingsVisibility] = useState<ProjectSummary["visibility"]>("private");
+  const [collaboratorInput, setCollaboratorInput] = useState("");
   const [input, setInput] = useState("");
   const [editingTarget, setEditingTarget] = useState<EditingTarget>("tv");
   const [chatMode, setChatMode] = useState<ChatMode>("plan");
@@ -107,6 +122,7 @@ export default function Home() {
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSavingProjectSettings, setIsSavingProjectSettings] = useState(false);
+  const [isUpdatingCollaborators, setIsUpdatingCollaborators] = useState(false);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [projectPendingDelete, setProjectPendingDelete] = useState<ProjectSummary | null>(null);
@@ -114,6 +130,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [projectSettingsMessage, setProjectSettingsMessage] = useState("");
   const decoderRef = useRef(new TextDecoder());
+  const canManageActiveProject = activeProject?.accessRole === "owner";
 
   const canCreate = useMemo(
     () => newProjectName.trim().length > 0 && !isCreating,
@@ -129,10 +146,11 @@ export default function Home() {
       Boolean(activeProject) &&
       name.length > 0 &&
       name.length <= PROJECT_NAME_MAX_LENGTH &&
-      name !== activeProject?.name &&
+      (name !== activeProject?.name ||
+        (canManageActiveProject && projectSettingsVisibility !== activeProject?.visibility)) &&
       !isSavingProjectSettings
     );
-  }, [activeProject, isSavingProjectSettings, projectSettingsName]);
+  }, [activeProject, canManageActiveProject, isSavingProjectSettings, projectSettingsName, projectSettingsVisibility]);
 
   useEffect(() => {
     void loadProjects();
@@ -259,6 +277,8 @@ export default function Home() {
 
     setIsProjectMenuOpen(false);
     setProjectSettingsName(activeProject.name);
+    setProjectSettingsVisibility(activeProject.visibility);
+    setCollaboratorInput("");
     setProjectSettingsMessage("");
     setIsProjectSettingsOpen(true);
   }
@@ -286,7 +306,10 @@ export default function Home() {
 
     try {
       const response = await fetch(`/api/projects/${activeProject.id}`, {
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({
+          name,
+          ...(canManageActiveProject ? { visibility: projectSettingsVisibility } : {})
+        }),
         headers: { "Content-Type": "application/json" },
         method: "PATCH"
       });
@@ -295,15 +318,9 @@ export default function Home() {
         throw new Error(data.error || `Failed to update project (${response.status})`);
       }
 
-      setProjects((current) =>
-        current.map((project) => (project.id === data.project?.id ? data.project : project))
-      );
-      setActiveProject((current) =>
-        current && data.project && current.id === data.project.id
-          ? { ...current, ...data.project, messages: current.messages }
-          : current
-      );
+      applyProjectSummary(data.project);
       setProjectSettingsName(data.project.name);
+      setProjectSettingsVisibility(data.project.visibility);
       setProjectSettingsMessage("Project details saved.");
     } catch (settingsError) {
       setProjectSettingsMessage(
@@ -312,6 +329,74 @@ export default function Home() {
     } finally {
       setIsSavingProjectSettings(false);
     }
+  }
+
+  async function addCollaborator() {
+    if (!activeProject || !canManageActiveProject || isUpdatingCollaborators) {
+      return;
+    }
+
+    setIsUpdatingCollaborators(true);
+    setProjectSettingsMessage("");
+
+    try {
+      const response = await fetch(`/api/projects/${activeProject.id}/collaborators`, {
+        body: JSON.stringify({ principalName: collaboratorInput }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+      const data = (await response.json()) as { project?: ProjectSummary; error?: string };
+      if (!response.ok || !data.project) {
+        throw new Error(data.error || `Failed to add collaborator (${response.status})`);
+      }
+
+      applyProjectSummary(data.project);
+      setCollaboratorInput("");
+      setProjectSettingsMessage("Collaborator added.");
+    } catch (collaboratorError) {
+      setProjectSettingsMessage(
+        collaboratorError instanceof Error ? collaboratorError.message : "Unable to add collaborator."
+      );
+    } finally {
+      setIsUpdatingCollaborators(false);
+    }
+  }
+
+  async function removeCollaborator(principalName: string) {
+    if (!activeProject || !canManageActiveProject || isUpdatingCollaborators) {
+      return;
+    }
+
+    setIsUpdatingCollaborators(true);
+    setProjectSettingsMessage("");
+
+    try {
+      const response = await fetch(`/api/projects/${activeProject.id}/collaborators`, {
+        body: JSON.stringify({ principalName }),
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE"
+      });
+      const data = (await response.json()) as { project?: ProjectSummary; error?: string };
+      if (!response.ok || !data.project) {
+        throw new Error(data.error || `Failed to remove collaborator (${response.status})`);
+      }
+
+      applyProjectSummary(data.project);
+      setProjectSettingsMessage("Collaborator removed.");
+    } catch (collaboratorError) {
+      setProjectSettingsMessage(
+        collaboratorError instanceof Error ? collaboratorError.message : "Unable to remove collaborator."
+      );
+    } finally {
+      setIsUpdatingCollaborators(false);
+    }
+  }
+
+  function applyProjectSummary(project: ProjectSummary) {
+    setProjects((current) => current.map((item) => (item.id === project.id ? project : item)));
+    setActiveProject((current) =>
+      current && current.id === project.id ? { ...current, ...project, messages: current.messages } : current
+    );
   }
 
   async function openInstructions() {
@@ -773,19 +858,30 @@ export default function Home() {
 
       {isProjectSettingsOpen && activeProject ? (
         <ProjectSettingsModal
+          canManage={canManageActiveProject}
           canSave={canSaveProjectSettings}
+          collaboratorInput={collaboratorInput}
+          collaborators={activeProject.collaborators}
           isSaving={isSavingProjectSettings}
+          isUpdatingCollaborators={isUpdatingCollaborators}
           message={projectSettingsMessage}
           name={projectSettingsName}
+          onAddCollaborator={addCollaborator}
           onClose={() => {
             if (!isSavingProjectSettings) {
               setIsProjectSettingsOpen(false);
               setProjectSettingsMessage("");
               setProjectSettingsName("");
+              setProjectSettingsVisibility("private");
+              setCollaboratorInput("");
             }
           }}
+          onCollaboratorInputChange={setCollaboratorInput}
           onNameChange={setProjectSettingsName}
+          onRemoveCollaborator={removeCollaborator}
           onSave={saveProjectSettings}
+          onVisibilityChange={setProjectSettingsVisibility}
+          visibility={projectSettingsVisibility}
         />
       ) : null}
 
@@ -818,21 +914,39 @@ export default function Home() {
 }
 
 function ProjectSettingsModal({
+  canManage,
   canSave,
+  collaboratorInput,
+  collaborators,
   isSaving,
+  isUpdatingCollaborators,
   message,
   name,
+  onAddCollaborator,
   onClose,
+  onCollaboratorInputChange,
   onNameChange,
-  onSave
+  onRemoveCollaborator,
+  onSave,
+  onVisibilityChange,
+  visibility
 }: {
+  canManage: boolean;
   canSave: boolean;
+  collaboratorInput: string;
+  collaborators: ProjectCollaborator[];
   isSaving: boolean;
+  isUpdatingCollaborators: boolean;
   message: string;
   name: string;
+  onAddCollaborator: () => void;
   onClose: () => void;
+  onCollaboratorInputChange: (value: string) => void;
   onNameChange: (value: string) => void;
+  onRemoveCollaborator: (principalName: string) => void;
   onSave: (event: FormEvent<HTMLFormElement>) => void;
+  onVisibilityChange: (value: ProjectSummary["visibility"]) => void;
+  visibility: ProjectSummary["visibility"];
 }) {
   const trimmedLength = name.trim().length;
   const isOverLimit = trimmedLength > PROJECT_NAME_MAX_LENGTH;
@@ -871,6 +985,83 @@ function ProjectSettingsModal({
               {trimmedLength}/{PROJECT_NAME_MAX_LENGTH}
             </span>
           </div>
+          {canManage ? (
+            <>
+              <fieldset className={styles.visibilityField} disabled={isSaving}>
+                <legend>Project visibility</legend>
+                <div className={styles.visibilityToggle}>
+                  <button
+                    aria-pressed={visibility === "private"}
+                    className={visibility === "private" ? styles.activeVisibility : undefined}
+                    onClick={() => onVisibilityChange("private")}
+                    type="button"
+                  >
+                    <Lock aria-hidden="true" />
+                    <span>Private</span>
+                  </button>
+                  <button
+                    aria-pressed={visibility === "public"}
+                    className={visibility === "public" ? styles.activeVisibility : undefined}
+                    onClick={() => onVisibilityChange("public")}
+                    type="button"
+                  >
+                    <Globe2 aria-hidden="true" />
+                    <span>Public</span>
+                  </button>
+                </div>
+              </fieldset>
+              <section className={styles.collaboratorsSection} aria-label="Project collaborators">
+                <div>
+                  <h3>Collaborators</h3>
+                  <p>Invite editors by email or login.</p>
+                </div>
+                <div className={styles.collaboratorForm}>
+                  <div className={styles.projectNameField}>
+                    <UserPlus aria-hidden="true" />
+                    <input
+                      autoComplete="off"
+                      disabled={isUpdatingCollaborators}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          onAddCollaborator();
+                        }
+                      }}
+                      onChange={(event) => onCollaboratorInputChange(event.target.value)}
+                      placeholder="person@example.com"
+                      type="text"
+                      value={collaboratorInput}
+                    />
+                  </div>
+                  <button
+                    disabled={!collaboratorInput.trim() || isUpdatingCollaborators}
+                    onClick={onAddCollaborator}
+                    type="button"
+                  >
+                    {isUpdatingCollaborators ? "Updating" : "Invite"}
+                  </button>
+                </div>
+                {collaborators.length > 0 ? (
+                  <ul className={styles.collaboratorList}>
+                    {collaborators.map((collaborator) => (
+                      <li key={collaborator.principalName}>
+                        <span>{collaborator.principalName}</span>
+                        <button
+                          disabled={isUpdatingCollaborators}
+                          onClick={() => onRemoveCollaborator(collaborator.principalName)}
+                          type="button"
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className={styles.emptyCollaborators}>No collaborators yet.</p>
+                )}
+              </section>
+            </>
+          ) : null}
           {message ? <p className={styles.settingsMessage}>{message}</p> : null}
         </div>
         <div className={styles.modalFooter}>
@@ -1070,6 +1261,18 @@ function ProjectDashboard({
                 <h2>{project.name}</h2>
                 <span>{formatUpdatedAt(project.updatedAt)}</span>
               </div>
+              <span className={styles.visibilityBadge}>
+                {project.visibility === "public" ? (
+                  <Globe2 aria-hidden="true" />
+                ) : (
+                  <Lock aria-hidden="true" />
+                )}
+                {project.accessRole === "collaborator"
+                  ? "Shared"
+                  : project.visibility === "public"
+                    ? "Public"
+                    : "Private"}
+              </span>
             </a>
             <button
               aria-label={`Edit ${project.name}`}
@@ -1080,15 +1283,17 @@ function ProjectDashboard({
             >
               <Pencil aria-hidden="true" />
             </button>
-            <button
-              aria-label={`Delete ${project.name}`}
-              className={styles.trashButton}
-              onClick={() => onDeleteProject(project)}
-              title="Delete project"
-              type="button"
-            >
-              <Trash2 aria-hidden="true" />
-            </button>
+            {project.accessRole === "owner" ? (
+              <button
+                aria-label={`Delete ${project.name}`}
+                className={styles.trashButton}
+                onClick={() => onDeleteProject(project)}
+                title="Delete project"
+                type="button"
+              >
+                <Trash2 aria-hidden="true" />
+              </button>
+            ) : null}
           </div>
         ))}
       </section>

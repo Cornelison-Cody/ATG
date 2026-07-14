@@ -42,6 +42,18 @@ export function getAuthenticatedUserId(request: Request) {
   ).trim();
 }
 
+export function getAuthenticatedPrincipalName(request: Request) {
+  if (!isProduction()) {
+    return "local-development-user";
+  }
+
+  return (
+    request.headers.get("x-ms-client-principal-name") ||
+    request.headers.get("x-ms-client-principal-id") ||
+    ""
+  ).trim();
+}
+
 export function requireEditorAuth(request: Request) {
   if (!isProduction()) {
     return null;

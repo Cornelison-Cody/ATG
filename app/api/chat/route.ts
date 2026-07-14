@@ -6,8 +6,15 @@ import { canUseLocalCodex, canUseLocalCompanion, getAiWorkerUrl } from "@/lib/en
 import { exportGameTextFiles } from "@/lib/project-game";
 import { buildProjectPrompt } from "@/lib/project-prompt.mjs";
 import {
+  canEditProject,
+  getProjectPrincipal,
+  principalRequiredResponse,
+  projectAccessResponse
+} from "@/lib/project-access";
+import {
   appendProjectMessages,
   ChatMessage,
+  claimProject,
   getProject,
   ProjectStoreError,
   updateProjectThread
@@ -66,6 +73,15 @@ export async function POST(request: Request) {
     return Response.json({ error: "Project was not found." }, { status: 404 });
   }
 
+  const principal = getProjectPrincipal(request);
+  if (!principal) {
+    return principalRequiredResponse();
+  }
+  const projectForAccess = project.ownerUserId ? project : await claimProject(projectId, principal);
+  if (!canEditProject(projectForAccess, principal)) {
+    return projectAccessResponse();
+  }
+
   const runningProjects = getRunningProjects();
   if (runningProjects.has(projectId)) {
     return Response.json({ error: "Codex is already running for this project." }, { status: 409 });
@@ -96,7 +112,7 @@ export async function POST(request: Request) {
       editingTarget,
       message,
       projectId,
-      threadId: project.codexThreadId
+      threadId: projectForAccess.codexThreadId
     });
   }
 
@@ -105,7 +121,7 @@ export async function POST(request: Request) {
       return await streamLocalCompanion({
         editingTarget,
         message,
-        project,
+        project: projectForAccess,
         projectId
       });
     } catch (error) {
@@ -141,12 +157,12 @@ export async function POST(request: Request) {
 
       send({
         type: "status",
-        message: project.codexThreadId ? "Resuming Codex session..." : "Starting Codex session..."
+        message: projectForAccess.codexThreadId ? "Resuming Codex session..." : "Starting Codex session..."
       });
 
-      const args = buildCodexArgs(project.codexThreadId, buildProjectPrompt(message, editingTarget));
+      const args = buildCodexArgs(projectForAccess.codexThreadId, buildProjectPrompt(message, editingTarget));
       const child = spawn("codex", args, {
-        cwd: project.path,
+        cwd: projectForAccess.path,
         env: process.env,
         stdio: ["ignore", "pipe", "pipe"]
       });
