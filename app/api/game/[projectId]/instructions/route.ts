@@ -1,6 +1,12 @@
 import { requireEditorAuth } from "@/lib/api-auth";
-import { getProject, ProjectStoreError } from "@/lib/projects";
-import { requireProjectRuntimeAccess } from "@/lib/project-access";
+import { claimProject, getProject, ProjectStoreError } from "@/lib/projects";
+import {
+  canEditProject,
+  getProjectPrincipal,
+  principalRequiredResponse,
+  projectAccessResponse,
+  requireProjectRuntimeAccess
+} from "@/lib/project-access";
 import { readGameInstructions, updateGameInstructions } from "@/lib/project-game";
 
 export const runtime = "nodejs";
@@ -39,9 +45,18 @@ export async function PATCH(request: Request, context: RouteContext) {
     return Response.json({ error: "Project was not found." }, { status: 404 });
   }
 
+  const principal = getProjectPrincipal(request);
+  if (!principal) {
+    return principalRequiredResponse();
+  }
+  const projectForAccess = project.ownerUserId ? project : await claimProject(projectId, principal);
+  if (!canEditProject(projectForAccess, principal)) {
+    return projectAccessResponse();
+  }
+
   try {
     const body = (await request.json()) as { instructions?: unknown };
-    const instructions = await updateGameInstructions(project, body.instructions as string);
+    const instructions = await updateGameInstructions(projectForAccess, body.instructions as string);
     return Response.json({ instructions });
   } catch (error) {
     if (error instanceof ProjectStoreError) {

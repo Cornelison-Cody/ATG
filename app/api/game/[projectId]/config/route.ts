@@ -1,6 +1,12 @@
 import { requireEditorAuth } from "@/lib/api-auth";
-import { getProject } from "@/lib/projects";
-import { requireProjectRuntimeAccess } from "@/lib/project-access";
+import { claimProject, getProject } from "@/lib/projects";
+import {
+  canEditProject,
+  getProjectPrincipal,
+  principalRequiredResponse,
+  projectAccessResponse,
+  requireProjectRuntimeAccess
+} from "@/lib/project-access";
 import { readGameConfig, updateGameConfig } from "@/lib/project-game";
 
 export const runtime = "nodejs";
@@ -35,6 +41,15 @@ export async function PATCH(request: Request, context: RouteContext) {
     return Response.json({ error: "Project was not found." }, { status: 404 });
   }
 
+  const principal = getProjectPrincipal(request);
+  if (!principal) {
+    return principalRequiredResponse();
+  }
+  const projectForAccess = project.ownerUserId ? project : await claimProject(project.id, principal);
+  if (!canEditProject(projectForAccess, principal)) {
+    return projectAccessResponse();
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -47,7 +62,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       ? (body as { config?: unknown }).config
       : body;
 
-  return Response.json({ config: await updateGameConfig(project, configPatch) });
+  return Response.json({ config: await updateGameConfig(projectForAccess, configPatch) });
 }
 
 async function getActiveProject(context: RouteContext) {
