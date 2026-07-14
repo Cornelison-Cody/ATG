@@ -35,11 +35,16 @@ export function getAuthenticatedUserId(request: Request) {
     return "local-development-user";
   }
 
-  return (
+  const headerUserId = (
     request.headers.get("x-ms-client-principal-id") ||
     request.headers.get("x-ms-client-principal-name") ||
     ""
   ).trim();
+  if (headerUserId) {
+    return headerUserId;
+  }
+
+  return getBearerPrincipalId(request);
 }
 
 export function getAuthenticatedPrincipalName(request: Request) {
@@ -47,11 +52,16 @@ export function getAuthenticatedPrincipalName(request: Request) {
     return "local-development-user";
   }
 
-  return (
+  const headerPrincipalName = (
     request.headers.get("x-ms-client-principal-name") ||
     request.headers.get("x-ms-client-principal-id") ||
     ""
   ).trim();
+  if (headerPrincipalName) {
+    return headerPrincipalName;
+  }
+
+  return getBearerPrincipalId(request);
 }
 
 export function requireEditorAuth(request: Request) {
@@ -95,4 +105,37 @@ export function isPublicRuntimePath(pathname: string) {
   }
 
   return PUBLIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+function getBearerPrincipalId(request: Request) {
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!token) {
+    return "";
+  }
+
+  const payload = decodeJwtPayload(token);
+  return (
+    stringClaim(payload, "azp") ||
+    stringClaim(payload, "appid") ||
+    stringClaim(payload, "sub") ||
+    ""
+  );
+}
+
+function decodeJwtPayload(token: string) {
+  const payload = token.split(".")[1];
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function stringClaim(payload: Record<string, unknown> | null, claim: string) {
+  const value = payload?.[claim];
+  return typeof value === "string" ? value.trim() : "";
 }
