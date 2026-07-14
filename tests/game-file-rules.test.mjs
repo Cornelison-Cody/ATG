@@ -10,6 +10,7 @@ test("validateGameTextPath accepts editable game text paths", () => {
   assert.equal(validateGameTextPath("tv.html"), "tv.html");
   assert.equal(validateGameTextPath("nested/widget.svg"), "nested/widget.svg");
   assert.equal(validateGameTextPath("config.json"), "config.json");
+  assert.equal(validateGameTextPath("instructions.md"), "instructions.md");
 });
 
 test("validateGameTextPath rejects unsafe paths", () => {

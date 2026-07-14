@@ -5,6 +5,7 @@ import { mkdir, readFile, readdir, rename, stat, writeFile } from "fs/promises";
 import path from "path";
 import { ATG_ROOT, PROJECTS_ROOT, TRASH_ROOT, useAzureStorageBackend } from "./env";
 import { isAllowedGameTextPath, normalizeGameTextFiles, validateGameTextPath } from "./game-file-rules.mjs";
+import { renderGameInstructionsTemplate } from "./game-instructions-template.mjs";
 import { DEFAULT_GAME_CONFIG, GameConfig } from "./game-types";
 import { validateProjectName } from "./project-name-rules.mjs";
 import type { ChatMessage, ProjectDatabase, ProjectRecord, PublicProject } from "./project-types";
@@ -519,20 +520,7 @@ function renderReadme(project: ProjectRecord) {
 const TEMPLATE_FILES: Record<string, (project: ProjectRecord) => string> = {
   "config.json": (project) =>
     `${JSON.stringify({ ...DEFAULT_GAME_CONFIG, title: project.name }, null, 2)}\n`,
-  "instructions.md": (project) => `# ${project.name}
-
-## Goal
-
-Welcome to ${project.name}. Use these instructions to explain the game objective, setup, and how players interact from their phones.
-
-## How to Play
-
-Add setup and gameplay steps here.
-
-## Assets
-
-Images stored in the game folder can be embedded here with Markdown.
-`,
+  "instructions.md": (project) => renderGameInstructionsTemplate(project.name),
   "styles.css": () => `:root {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
