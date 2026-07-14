@@ -728,6 +728,21 @@
   padding: 14px;
 }
 
+.composerMeta {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 8px;
+  grid-column: 1 / -1;
+  text-transform: uppercase;
+}
+
+.composerMeta strong {
+  color: var(--accent);
+}
+
 .composer textarea {
   background: #0b1018;
   border: 1px solid var(--line);

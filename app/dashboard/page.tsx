@@ -503,7 +503,11 @@ export default function Home() {
     setRunFeedback({
       state: "connecting",
       label: "Connecting to Codex",
-      details: [chatMode === "plan" ? "Queued your planning request." : "Queued your edit request."],
+      details: [
+        chatMode === "plan"
+          ? `Queued your ${editingTarget === "tv" ? "TV" : "phone"} planning request.`
+          : `Queued your ${editingTarget === "tv" ? "TV" : "phone"} build request.`
+      ],
       lastUpdateAt: now,
       startedAt: now
     });
@@ -1234,6 +1238,7 @@ function ProjectChat({
     chatMode === "plan" && latestAssistantMessage ? extractPlanningQuestion(latestAssistantMessage.content) : "";
   const quickAnswersKey = quickAnswers.map((answer) => `${answer.label}:${answer.text}`).join("|");
   const hasConversation = messages.length > 0 || quickAnswers.length > 0;
+  const targetName = editingTarget === "tv" ? "TV display" : "phone controller";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
@@ -1341,6 +1346,12 @@ function ProjectChat({
         ) : null}
 
         <form className={styles.composer} onSubmit={onSubmit}>
+          {chatMode === "build" ? (
+            <div className={styles.composerMeta}>
+              <span>Build target</span>
+              <strong>{targetName}</strong>
+            </div>
+          ) : null}
           <textarea
             aria-label="Message Codex"
             disabled={isRunning}
@@ -1353,13 +1364,13 @@ function ProjectChat({
             placeholder={
               chatMode === "plan"
                 ? "Ask Codex to help plan gameplay choices..."
-                : "Ask Codex to update this project..."
+                : `Ask Codex to update the ${targetName}...`
             }
             rows={4}
             value={input}
           />
           <button disabled={!canSubmit} type="submit">
-            {isRunning ? "Running" : chatMode === "plan" ? "Plan" : "Send"}
+            {isRunning ? "Running" : chatMode === "plan" ? "Plan" : `Build ${editingTarget === "tv" ? "TV" : "Phone"}`}
           </button>
         </form>
       </section>
