@@ -833,6 +833,53 @@
   margin: 0;
 }
 
+.inlineLinkButton {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 850;
+  justify-self: start;
+  padding: 0;
+  text-align: left;
+}
+
+.inlineLinkButton:hover,
+.inlineLinkButton:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.byokGuide {
+  background: rgba(7, 9, 13, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.byokGuide ol {
+  color: var(--text);
+  display: grid;
+  gap: 10px;
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.byokGuide p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.byokGuide a {
+  color: var(--accent);
+}
+
 .accountSettingsBody label,
 .projectSettingsBody label {
   color: var(--text);
