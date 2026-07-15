@@ -8,7 +8,7 @@ The Bicep template in `infra/main.bicep` creates:
 
 - Container Apps environment and Container App.
 - Log Analytics workspace.
-- Cosmos DB NoSQL account, `atg` database, and `projects` container.
+- Cosmos DB NoSQL account, `atg` database, and `projects`, `user-settings`, `codex-jobs`, and `ai-usage-budget` containers.
 - Storage account and private `game-assets` blob container.
 - Container App secrets and environment variables for the Azure storage backend.
 
@@ -83,6 +83,7 @@ managed identity or job resource is replaced.
 - Direct local Codex CLI execution stays disabled inside the production web container.
 - When `ENABLE_CODEX_SDK_PROTOTYPE=true`, dashboard chat uses the Codex SDK endpoint. A user's encrypted account API key takes precedence over the optional process-wide `OPENAI_API_KEY`.
 - Per-user OpenAI API keys are stored in the dedicated Cosmos DB `user-settings` container. Keep `ATG_USER_SETTINGS_ENCRYPTION_KEY` stable across deployments; rotating it requires re-encrypting or clearing existing keys.
+- ATG-local AI usage estimates and monthly budget preferences are stored in the dedicated Cosmos DB `ai-usage-budget` container. If Account Settings usage calls fail after an image-only deployment, rerun the Bicep deployment so this container and `AZURE_COSMOS_AI_USAGE_CONTAINER` are present.
 - Deployed Codex edits run in a manual Container Apps Job. The web app managed
   identity receives `Container Apps Contributor` scoped only to that job through
   the one-time RBAC bootstrap. The execution receives a short-lived job token

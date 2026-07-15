@@ -15,7 +15,11 @@ export async function GET(request: Request) {
   if (auth instanceof Response) {
     return auth;
   }
-  return Response.json(await getUsageBudgetSummary(auth));
+  try {
+    return Response.json(await getUsageBudgetSummary(auth));
+  } catch (error) {
+    return usageBudgetErrorResponse(error);
+  }
 }
 
 export async function PUT(request: Request) {
@@ -60,5 +64,20 @@ function usageBudgetErrorResponse(error: unknown) {
   if (error instanceof UsageBudgetError) {
     return Response.json({ error: error.message }, { status: error.status });
   }
+  if (isCosmosContainerMissingError(error)) {
+    return Response.json(
+      { error: "AI usage storage is not configured. Run the Azure infrastructure deployment." },
+      { status: 503 }
+    );
+  }
   return Response.json({ error: "Unable to update AI usage budget settings." }, { status: 500 });
+}
+
+function isCosmosContainerMissingError(error: unknown) {
+  return Boolean(
+    error &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error as { code?: unknown }).code === 404
+  );
 }
