@@ -813,6 +813,13 @@
   width: min(100%, 560px);
 }
 
+.accountSettingsModal {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  max-height: min(760px, calc(100dvh - 48px));
+  max-width: 720px;
+  width: min(100%, 720px);
+}
+
 .instructionsModal {
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   max-height: min(760px, calc(100dvh - 48px));
@@ -845,6 +852,8 @@
 .accountSettingsBody {
   display: grid;
   gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .projectSettingsBody {
@@ -854,6 +863,46 @@
 
 .accountSettingsBody p {
   margin: 0;
+}
+
+.accountSettingsTabs {
+  background: rgba(7, 9, 13, 0.24);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+}
+
+.accountSettingsTabs button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  display: inline-flex;
+  font: inherit;
+  font-weight: 850;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.accountSettingsTabs svg {
+  height: 17px;
+  width: 17px;
+}
+
+.accountSettingsTabs button:hover,
+.accountSettingsTabs button:focus-visible,
+.accountSettingsTabs .activeAccountTab {
+  background: rgba(77, 214, 201, 0.12);
+  border-color: rgba(77, 214, 201, 0.52);
+  outline: none;
+}
+
+.accountTabPanel {
+  display: grid;
+  gap: 12px;
 }
 
 .inlineLinkButton {
@@ -1083,31 +1132,6 @@
 .settingsMessage {
   color: var(--accent);
   font-size: 0.9rem;
-}
-
-.usageBudgetSection {
-  border-top: 1px solid var(--line);
-  display: grid;
-  gap: 12px;
-  margin-top: 8px;
-  padding-top: 16px;
-}
-
-.sectionHeading {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-}
-
-.sectionHeading svg {
-  color: var(--accent);
-  height: 20px;
-  width: 20px;
-}
-
-.sectionHeading h3 {
-  font-size: 1rem;
-  margin: 0;
 }
 
 .usageSummaryGrid {
@@ -1411,6 +1435,10 @@
   .headerActions {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .accountSettingsTabs {
+    flex-wrap: wrap;
   }
 
   .createControls,

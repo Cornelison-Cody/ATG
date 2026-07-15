@@ -1222,12 +1222,24 @@ function AccountSettingsModal({
   usageBudget: AccountUsageBudget | null;
 }) {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [activeAccountTab, setActiveAccountTab] = useState<"api-key" | "usage">("api-key");
   const isBusy = isLoading || isSaving || isTesting;
   const budgetConfigured = usageBudget?.budget.monthlyBudgetUsd != null;
 
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    if (activeAccountTab === "api-key") {
+      onSave(event);
+      return;
+    }
+    event.preventDefault();
+    if (!isBusy && monthlyBudgetInput.trim()) {
+      onBudgetSave();
+    }
+  }
+
   return (
     <div className={styles.modalOverlay} role="presentation">
-      <form className={styles.modal} onSubmit={onSave}>
+      <form className={`${styles.modal} ${styles.accountSettingsModal}`} onSubmit={handleSubmit}>
         <div className={styles.modalHeader}>
           <h2>Account Settings</h2>
           <button
@@ -1240,81 +1252,103 @@ function AccountSettingsModal({
             <X aria-hidden="true" />
           </button>
         </div>
-        <div className={`${styles.modalBody} ${styles.accountSettingsBody}`}>
-          <p>
-            Add your OpenAI API key to run dashboard AI edits with the Codex SDK.
-            The key is encrypted server-side and is never shown again.
-          </p>
+        <div className={styles.accountSettingsTabs} role="tablist" aria-label="Account settings sections">
           <button
-            className={styles.inlineLinkButton}
-            onClick={() => setIsGuideOpen((current) => !current)}
+            aria-selected={activeAccountTab === "api-key"}
+            className={activeAccountTab === "api-key" ? styles.activeAccountTab : undefined}
+            onClick={() => setActiveAccountTab("api-key")}
+            role="tab"
             type="button"
           >
-            Learn how to create an OpenAI API key
+            <KeyRound aria-hidden="true" />
+            API Key
           </button>
-          {isGuideOpen ? (
-            <section className={styles.byokGuide} aria-label="OpenAI API key guide">
-              <ol>
-                <li>
-                  Create or choose a dedicated OpenAI project for Azure Tides Gaming in the{" "}
-                  <a href="https://platform.openai.com/settings/organization/projects" rel="noreferrer" target="_blank">
-                    OpenAI project settings
-                  </a>
-                  .
-                </li>
-                <li>
-                  Confirm billing and usage in the{" "}
-                  <a href="https://platform.openai.com/usage" rel="noreferrer" target="_blank">
-                    OpenAI Usage Dashboard
-                  </a>
-                  . Project budgets are alerts for tracking, not hard spending limits.
-                </li>
-                <li>
-                  Create a project API key from the{" "}
-                  <a href="https://platform.openai.com/api-keys" rel="noreferrer" target="_blank">
-                    OpenAI API keys page
-                  </a>
-                  . Use a normal project key for ATG, not an organization Admin API key.
-                </li>
-                <li>
-                  Restrict the key where practical, then paste it here. ATG encrypts it server-side,
-                  never displays it again, and uses it only for your AI editing jobs.
-                </li>
-                <li>
-                  Save and test the key. If it is invalid, revoked, unauthorized, or rate-limited,
-                  ATG shows a redacted validation message.
-                </li>
-              </ol>
+          <button
+            aria-selected={activeAccountTab === "usage"}
+            className={activeAccountTab === "usage" ? styles.activeAccountTab : undefined}
+            onClick={() => setActiveAccountTab("usage")}
+            role="tab"
+            type="button"
+          >
+            <BadgeDollarSign aria-hidden="true" />
+            Usage
+          </button>
+        </div>
+        <div className={`${styles.modalBody} ${styles.accountSettingsBody}`}>
+          {activeAccountTab === "api-key" ? (
+            <section className={styles.accountTabPanel} role="tabpanel">
               <p>
-                Rotate a key by creating a replacement in OpenAI, saving it here, testing it, and revoking
-                the old key in OpenAI. Remove it here any time to return to the available fallback mode.
+                Add your OpenAI API key to run dashboard AI edits with the Codex SDK.
+                The key is encrypted server-side and is never shown again.
+              </p>
+              <button
+                className={styles.inlineLinkButton}
+                onClick={() => setIsGuideOpen((current) => !current)}
+                type="button"
+              >
+                Learn how to create an OpenAI API key
+              </button>
+              {isGuideOpen ? (
+                <section className={styles.byokGuide} aria-label="OpenAI API key guide">
+                  <ol>
+                    <li>
+                      Create or choose a dedicated OpenAI project for Azure Tides Gaming in the{" "}
+                      <a href="https://platform.openai.com/settings/organization/projects" rel="noreferrer" target="_blank">
+                        OpenAI project settings
+                      </a>
+                      .
+                    </li>
+                    <li>
+                      Confirm billing and usage in the{" "}
+                      <a href="https://platform.openai.com/usage" rel="noreferrer" target="_blank">
+                        OpenAI Usage Dashboard
+                      </a>
+                      . Project budgets are alerts for tracking, not hard spending limits.
+                    </li>
+                    <li>
+                      Create a project API key from the{" "}
+                      <a href="https://platform.openai.com/api-keys" rel="noreferrer" target="_blank">
+                        OpenAI API keys page
+                      </a>
+                      . Use a normal project key for ATG, not an organization Admin API key.
+                    </li>
+                    <li>
+                      Restrict the key where practical, then paste it here. ATG encrypts it server-side,
+                      never displays it again, and uses it only for your AI editing jobs.
+                    </li>
+                    <li>
+                      Save and test the key. If it is invalid, revoked, unauthorized, or rate-limited,
+                      ATG shows a redacted validation message.
+                    </li>
+                  </ol>
+                  <p>
+                    Rotate a key by creating a replacement in OpenAI, saving it here, testing it, and revoking
+                    the old key in OpenAI. Remove it here any time to return to the available fallback mode.
+                  </p>
+                </section>
+              ) : null}
+              <label htmlFor="openai-api-key">OpenAI API key</label>
+              <input
+                autoComplete="off"
+                disabled={isBusy}
+                id="openai-api-key"
+                onChange={(event) => onApiKeyChange(event.target.value)}
+                placeholder={configured ? "A personal key is configured" : "sk-..."}
+                type="password"
+                value={apiKey}
+              />
+              <p className={styles.settingsStatus}>
+                {isLoading
+                  ? "Loading settings..."
+                  : configured
+                    ? "Personal API key configured."
+                    : serverFallbackConfigured
+                      ? "Using the server API key until you add a personal key."
+                      : "No API key configured. Local development can use your Codex login."}
               </p>
             </section>
-          ) : null}
-          <label htmlFor="openai-api-key">OpenAI API key</label>
-          <input
-            autoComplete="off"
-            disabled={isBusy}
-            id="openai-api-key"
-            onChange={(event) => onApiKeyChange(event.target.value)}
-            placeholder={configured ? "A personal key is configured" : "sk-..."}
-            type="password"
-            value={apiKey}
-          />
-          <p className={styles.settingsStatus}>
-            {isLoading
-              ? "Loading settings..."
-              : configured
-                ? "Personal API key configured."
-                : serverFallbackConfigured
-                  ? "Using the server API key until you add a personal key."
-                  : "No API key configured. Local development can use your Codex login."}
-          </p>
-          <section className={styles.usageBudgetSection} aria-label="API usage and budget">
-            <div className={styles.sectionHeading}>
-              <BadgeDollarSign aria-hidden="true" />
-              <h3>API usage and budget</h3>
-            </div>
+          ) : (
+            <section className={styles.accountTabPanel} role="tabpanel" aria-label="API usage and budget">
             {isLoading || !usageBudget ? (
               <p className={styles.settingsStatus}>Loading usage totals...</p>
             ) : (
@@ -1418,11 +1452,12 @@ function AccountSettingsModal({
                 </p>
               </>
             )}
-          </section>
+            </section>
+          )}
           {message ? <p className={styles.settingsMessage}>{message}</p> : null}
         </div>
         <div className={styles.modalFooter}>
-          {configured ? (
+          {activeAccountTab === "api-key" && configured ? (
             <button
               className={styles.dangerButton}
               disabled={isBusy}
@@ -1435,17 +1470,21 @@ function AccountSettingsModal({
           <button className={styles.secondaryButton} disabled={isBusy} onClick={onClose} type="button">
             Close
           </button>
-          <button
-            className={styles.secondaryButton}
-            disabled={isBusy || (!apiKey.trim() && !configured)}
-            onClick={onTest}
-            type="button"
-          >
-            {isTesting ? "Testing..." : "Test Key"}
-          </button>
-          <button disabled={!apiKey.trim() || isBusy} type="submit">
-            {isSaving ? "Saving..." : configured ? "Replace Key" : "Save Key"}
-          </button>
+          {activeAccountTab === "api-key" ? (
+            <>
+              <button
+                className={styles.secondaryButton}
+                disabled={isBusy || (!apiKey.trim() && !configured)}
+                onClick={onTest}
+                type="button"
+              >
+                {isTesting ? "Testing..." : "Test Key"}
+              </button>
+              <button disabled={!apiKey.trim() || isBusy} type="submit">
+                {isSaving ? "Saving..." : configured ? "Replace Key" : "Save Key"}
+              </button>
+            </>
+          ) : null}
         </div>
       </form>
     </div>
