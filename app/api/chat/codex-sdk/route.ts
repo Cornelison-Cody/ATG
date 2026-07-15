@@ -9,6 +9,7 @@ import { canUseCodexSdkPrototype, getCodexSdkTimeoutMs, getCodexSdkWorkspaceRoot
 import { exportGameTextFiles, updateGameTextFiles } from "@/lib/project-game";
 import { buildPlanningRequest, normalizeChatMode } from "@/lib/chat-mode.mjs";
 import { buildProjectPrompt } from "@/lib/project-prompt.mjs";
+import { recordCodexUsage } from "@/lib/usage-budget.mjs";
 import {
   canEditProject,
   getProjectPrincipal,
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
 
   const encoder = new TextEncoder();
   const abortController = new AbortController();
+  const directUsageKey = randomUUID();
   let streamCancelled = false;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -195,6 +197,15 @@ export async function POST(request: Request) {
           send({ sessionId: result.threadId, type: "session" });
         }
 
+        await recordCodexUsage({
+          idempotencyKey: directUsageKey,
+          model: process.env.ATG_CODEX_SDK_MODEL,
+          projectId,
+          source: "direct-codex-sdk",
+          usage: result.usage,
+          userId
+        });
+
         await persistAssistantMessage(projectId, result.finalResponse, "done");
         send({
           changedFiles: result.changedFiles.map((file) => file.path),
@@ -244,6 +255,7 @@ async function streamAzureJob({
   const { job, token } = await createCodexJob({
     editingTarget,
     files,
+    model: process.env.ATG_CODEX_SDK_MODEL || "",
     projectId,
     prompt: `${buildProjectPrompt(
       chatMode === "plan" ? buildPlanningRequest(message, editingTarget) : message,

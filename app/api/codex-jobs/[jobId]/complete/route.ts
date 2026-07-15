@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { claimCodexJobCompletion, CodexJobError, completeCodexJob } from "@/lib/codex-job-store.mjs";
 import { updateGameTextFiles } from "@/lib/project-game";
 import { appendProjectMessages, getProject } from "@/lib/projects";
+import { recordCodexUsage } from "@/lib/usage-budget.mjs";
 
 export const runtime = "nodejs";
 export async function POST(request: Request, context: { params: Promise<{ jobId: string }> }) {
@@ -22,6 +23,14 @@ export async function POST(request: Request, context: { params: Promise<{ jobId:
       await appendProjectMessages(project.id, [{
         id: randomUUID(), role: "assistant", content: finalMessage, status: "done", createdAt: new Date().toISOString()
       }]);
+      await recordCodexUsage({
+        idempotencyKey: jobId,
+        model: typeof record.model === "string" ? record.model : "",
+        projectId: record.projectId,
+        source: "isolated-codex-job",
+        usage: body.usage as Record<string, unknown>,
+        userId: record.userId
+      });
       await completeCodexJob(jobId, token, { ok: true, files, finalMessage, usage: body.usage });
     } else {
       const errorMessage = typeof body.errorMessage === "string" ? body.errorMessage : "Codex job failed.";
