@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BadgeDollarSign,
   CheckCircle2,
   ChevronDown,
   Globe2,
@@ -77,6 +78,36 @@ type ChatRunFeedback = {
 type EditingTarget = "tv" | "phone";
 type ChatMode = "build" | "plan";
 
+type AccountUsageBudget = {
+  budget: {
+    consumedPercent: number | null;
+    monthlyBudgetUsd: number | null;
+    remainingBudgetUsd: number | null;
+  };
+  lastUpdatedAt: string | null;
+  period: {
+    key: string;
+    resetAt: string;
+    startAt: string;
+    timezone: "UTC";
+  };
+  pricing: {
+    sourceUrl: string;
+    version: string;
+  };
+  totals: {
+    cachedInputTokens: number;
+    estimatedRecords: number;
+    estimatedSpendUsd: number;
+    inputTokens: number;
+    outputTokens: number;
+    reasoningOutputTokens: number;
+    recordCount: number;
+    unpricedRecords: number;
+  };
+  valuesAreEstimated: boolean;
+};
+
 const idleRunFeedback: ChatRunFeedback = {
   state: "idle",
   label: "Ready",
@@ -111,6 +142,8 @@ export default function Home() {
   const [accountApiKey, setAccountApiKey] = useState("");
   const [isAccountKeyConfigured, setIsAccountKeyConfigured] = useState(false);
   const [isServerKeyConfigured, setIsServerKeyConfigured] = useState(false);
+  const [accountUsageBudget, setAccountUsageBudget] = useState<AccountUsageBudget | null>(null);
+  const [monthlyBudgetInput, setMonthlyBudgetInput] = useState("");
   const [isLoadingAccountSettings, setIsLoadingAccountSettings] = useState(false);
   const [isSavingAccountSettings, setIsSavingAccountSettings] = useState(false);
   const [isTestingAccountKey, setIsTestingAccountKey] = useState(false);
@@ -457,26 +490,93 @@ export default function Home() {
     setIsAccountSettingsOpen(true);
     setAccountApiKey("");
     setAccountSettingsMessage("");
+    setAccountUsageBudget(null);
+    setMonthlyBudgetInput("");
     setIsLoadingAccountSettings(true);
 
     try {
-      const response = await fetch("/api/account/openai-key", { cache: "no-store" });
-      const data = (await response.json()) as {
+      const [keyResponse, usageResponse] = await Promise.all([
+        fetch("/api/account/openai-key", { cache: "no-store" }),
+        fetch("/api/account/usage-budget", { cache: "no-store" })
+      ]);
+      const data = (await keyResponse.json()) as {
         configured?: boolean;
         error?: string;
         serverFallbackConfigured?: boolean;
       };
-      if (!response.ok) {
-        throw new Error(data.error || `Failed to load account settings (${response.status})`);
+      const usageData = (await usageResponse.json()) as AccountUsageBudget & { error?: string };
+      if (!keyResponse.ok) {
+        throw new Error(data.error || `Failed to load account settings (${keyResponse.status})`);
+      }
+      if (!usageResponse.ok) {
+        throw new Error(usageData.error || `Failed to load usage settings (${usageResponse.status})`);
       }
       setIsAccountKeyConfigured(Boolean(data.configured));
       setIsServerKeyConfigured(Boolean(data.serverFallbackConfigured));
+      setAccountUsageBudget(usageData);
+      setMonthlyBudgetInput(
+        usageData.budget.monthlyBudgetUsd == null ? "" : String(usageData.budget.monthlyBudgetUsd)
+      );
     } catch (settingsError) {
       setAccountSettingsMessage(
         settingsError instanceof Error ? settingsError.message : "Unable to load account settings."
       );
     } finally {
       setIsLoadingAccountSettings(false);
+    }
+  }
+
+  async function saveMonthlyBudget() {
+    if (isSavingAccountSettings) {
+      return;
+    }
+    setIsSavingAccountSettings(true);
+    setAccountSettingsMessage("");
+    try {
+      const response = await fetch("/api/account/usage-budget", {
+        body: JSON.stringify({ monthlyBudgetUsd: monthlyBudgetInput }),
+        headers: { "Content-Type": "application/json" },
+        method: "PUT"
+      });
+      const data = (await response.json()) as AccountUsageBudget & { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || `Failed to save monthly budget (${response.status})`);
+      }
+      setAccountUsageBudget(data);
+      setMonthlyBudgetInput(
+        data.budget.monthlyBudgetUsd == null ? "" : String(data.budget.monthlyBudgetUsd)
+      );
+      setAccountSettingsMessage("Monthly AI budget saved.");
+    } catch (settingsError) {
+      setAccountSettingsMessage(
+        settingsError instanceof Error ? settingsError.message : "Unable to save the monthly budget."
+      );
+    } finally {
+      setIsSavingAccountSettings(false);
+    }
+  }
+
+  async function clearMonthlyBudget() {
+    if (isSavingAccountSettings) {
+      return;
+    }
+    setIsSavingAccountSettings(true);
+    setAccountSettingsMessage("");
+    try {
+      const response = await fetch("/api/account/usage-budget", { method: "DELETE" });
+      const data = (await response.json()) as AccountUsageBudget & { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || `Failed to remove monthly budget (${response.status})`);
+      }
+      setAccountUsageBudget(data);
+      setMonthlyBudgetInput("");
+      setAccountSettingsMessage("Monthly AI budget removed.");
+    } catch (settingsError) {
+      setAccountSettingsMessage(
+        settingsError instanceof Error ? settingsError.message : "Unable to remove the monthly budget."
+      );
+    } finally {
+      setIsSavingAccountSettings(false);
     }
   }
 
@@ -841,18 +941,25 @@ export default function Home() {
           isSaving={isSavingAccountSettings}
           isTesting={isTestingAccountKey}
           message={accountSettingsMessage}
+          monthlyBudgetInput={monthlyBudgetInput}
           onApiKeyChange={setAccountApiKey}
+          onBudgetChange={setMonthlyBudgetInput}
+          onBudgetClear={clearMonthlyBudget}
+          onBudgetSave={saveMonthlyBudget}
           onClear={clearAccountApiKey}
           onClose={() => {
             if (!isSavingAccountSettings && !isTestingAccountKey) {
               setIsAccountSettingsOpen(false);
               setAccountApiKey("");
               setAccountSettingsMessage("");
+              setAccountUsageBudget(null);
+              setMonthlyBudgetInput("");
             }
           }}
           onSave={saveAccountApiKey}
           onTest={testAccountApiKey}
           serverFallbackConfigured={isServerKeyConfigured}
+          usageBudget={accountUsageBudget}
         />
       ) : null}
 
@@ -1084,12 +1191,17 @@ function AccountSettingsModal({
   isSaving,
   isTesting,
   message,
+  monthlyBudgetInput,
   onApiKeyChange,
+  onBudgetChange,
+  onBudgetClear,
+  onBudgetSave,
   onClear,
   onClose,
   onSave,
   onTest,
-  serverFallbackConfigured
+  serverFallbackConfigured,
+  usageBudget
 }: {
   apiKey: string;
   configured: boolean;
@@ -1097,15 +1209,21 @@ function AccountSettingsModal({
   isSaving: boolean;
   isTesting: boolean;
   message: string;
+  monthlyBudgetInput: string;
   onApiKeyChange: (value: string) => void;
+  onBudgetChange: (value: string) => void;
+  onBudgetClear: () => void;
+  onBudgetSave: () => void;
   onClear: () => void;
   onClose: () => void;
   onSave: (event: FormEvent<HTMLFormElement>) => void;
   onTest: () => void;
   serverFallbackConfigured: boolean;
+  usageBudget: AccountUsageBudget | null;
 }) {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const isBusy = isLoading || isSaving || isTesting;
+  const budgetConfigured = usageBudget?.budget.monthlyBudgetUsd != null;
 
   return (
     <div className={styles.modalOverlay} role="presentation">
@@ -1192,6 +1310,115 @@ function AccountSettingsModal({
                   ? "Using the server API key until you add a personal key."
                   : "No API key configured. Local development can use your Codex login."}
           </p>
+          <section className={styles.usageBudgetSection} aria-label="API usage and budget">
+            <div className={styles.sectionHeading}>
+              <BadgeDollarSign aria-hidden="true" />
+              <h3>API usage and budget</h3>
+            </div>
+            {isLoading || !usageBudget ? (
+              <p className={styles.settingsStatus}>Loading usage totals...</p>
+            ) : (
+              <>
+                <div className={styles.usageSummaryGrid}>
+                  <div>
+                    <span>Estimated spend</span>
+                    <strong>{formatCurrency(usageBudget.totals.estimatedSpendUsd)}</strong>
+                  </div>
+                  <div>
+                    <span>Monthly budget</span>
+                    <strong>
+                      {usageBudget.budget.monthlyBudgetUsd == null
+                        ? "Not set"
+                        : formatCurrency(usageBudget.budget.monthlyBudgetUsd)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Remaining</span>
+                    <strong>
+                      {usageBudget.budget.remainingBudgetUsd == null
+                        ? "Not set"
+                        : formatCurrency(usageBudget.budget.remainingBudgetUsd)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Period reset</span>
+                    <strong>{formatDate(usageBudget.period.resetAt)}</strong>
+                  </div>
+                </div>
+                {budgetConfigured && usageBudget.budget.consumedPercent != null ? (
+                  <div className={styles.budgetMeter} aria-label="Budget consumed">
+                    <span style={{ width: `${Math.min(100, usageBudget.budget.consumedPercent)}%` }} />
+                  </div>
+                ) : null}
+                <dl className={styles.tokenTotals}>
+                  <div>
+                    <dt>Input</dt>
+                    <dd>{formatInteger(usageBudget.totals.inputTokens)}</dd>
+                  </div>
+                  <div>
+                    <dt>Cached input</dt>
+                    <dd>{formatInteger(usageBudget.totals.cachedInputTokens)}</dd>
+                  </div>
+                  <div>
+                    <dt>Reasoning</dt>
+                    <dd>{formatInteger(usageBudget.totals.reasoningOutputTokens)}</dd>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>{formatInteger(usageBudget.totals.outputTokens)}</dd>
+                  </div>
+                </dl>
+                <div className={styles.budgetControls}>
+                  <label htmlFor="monthly-ai-budget">Monthly ATG budget</label>
+                  <div>
+                    <input
+                      disabled={isBusy}
+                      id="monthly-ai-budget"
+                      min="0"
+                      onChange={(event) => onBudgetChange(event.target.value)}
+                      placeholder="Optional USD budget"
+                      step="0.01"
+                      type="number"
+                      value={monthlyBudgetInput}
+                    />
+                    <button
+                      className={styles.secondaryInlineButton}
+                      disabled={isBusy || !monthlyBudgetInput.trim()}
+                      onClick={onBudgetSave}
+                      type="button"
+                    >
+                      Save
+                    </button>
+                    <button
+                      className={styles.secondaryInlineButton}
+                      disabled={isBusy || !budgetConfigured}
+                      onClick={onBudgetClear}
+                      type="button"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+                <p className={styles.settingsStatus}>
+                  ATG-local totals cover AI edits made through ATG during {usageBudget.period.key}.
+                  Values are estimates and may not match your complete OpenAI account spend.
+                </p>
+                {usageBudget.totals.unpricedRecords > 0 ? (
+                  <p className={styles.settingsStatus}>
+                    {usageBudget.totals.unpricedRecords} usage record{usageBudget.totals.unpricedRecords === 1 ? "" : "s"} use
+                    unknown model pricing, so token totals are shown without an invented cost.
+                  </p>
+                ) : null}
+                <a className={styles.settingsLink} href="https://platform.openai.com/usage" rel="noreferrer" target="_blank">
+                  Open authoritative OpenAI usage
+                </a>
+                <p className={styles.usageMeta}>
+                  {usageBudget.lastUpdatedAt ? `Last updated ${formatDateTime(usageBudget.lastUpdatedAt)}.` : "No ATG usage recorded yet."}
+                  {" "}Pricing version {usageBudget.pricing.version}.
+                </p>
+              </>
+            )}
+          </section>
           {message ? <p className={styles.settingsMessage}>{message}</p> : null}
         </div>
         <div className={styles.modalFooter}>
@@ -1872,4 +2099,31 @@ function formatUpdatedAt(value: string) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value))}`;
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat(undefined, {
+    currency: "USD",
+    maximumFractionDigits: value > 0 && value < 0.01 ? 4 : 2,
+    minimumFractionDigits: 2,
+    style: "currency"
+  }).format(value);
+}
+
+function formatInteger(value: number) {
+  return new Intl.NumberFormat(undefined).format(value);
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric"
+  }).format(new Date(value));
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
 }

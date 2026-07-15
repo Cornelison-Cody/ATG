@@ -1085,6 +1085,130 @@
   font-size: 0.9rem;
 }
 
+.usageBudgetSection {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 16px;
+}
+
+.sectionHeading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.sectionHeading svg {
+  color: var(--accent);
+  height: 20px;
+  width: 20px;
+}
+
+.sectionHeading h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.usageSummaryGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.usageSummaryGrid div,
+.tokenTotals div {
+  background: rgba(7, 9, 13, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.usageSummaryGrid span,
+.tokenTotals dt,
+.usageMeta {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.usageSummaryGrid strong,
+.tokenTotals dd {
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 900;
+  margin: 0;
+}
+
+.budgetMeter {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.budgetMeter span {
+  background: var(--accent);
+  display: block;
+  height: 100%;
+}
+
+.tokenTotals {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.budgetControls {
+  display: grid;
+  gap: 8px;
+}
+
+.budgetControls > div {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.secondaryInlineButton {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 850;
+  min-height: 46px;
+  padding: 10px 14px;
+}
+
+.secondaryInlineButton:hover,
+.secondaryInlineButton:focus-visible {
+  border-color: rgba(77, 214, 201, 0.52);
+  outline: none;
+}
+
+.secondaryInlineButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.settingsLink {
+  color: var(--accent);
+  font-weight: 850;
+  justify-self: start;
+  text-decoration: none;
+}
+
+.settingsLink:hover,
+.settingsLink:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
 .fieldMeta {
   color: var(--muted);
   display: flex;
@@ -1291,6 +1415,12 @@
 
   .createControls,
   .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .budgetControls > div,
+  .tokenTotals,
+  .usageSummaryGrid {
     grid-template-columns: 1fr;
   }
 

@@ -16,6 +16,14 @@ npm run dev
 
 The development server runs the custom Node/Next/WebSocket server at `http://localhost:3000`.
 
+## AI Usage and Budgets
+
+Account Settings tracks token usage and estimated cost for Codex edits made through ATG. Users can set an optional monthly ATG budget for visibility, but BYOK edits are not blocked when that informational budget is exceeded.
+
+ATG keeps local usage records scoped to the signed-in user and does not store prompts, generated file contents, or OpenAI API keys in the usage ledger. Cost values are estimates calculated from server-maintained model pricing; unknown model prices show token totals without a dollar estimate.
+
+Normal OpenAI project API keys cannot read organization-wide Costs API data or a universal remaining-credit balance. Users should use the official [OpenAI Usage Dashboard](https://platform.openai.com/usage) for authoritative account billing, because ATG-local totals only cover requests made through ATG.
+
 ## Production Deployment
 
 ATG is prepared for a container-based VPS deployment:
