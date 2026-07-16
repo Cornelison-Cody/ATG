@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { ThreadEvent, Usage } from "@openai/codex-sdk";
 import { getAuthenticatedUserId } from "@/lib/auth";
 import { requireEditorAuth } from "@/lib/api-auth";
+import { AiBillingError, AI_BILLING_MODES, prepareAiBillingForRun } from "@/lib/ai-billing.mjs";
 import { createCodexJob, getCodexJob, completeCodexJob } from "@/lib/codex-job-store.mjs";
 import { startAzureCodexJob } from "@/lib/codex-job-launcher";
 import { runCodexSdkPrototype } from "@/lib/codex-sdk-prototype.mjs";
@@ -9,14 +10,13 @@ import { canUseCodexSdkPrototype, getCodexSdkTimeoutMs, getCodexSdkWorkspaceRoot
 import { exportGameTextFiles, updateGameTextFiles } from "@/lib/project-game";
 import { buildPlanningRequest, normalizeChatMode } from "@/lib/chat-mode.mjs";
 import { buildProjectPrompt } from "@/lib/project-prompt.mjs";
-import { recordCodexUsage } from "@/lib/usage-budget.mjs";
+import { reconcileManagedAiReservation, recordCodexUsage, releaseManagedAiReservation } from "@/lib/usage-budget.mjs";
 import {
   canEditProject,
   getProjectPrincipal,
   principalRequiredResponse,
   projectAccessResponse
 } from "@/lib/project-access";
-import { getUserApiKey } from "@/lib/user-settings.mjs";
 import {
   appendProjectMessages,
   claimProject,
@@ -98,9 +98,9 @@ export async function POST(request: Request) {
   runningProjects.add(projectId);
 
   let files;
-  let userApiKey = "";
+  let billing;
   try {
-    userApiKey = isProduction() ? "" : await getUserApiKey(userId);
+    billing = await prepareAiBillingForRun({ projectId, userId });
     files = await exportGameTextFiles(projectForAccess);
     await appendProjectMessages(projectId, [{
       content: message,
@@ -111,6 +111,16 @@ export async function POST(request: Request) {
     }]);
   } catch (error) {
     runningProjects.delete(projectId);
+    if (billing?.billingMode === AI_BILLING_MODES.MANAGED) {
+      await releaseManagedAiReservation({
+        reason: "prepare-failed",
+        reservationId: billing.reservationId,
+        userId
+      }).catch(() => undefined);
+    }
+    if (error instanceof AiBillingError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
     return projectStoreErrorResponse(error, "Unable to prepare the Codex SDK workspace.");
   }
 
@@ -122,6 +132,7 @@ export async function POST(request: Request) {
       message,
       project: projectForAccess,
       projectId,
+      billing,
       runningProjects,
       userId
     });
@@ -167,7 +178,7 @@ export async function POST(request: Request) {
 
       try {
         const result = await runCodexSdkPrototype({
-          apiKey: userApiKey || process.env.OPENAI_API_KEY || undefined,
+          apiKey: billing.apiKey,
           files,
           message: buildProjectPrompt(
             chatMode === "plan" ? buildPlanningRequest(message, editingTarget) : message,
@@ -197,7 +208,7 @@ export async function POST(request: Request) {
           send({ sessionId: result.threadId, type: "session" });
         }
 
-        await recordCodexUsage({
+        const usageResult = await recordCodexUsage({
           idempotencyKey: directUsageKey,
           model: process.env.ATG_CODEX_SDK_MODEL,
           projectId,
@@ -205,6 +216,22 @@ export async function POST(request: Request) {
           usage: result.usage,
           userId
         });
+        if (billing.billingMode === AI_BILLING_MODES.MANAGED) {
+          if (usageResult.recorded) {
+            await reconcileManagedAiReservation({
+              model: process.env.ATG_CODEX_SDK_MODEL,
+              reservationId: billing.reservationId,
+              usage: result.usage,
+              userId
+            });
+          } else {
+            await releaseManagedAiReservation({
+              reason: usageResult.reason || "missing-usage",
+              reservationId: billing.reservationId,
+              userId
+            });
+          }
+        }
 
         await persistAssistantMessage(projectId, result.finalResponse, "done");
         send({
@@ -215,6 +242,13 @@ export async function POST(request: Request) {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Codex SDK request failed.";
+        if (billing.billingMode === AI_BILLING_MODES.MANAGED) {
+          await releaseManagedAiReservation({
+            reason: "run-failed",
+            reservationId: billing.reservationId,
+            userId
+          }).catch(() => undefined);
+        }
         await persistAssistantMessage(projectId, message, "error").catch(() => undefined);
         send({ message, type: "error" });
       } finally {
@@ -238,8 +272,9 @@ export async function POST(request: Request) {
 }
 
 async function streamAzureJob({
-  chatMode, editingTarget, files, message, project, projectId, runningProjects, userId
+  billing, chatMode, editingTarget, files, message, project, projectId, runningProjects, userId
 }: {
+  billing: { apiKey: string; billingMode: "managed" | "byok"; reservationId: string };
   chatMode: "build" | "plan";
   editingTarget: "tv" | "phone";
   files: { path: string; content: string }[];
@@ -252,24 +287,39 @@ async function streamAzureJob({
   const recentContext = project.messages.slice(-8)
     .map((item) => `${item.role}: ${item.content}`)
     .join("\n");
-  const { job, token } = await createCodexJob({
-    editingTarget,
-    files,
-    model: process.env.ATG_CODEX_SDK_MODEL || "",
-    projectId,
-    prompt: `${buildProjectPrompt(
-      chatMode === "plan" ? buildPlanningRequest(message, editingTarget) : message,
-      editingTarget
-    )}${recentContext ? `\n\nRecent project conversation:\n${recentContext}` : ""}`,
-    userId
-  });
+  let job;
+  let token = "";
   const encoder = new TextEncoder();
 
   try {
+    const created = await createCodexJob({
+      editingTarget,
+      files,
+      billingMode: billing.billingMode,
+      model: process.env.ATG_CODEX_SDK_MODEL || "",
+      projectId,
+      prompt: `${buildProjectPrompt(
+        chatMode === "plan" ? buildPlanningRequest(message, editingTarget) : message,
+        editingTarget
+      )}${recentContext ? `\n\nRecent project conversation:\n${recentContext}` : ""}`,
+      reservationId: billing.reservationId,
+      userId
+    });
+    job = created.job;
+    token = created.token;
     await startAzureCodexJob(job.id, token);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unable to start isolated Codex job.";
-    await completeCodexJob(job.id, token, { ok: false, errorMessage });
+    if (job && token) {
+      await completeCodexJob(job.id, token, { ok: false, errorMessage });
+    }
+    if (billing.billingMode === AI_BILLING_MODES.MANAGED) {
+      await releaseManagedAiReservation({
+        reason: "start-failed",
+        reservationId: billing.reservationId,
+        userId
+      }).catch(() => undefined);
+    }
     runningProjects.delete(projectId);
     await persistAssistantMessage(projectId, errorMessage, "error");
     return Response.json({ error: errorMessage }, { status: 502 });

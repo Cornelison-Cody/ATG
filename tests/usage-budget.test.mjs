@@ -150,3 +150,77 @@ test("usage summaries are isolated by user and month", async () => {
     await cleanup();
   }
 });
+
+test("managed AI credit reserves, reconciles, and summarizes monthly allowance", async () => {
+  const { store, cleanup } = await loadStore();
+  try {
+    const initial = await store.getManagedAiCreditSummary("user-a", new Date("2026-07-20T00:00:00Z"));
+    assert.equal(initial.monthlyCreditUsd, 5);
+    assert.equal(initial.reservationUsd, 0.25);
+    assert.equal(initial.remainingCreditUsd, 5);
+
+    const reservation = await store.reserveManagedAiCredit({
+      projectId: "project-a",
+      reservationId: "reservation-a",
+      timestamp: "2026-07-20T00:00:00Z",
+      userId: "user-a"
+    });
+    const duplicate = await store.reserveManagedAiCredit({
+      projectId: "project-a",
+      reservationId: "reservation-a",
+      timestamp: "2026-07-20T00:00:00Z",
+      userId: "user-a"
+    });
+    assert.equal(reservation.status, "reserved");
+    assert.equal(duplicate.status, "reserved");
+
+    const reserved = await store.getManagedAiCreditSummary("user-a", new Date("2026-07-20T00:00:00Z"));
+    assert.equal(reserved.reservedUsd, 0.25);
+    assert.equal(reserved.remainingCreditUsd, 4.75);
+
+    await store.reconcileManagedAiReservation({
+      model: "gpt-5.3-codex",
+      reservationId: "reservation-a",
+      usage: { cached_input_tokens: 0, input_tokens: 1000, output_tokens: 100 },
+      userId: "user-a"
+    });
+    const reconciled = await store.getManagedAiCreditSummary("user-a", new Date("2026-07-20T00:00:00Z"));
+    assert.equal(reconciled.reservedUsd, 0);
+    assert.equal(reconciled.spentUsd, 0.0032);
+    assert.equal(reconciled.remainingCreditUsd, 4.9968);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("managed AI credit releases failed reservations and isolates users", async () => {
+  const { store, cleanup } = await loadStore();
+  try {
+    await store.reserveManagedAiCredit({
+      amountUsd: 4.9,
+      projectId: "project-a",
+      reservationId: "reservation-a",
+      userId: "user-a"
+    });
+    await assert.rejects(
+      store.reserveManagedAiCredit({
+        amountUsd: 0.2,
+        projectId: "project-a",
+        reservationId: "reservation-b",
+        userId: "user-a"
+      }),
+      /credit is exhausted/
+    );
+    await store.releaseManagedAiReservation({
+      reason: "failed-start",
+      reservationId: "reservation-a",
+      userId: "user-a"
+    });
+    const userA = await store.getManagedAiCreditSummary("user-a");
+    const userB = await store.getManagedAiCreditSummary("user-b");
+    assert.equal(userA.remainingCreditUsd, 5);
+    assert.equal(userB.remainingCreditUsd, 5);
+  } finally {
+    await cleanup();
+  }
+});

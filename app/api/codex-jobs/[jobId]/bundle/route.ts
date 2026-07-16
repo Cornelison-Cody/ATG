@@ -1,4 +1,5 @@
 import { authenticateCodexJob, CodexJobError } from "@/lib/codex-job-store.mjs";
+import { AI_BILLING_MODES, getManagedOpenAiApiKey } from "@/lib/ai-billing.mjs";
 import { getUserApiKey } from "@/lib/user-settings.mjs";
 
 export const runtime = "nodejs";
@@ -8,7 +9,11 @@ export async function GET(request: Request, context: { params: Promise<{ jobId: 
   try {
     const { jobId } = await context.params;
     const record = await authenticateCodexJob(jobId, bearer(request));
-    const apiKey = await getUserApiKey(record.userId) || process.env.OPENAI_API_KEY || "";
+    const apiKey = record.billingMode === AI_BILLING_MODES.MANAGED
+      ? getManagedOpenAiApiKey()
+      : record.billingMode === AI_BILLING_MODES.BYOK
+        ? await getUserApiKey(record.userId)
+        : await getUserApiKey(record.userId) || process.env.OPENAI_API_KEY || "";
     if (!apiKey) return Response.json({ error: "No OpenAI API key is configured." }, { status: 503 });
     return Response.json({
       apiKey,

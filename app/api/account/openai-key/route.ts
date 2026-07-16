@@ -1,5 +1,6 @@
 import { getAuthenticatedUserId } from "@/lib/auth";
 import { requireEditorAuth } from "@/lib/api-auth";
+import { getAiBillingStatus } from "@/lib/ai-billing.mjs";
 import { validateOpenAiApiKey } from "@/lib/openai-key-validation.mjs";
 import {
   deleteUserApiKey,
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
     return auth;
   }
   return Response.json({
+    aiBilling: await getAiBillingStatus(auth),
     configured: await hasUserApiKey(auth),
     serverFallbackConfigured: Boolean(process.env.OPENAI_API_KEY)
   });
@@ -32,7 +34,7 @@ export async function PUT(request: Request) {
   try {
     const body = (await request.json()) as { apiKey?: unknown };
     await saveUserApiKey(auth, body.apiKey);
-    return Response.json({ configured: true });
+    return Response.json({ aiBilling: await getAiBillingStatus(auth), configured: true });
   } catch (error) {
     return settingsErrorResponse(error);
   }
@@ -66,7 +68,7 @@ export async function DELETE(request: Request) {
   }
   try {
     await deleteUserApiKey(auth);
-    return Response.json({ configured: false });
+    return Response.json({ aiBilling: await getAiBillingStatus(auth), configured: false });
   } catch (error) {
     return settingsErrorResponse(error);
   }

@@ -2,6 +2,7 @@ import { getAuthenticatedUserId } from "@/lib/auth";
 import { requireEditorAuth } from "@/lib/api-auth";
 import {
   deleteMonthlyBudget,
+  getManagedAiCreditSummary,
   getUsageBudgetSummary,
   saveMonthlyBudget,
   UsageBudgetError
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
     return auth;
   }
   try {
-    return Response.json(await getUsageBudgetSummary(auth));
+    return Response.json(await usageBudgetResponse(auth));
   } catch (error) {
     return usageBudgetErrorResponse(error);
   }
@@ -31,7 +32,7 @@ export async function PUT(request: Request) {
   try {
     const body = (await request.json()) as { monthlyBudgetUsd?: unknown };
     await saveMonthlyBudget(auth, body.monthlyBudgetUsd);
-    return Response.json(await getUsageBudgetSummary(auth));
+    return Response.json(await usageBudgetResponse(auth));
   } catch (error) {
     return usageBudgetErrorResponse(error);
   }
@@ -45,10 +46,18 @@ export async function DELETE(request: Request) {
 
   try {
     await deleteMonthlyBudget(auth);
-    return Response.json(await getUsageBudgetSummary(auth));
+    return Response.json(await usageBudgetResponse(auth));
   } catch (error) {
     return usageBudgetErrorResponse(error);
   }
+}
+
+async function usageBudgetResponse(userId: string) {
+  const [summary, managedCredit] = await Promise.all([
+    getUsageBudgetSummary(userId),
+    getManagedAiCreditSummary(userId)
+  ]);
+  return { ...summary, managedCredit };
 }
 
 async function authenticateUser(request: Request) {
