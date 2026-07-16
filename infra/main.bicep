@@ -91,6 +91,7 @@ var cosmosDatabaseName = 'atg'
 var cosmosProjectsContainerName = 'projects'
 var cosmosUserSettingsContainerName = 'user-settings'
 var cosmosCodexJobsContainerName = 'codex-jobs'
+var cosmosAiUsageContainerName = 'ai-usage-budget'
 var codexJobName = '${prefix}-codex-job'
 var storageAccountName = 'atg${take(normalizedEnvironment, 6)}${nameSeed}st'
 var gameAssetsContainerName = 'game-assets'
@@ -186,6 +187,10 @@ var containerAppEnv = concat(
     {
       name: 'AZURE_COSMOS_CODEX_JOBS_CONTAINER'
       value: cosmosCodexJobsContainerName
+    }
+    {
+      name: 'AZURE_COSMOS_AI_USAGE_CONTAINER'
+      value: cosmosAiUsageContainerName
     }
     {
       name: 'AZURE_SUBSCRIPTION_ID'
@@ -407,6 +412,36 @@ resource codexJobsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/
   }
 }
 
+resource aiUsageContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  name: cosmosAiUsageContainerName
+  parent: cosmosDatabase
+  properties: {
+    resource: {
+      id: cosmosAiUsageContainerName
+      partitionKey: {
+        paths: [
+          '/id'
+        ]
+        kind: 'Hash'
+      }
+      indexingPolicy: {
+        indexingMode: 'consistent'
+        automatic: true
+        includedPaths: [
+          {
+            path: '/*'
+          }
+        ]
+        excludedPaths: [
+          {
+            path: '/"_etag"/?'
+          }
+        ]
+      }
+    }
+  }
+}
+
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
@@ -483,6 +518,9 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
   dependsOn: [
     projectsContainer
+    userSettingsContainer
+    codexJobsContainer
+    aiUsageContainer
     gameAssetsContainer
   ]
 }
