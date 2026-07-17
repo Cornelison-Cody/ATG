@@ -905,6 +905,62 @@
   gap: 12px;
 }
 
+.billingModeField {
+  border: 0;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.billingModeField legend {
+  color: var(--text);
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+.billingModeGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.billingModeGrid button {
+  background: rgba(7, 9, 13, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  display: grid;
+  font: inherit;
+  gap: 6px;
+  min-height: 112px;
+  padding: 12px;
+  text-align: left;
+}
+
+.billingModeGrid button:hover,
+.billingModeGrid button:focus-visible,
+.billingModeGrid .activeBillingMode {
+  background: rgba(77, 214, 201, 0.12);
+  border-color: rgba(77, 214, 201, 0.52);
+  outline: none;
+}
+
+.billingModeGrid button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.billingModeGrid span {
+  font-weight: 900;
+}
+
+.billingModeGrid small {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
 .inlineLinkButton {
   background: transparent;
   border: 0;
@@ -1447,6 +1503,7 @@
   }
 
   .budgetControls > div,
+  .billingModeGrid,
   .tokenTotals,
   .usageSummaryGrid {
     grid-template-columns: 1fr;

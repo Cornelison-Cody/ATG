@@ -88,6 +88,8 @@ jobs:
           AI_WORKER_TOKEN: ${{ secrets.AI_WORKER_TOKEN }}
           ENABLE_LOCAL_COMPANION: ${{ vars.ENABLE_LOCAL_COMPANION }}
           ENABLE_CODEX_SDK_PROTOTYPE: ${{ vars.ENABLE_CODEX_SDK_PROTOTYPE }}
+          ATG_MANAGED_AI_ENABLED: ${{ vars.ATG_MANAGED_AI_ENABLED }}
+          ATG_MANAGED_OPENAI_API_KEY: ${{ secrets.ATG_MANAGED_OPENAI_API_KEY }}
           ATG_COMPANION_TOKEN: ${{ secrets.ATG_COMPANION_TOKEN }}
           ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
           ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
@@ -118,9 +120,11 @@ jobs:
                 aiWorkerUrl="${AI_WORKER_URL:-}" \
                 enableLocalCompanion="${ENABLE_LOCAL_COMPANION:-false}" \
                 enableCodexSdkPrototype="${ENABLE_CODEX_SDK_PROTOTYPE:-false}" \
+                managedAiEnabled="${ATG_MANAGED_AI_ENABLED:-false}" \
                 aiWorkerToken="${AI_WORKER_TOKEN:-}" \
                 atgCompanionToken="${ATG_COMPANION_TOKEN:-}" \
                 openAiApiKey="${OPENAI_API_KEY:-}" \
+                managedOpenAiApiKey="${ATG_MANAGED_OPENAI_API_KEY:-}" \
                 userSettingsEncryptionKey="${ATG_USER_SETTINGS_ENCRYPTION_KEY:-}" \
                 ghcrUsername="${GHCR_USERNAME:-}" \
                 ghcrToken="${GHCR_TOKEN:-}" \

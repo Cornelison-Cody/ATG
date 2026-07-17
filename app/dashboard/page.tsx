@@ -105,7 +105,33 @@ type AccountUsageBudget = {
     recordCount: number;
     unpricedRecords: number;
   };
+  managedCredit: {
+    monthlyCreditUsd: number;
+    remainingCreditUsd: number;
+    reservationUsd: number;
+    reservedUsd: number;
+    spentUsd: number;
+    period: {
+      resetAt: string;
+    };
+  };
   valuesAreEstimated: boolean;
+};
+
+type AccountAiBilling = {
+  mode: "managed" | "byok";
+  byok: {
+    configured: boolean;
+  };
+  managed: {
+    enabled: boolean;
+    eligible: boolean;
+    keyConfigured: boolean;
+    monthlyCreditUsd: number;
+    remainingCreditUsd: number;
+    reservationUsd: number;
+    resetAt: string;
+  };
 };
 
 const idleRunFeedback: ChatRunFeedback = {
@@ -143,6 +169,7 @@ export default function Home() {
   const [isAccountKeyConfigured, setIsAccountKeyConfigured] = useState(false);
   const [isServerKeyConfigured, setIsServerKeyConfigured] = useState(false);
   const [accountUsageBudget, setAccountUsageBudget] = useState<AccountUsageBudget | null>(null);
+  const [accountAiBilling, setAccountAiBilling] = useState<AccountAiBilling | null>(null);
   const [monthlyBudgetInput, setMonthlyBudgetInput] = useState("");
   const [isLoadingAccountSettings, setIsLoadingAccountSettings] = useState(false);
   const [isSavingAccountSettings, setIsSavingAccountSettings] = useState(false);
@@ -491,6 +518,7 @@ export default function Home() {
     setAccountApiKey("");
     setAccountSettingsMessage("");
     setAccountUsageBudget(null);
+    setAccountAiBilling(null);
     setMonthlyBudgetInput("");
     setIsLoadingAccountSettings(true);
 
@@ -502,6 +530,7 @@ export default function Home() {
       const data = (await keyResponse.json()) as {
         configured?: boolean;
         error?: string;
+        aiBilling?: AccountAiBilling;
         serverFallbackConfigured?: boolean;
       };
       const usageData = (await usageResponse.json()) as AccountUsageBudget & { error?: string };
@@ -513,6 +542,7 @@ export default function Home() {
       }
       setIsAccountKeyConfigured(Boolean(data.configured));
       setIsServerKeyConfigured(Boolean(data.serverFallbackConfigured));
+      setAccountAiBilling(data.aiBilling || null);
       setAccountUsageBudget(usageData);
       setMonthlyBudgetInput(
         usageData.budget.monthlyBudgetUsd == null ? "" : String(usageData.budget.monthlyBudgetUsd)
@@ -523,6 +553,33 @@ export default function Home() {
       );
     } finally {
       setIsLoadingAccountSettings(false);
+    }
+  }
+
+  async function saveAiBillingMode(mode: AccountAiBilling["mode"]) {
+    if (isSavingAccountSettings) {
+      return;
+    }
+    setIsSavingAccountSettings(true);
+    setAccountSettingsMessage("");
+    try {
+      const response = await fetch("/api/account/ai-billing", {
+        body: JSON.stringify({ mode }),
+        headers: { "Content-Type": "application/json" },
+        method: "PUT"
+      });
+      const data = (await response.json()) as AccountAiBilling & { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || `Failed to update billing mode (${response.status})`);
+      }
+      setAccountAiBilling(data);
+      setAccountSettingsMessage(mode === "managed" ? "ATG-managed AI selected." : "Personal API key mode selected.");
+    } catch (settingsError) {
+      setAccountSettingsMessage(
+        settingsError instanceof Error ? settingsError.message : "Unable to update AI billing mode."
+      );
+    } finally {
+      setIsSavingAccountSettings(false);
     }
   }
 
@@ -593,11 +650,18 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         method: "PUT"
       });
-      const data = (await response.json()) as { configured?: boolean; error?: string };
+      const data = (await response.json()) as { aiBilling?: AccountAiBilling; configured?: boolean; error?: string };
       if (!response.ok) {
         throw new Error(data.error || `Failed to save API key (${response.status})`);
       }
       setIsAccountKeyConfigured(true);
+      if (data.aiBilling) {
+        setAccountAiBilling(data.aiBilling);
+      } else {
+        setAccountAiBilling((current) => current
+          ? { ...current, byok: { ...current.byok, configured: true } }
+          : current);
+      }
       setAccountApiKey("");
       setAccountSettingsMessage("Your OpenAI API key is configured.");
     } catch (settingsError) {
@@ -641,11 +705,18 @@ export default function Home() {
     setAccountSettingsMessage("");
     try {
       const response = await fetch("/api/account/openai-key", { method: "DELETE" });
-      const data = (await response.json()) as { error?: string };
+      const data = (await response.json()) as { aiBilling?: AccountAiBilling; error?: string };
       if (!response.ok) {
         throw new Error(data.error || `Failed to remove API key (${response.status})`);
       }
       setIsAccountKeyConfigured(false);
+      if (data.aiBilling) {
+        setAccountAiBilling(data.aiBilling);
+      } else {
+        setAccountAiBilling((current) => current
+          ? { ...current, byok: { ...current.byok, configured: false } }
+          : current);
+      }
       setAccountApiKey("");
       setAccountSettingsMessage("Your saved OpenAI API key was removed.");
     } catch (settingsError) {
@@ -942,7 +1013,9 @@ export default function Home() {
           isTesting={isTestingAccountKey}
           message={accountSettingsMessage}
           monthlyBudgetInput={monthlyBudgetInput}
+          aiBilling={accountAiBilling}
           onApiKeyChange={setAccountApiKey}
+          onBillingModeChange={saveAiBillingMode}
           onBudgetChange={setMonthlyBudgetInput}
           onBudgetClear={clearMonthlyBudget}
           onBudgetSave={saveMonthlyBudget}
@@ -953,6 +1026,7 @@ export default function Home() {
               setAccountApiKey("");
               setAccountSettingsMessage("");
               setAccountUsageBudget(null);
+              setAccountAiBilling(null);
               setMonthlyBudgetInput("");
             }
           }}
@@ -1185,6 +1259,7 @@ function ProjectSettingsModal({
 }
 
 function AccountSettingsModal({
+  aiBilling,
   apiKey,
   configured,
   isLoading,
@@ -1193,6 +1268,7 @@ function AccountSettingsModal({
   message,
   monthlyBudgetInput,
   onApiKeyChange,
+  onBillingModeChange,
   onBudgetChange,
   onBudgetClear,
   onBudgetSave,
@@ -1203,6 +1279,7 @@ function AccountSettingsModal({
   serverFallbackConfigured,
   usageBudget
 }: {
+  aiBilling: AccountAiBilling | null;
   apiKey: string;
   configured: boolean;
   isLoading: boolean;
@@ -1211,6 +1288,7 @@ function AccountSettingsModal({
   message: string;
   monthlyBudgetInput: string;
   onApiKeyChange: (value: string) => void;
+  onBillingModeChange: (mode: AccountAiBilling["mode"]) => void;
   onBudgetChange: (value: string) => void;
   onBudgetClear: () => void;
   onBudgetSave: () => void;
@@ -1278,8 +1356,42 @@ function AccountSettingsModal({
           {activeAccountTab === "api-key" ? (
             <section className={styles.accountTabPanel} role="tabpanel">
               <p>
-                Add your OpenAI API key to run dashboard AI edits with the Codex SDK.
-                The key is encrypted server-side and is never shown again.
+                Choose who pays for dashboard AI edits. ATG-managed AI is recommended for the closed beta;
+                BYOK always remains available when you configure a personal key.
+              </p>
+              <fieldset className={styles.billingModeField} disabled={isBusy || !aiBilling}>
+                <legend>AI billing mode</legend>
+                <div className={styles.billingModeGrid}>
+                  <button
+                    aria-pressed={aiBilling?.mode === "managed"}
+                    className={aiBilling?.mode === "managed" ? styles.activeBillingMode : undefined}
+                    disabled={!aiBilling?.managed.eligible}
+                    onClick={() => onBillingModeChange("managed")}
+                    type="button"
+                  >
+                    <span>ATG-managed AI</span>
+                    <small>
+                      Recommended beta credit. {aiBilling?.managed.enabled && aiBilling.managed.keyConfigured
+                        ? `${formatCurrency(aiBilling.managed.remainingCreditUsd)} remaining this month.`
+                        : "Temporarily unavailable until managed AI is configured."}
+                    </small>
+                  </button>
+                  <button
+                    aria-pressed={aiBilling?.mode === "byok"}
+                    className={aiBilling?.mode === "byok" ? styles.activeBillingMode : undefined}
+                    disabled={!configured}
+                    onClick={() => onBillingModeChange("byok")}
+                    type="button"
+                  >
+                    <span>Use my OpenAI API key</span>
+                    <small>
+                      You pay OpenAI directly. {configured ? "Personal key configured." : "Save a personal key to enable BYOK."}
+                    </small>
+                  </button>
+                </div>
+              </fieldset>
+              <p>
+                Add your OpenAI API key for BYOK mode. The key is encrypted server-side and is never shown again.
               </p>
               <button
                 className={styles.inlineLinkButton}
@@ -1354,6 +1466,22 @@ function AccountSettingsModal({
             ) : (
               <>
                 <div className={styles.usageSummaryGrid}>
+                  <div>
+                    <span>ATG credit</span>
+                    <strong>{formatCurrency(usageBudget.managedCredit.monthlyCreditUsd)}</strong>
+                  </div>
+                  <div>
+                    <span>ATG remaining</span>
+                    <strong>{formatCurrency(usageBudget.managedCredit.remainingCreditUsd)}</strong>
+                  </div>
+                  <div>
+                    <span>ATG reserved</span>
+                    <strong>{formatCurrency(usageBudget.managedCredit.reservedUsd)}</strong>
+                  </div>
+                  <div>
+                    <span>ATG reset</span>
+                    <strong>{formatDate(usageBudget.managedCredit.period.resetAt)}</strong>
+                  </div>
                   <div>
                     <span>Estimated spend</span>
                     <strong>{formatCurrency(usageBudget.totals.estimatedSpendUsd)}</strong>

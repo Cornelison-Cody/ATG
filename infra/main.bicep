@@ -41,6 +41,13 @@ param atgCompanionToken string = ''
 @description('OpenAI API key for hosted AI/worker integration.')
 param openAiApiKey string = ''
 
+@description('Enable ATG-managed AI billing mode for eligible closed-beta users.')
+param managedAiEnabled bool = false
+
+@secure()
+@description('OpenAI project service-account API key for ATG-managed AI. Never use a user BYOK key here.')
+param managedOpenAiApiKey string = ''
+
 @secure()
 @description('Base64-encoded 32-byte key used to encrypt per-user OpenAI API keys.')
 param userSettingsEncryptionKey string = ''
@@ -129,6 +136,12 @@ var containerAppSecrets = concat(
     {
       name: 'openai-api-key'
       value: openAiApiKey
+    }
+  ],
+  empty(managedOpenAiApiKey) ? [] : [
+    {
+      name: 'managed-openai-api-key'
+      value: managedOpenAiApiKey
     }
   ],
   empty(userSettingsEncryptionKey) ? [] : [
@@ -252,6 +265,18 @@ var containerAppEnv = concat(
       name: 'ENABLE_CODEX_SDK_PROTOTYPE'
       value: enableCodexSdkPrototype ? 'true' : 'false'
     }
+    {
+      name: 'ATG_MANAGED_AI_ENABLED'
+      value: managedAiEnabled ? 'true' : 'false'
+    }
+    {
+      name: 'ATG_MANAGED_AI_MONTHLY_CREDIT_USD'
+      value: '5'
+    }
+    {
+      name: 'ATG_MANAGED_AI_RESERVATION_USD'
+      value: '0.25'
+    }
   ],
   empty(aiWorkerToken) ? [] : [
     {
@@ -269,6 +294,12 @@ var containerAppEnv = concat(
     {
       name: 'OPENAI_API_KEY'
       secretRef: 'openai-api-key'
+    }
+  ],
+  empty(managedOpenAiApiKey) ? [] : [
+    {
+      name: 'ATG_MANAGED_OPENAI_API_KEY'
+      secretRef: 'managed-openai-api-key'
     }
   ],
   empty(userSettingsEncryptionKey) ? [] : [
