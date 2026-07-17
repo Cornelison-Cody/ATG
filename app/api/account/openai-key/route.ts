@@ -20,8 +20,7 @@ export async function GET(request: Request) {
   }
   return Response.json({
     aiBilling: await getAiBillingStatus(auth),
-    configured: await hasUserApiKey(auth),
-    serverFallbackConfigured: Boolean(process.env.OPENAI_API_KEY)
+    configured: await hasUserApiKey(auth)
   });
 }
 

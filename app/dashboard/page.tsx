@@ -167,7 +167,6 @@ export default function Home() {
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const [accountApiKey, setAccountApiKey] = useState("");
   const [isAccountKeyConfigured, setIsAccountKeyConfigured] = useState(false);
-  const [isServerKeyConfigured, setIsServerKeyConfigured] = useState(false);
   const [accountUsageBudget, setAccountUsageBudget] = useState<AccountUsageBudget | null>(null);
   const [accountAiBilling, setAccountAiBilling] = useState<AccountAiBilling | null>(null);
   const [monthlyBudgetInput, setMonthlyBudgetInput] = useState("");
@@ -531,7 +530,6 @@ export default function Home() {
         configured?: boolean;
         error?: string;
         aiBilling?: AccountAiBilling;
-        serverFallbackConfigured?: boolean;
       };
       const usageData = (await usageResponse.json()) as AccountUsageBudget & { error?: string };
       if (!keyResponse.ok) {
@@ -541,7 +539,6 @@ export default function Home() {
         throw new Error(usageData.error || `Failed to load usage settings (${usageResponse.status})`);
       }
       setIsAccountKeyConfigured(Boolean(data.configured));
-      setIsServerKeyConfigured(Boolean(data.serverFallbackConfigured));
       setAccountAiBilling(data.aiBilling || null);
       setAccountUsageBudget(usageData);
       setMonthlyBudgetInput(
@@ -1032,7 +1029,6 @@ export default function Home() {
           }}
           onSave={saveAccountApiKey}
           onTest={testAccountApiKey}
-          serverFallbackConfigured={isServerKeyConfigured}
           usageBudget={accountUsageBudget}
         />
       ) : null}
@@ -1276,7 +1272,6 @@ function AccountSettingsModal({
   onClose,
   onSave,
   onTest,
-  serverFallbackConfigured,
   usageBudget
 }: {
   aiBilling: AccountAiBilling | null;
@@ -1296,7 +1291,6 @@ function AccountSettingsModal({
   onClose: () => void;
   onSave: (event: FormEvent<HTMLFormElement>) => void;
   onTest: () => void;
-  serverFallbackConfigured: boolean;
   usageBudget: AccountUsageBudget | null;
 }) {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
@@ -1435,7 +1429,7 @@ function AccountSettingsModal({
                   </ol>
                   <p>
                     Rotate a key by creating a replacement in OpenAI, saving it here, testing it, and revoking
-                    the old key in OpenAI. Remove it here any time to return to the available fallback mode.
+                    the old key in OpenAI. Remove it here any time to return to ATG-managed AI.
                   </p>
                 </section>
               ) : null}
@@ -1454,9 +1448,7 @@ function AccountSettingsModal({
                   ? "Loading settings..."
                   : configured
                     ? "Personal API key configured."
-                    : serverFallbackConfigured
-                      ? "Using the server API key until you add a personal key."
-                      : "No API key configured. Local development can use your Codex login."}
+                    : "No personal API key configured. Use ATG-managed AI or save a key to enable BYOK."}
               </p>
             </section>
           ) : (
