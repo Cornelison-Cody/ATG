@@ -25,7 +25,6 @@ Create a GitHub `production` environment and configure these repository or envir
 - `AZURE_LOCATION` set to `westus`
 - `AZURE_ENVIRONMENT_NAME` set to `prod`
 - `APP_BASE_URL` optional on first deploy; leave blank to use the generated Container Apps URL.
-- `AI_WORKER_URL`
 - `ENABLE_CODEX_SDK_PROTOTYPE` set to `true` to route dashboard chat through the server-side SDK.
 - `ATG_MANAGED_AI_ENABLED` set to `true` to enable ATG-managed AI after the managed OpenAI project key is configured.
 - `ENTRA_TENANT_ID`
@@ -34,10 +33,8 @@ Create a GitHub `production` environment and configure these repository or envir
 
 Configure these secrets:
 
-- `AI_WORKER_TOKEN`
 - `ENTRA_CLIENT_SECRET`
 - `GHCR_TOKEN` with `read:packages` if the GHCR package is private
-- `OPENAI_API_KEY`
 - `ATG_MANAGED_OPENAI_API_KEY`, the dedicated OpenAI project service-account key used only for ATG-managed AI
 - `ATG_USER_SETTINGS_ENCRYPTION_KEY`, generated once with `openssl rand -base64 32`.
 
@@ -81,9 +78,8 @@ managed identity or job resource is replaced.
 - `/`, `/tv/*`, `/join/*`, `/ws/game`, join-info, health, and game asset routes remain public.
 - Dashboard, editor, chat, and project mutation routes require Entra-backed Container Apps auth headers in production.
 - The Bicep template enables Container Apps authentication when `ENTRA_CLIENT_SECRET` is provided. Its global validation allows anonymous traffic so TV/phone routes can stay public; the app middleware enforces editor-only auth.
-- `AI_WORKER_URL` remains the preferred production chat editing path. If it is unset, trusted beta deployments can set `ENABLE_LOCAL_COMPANION=true` and `ATG_COMPANION_TOKEN` to let a user-run companion process pick up editing jobs from their own machine.
-- Direct local Codex CLI execution stays disabled inside the production web container.
-- When `ENABLE_CODEX_SDK_PROTOTYPE=true`, dashboard chat uses the Codex SDK endpoint. Account Settings selects either ATG-managed AI or BYOK explicitly; the app does not silently switch between them when a request fails.
+- Direct local Codex CLI execution stays out of the production web container.
+- When `ENABLE_CODEX_SDK_PROTOTYPE=true`, dashboard chat uses the Codex SDK endpoint. Production edits run in the isolated Container Apps Job. Account Settings selects either ATG-managed AI or BYOK explicitly; the app does not silently switch between them when a request fails.
 - `ATG_MANAGED_AI_ENABLED=true` enables ATG-managed AI for authenticated tenant users. Managed jobs use only `ATG_MANAGED_OPENAI_API_KEY`, reserve $0.25 of the user's monthly beta credit before launch, and reconcile the reservation after reported usage arrives. Set `ATG_MANAGED_AI_ENABLED=false` to disable managed AI without disabling BYOK.
 - Per-user OpenAI API keys are stored in the dedicated Cosmos DB `user-settings` container. Keep `ATG_USER_SETTINGS_ENCRYPTION_KEY` stable across deployments; rotating it requires re-encrypting or clearing existing keys.
 - ATG-local AI usage estimates and monthly budget preferences are stored in the dedicated Cosmos DB `ai-usage-budget` container. If Account Settings usage calls fail after an image-only deployment, rerun the Bicep deployment so this container and `AZURE_COSMOS_AI_USAGE_CONTAINER` are present.
@@ -91,16 +87,6 @@ managed identity or job resource is replaced.
   identity receives `Container Apps Contributor` scoped only to that job through
   the one-time RBAC bootstrap. The execution receives a short-lived job token
   rather than Cosmos, Blob, Entra, or account-key encryption secrets.
-- Run the local companion from a trusted machine with Codex installed:
-
-```bash
-ATG_BASE_URL=https://atg.example.com \
-ATG_COMPANION_TOKEN=change-me \
-npm run companion
-```
-
-The companion opens outbound HTTPS requests to ATG, downloads only editable `game/` text files into a temporary local workspace, runs `codex exec`, and uploads changed `game/` text files back to the app. Do not use this beta mode for untrusted public users.
-
 ## Local development
 
 Local development keeps the filesystem backend by default:

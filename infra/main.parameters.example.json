@@ -20,23 +20,8 @@
     "customDomainCertificateId": {
       "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/atg-prod-rg/providers/Microsoft.App/managedEnvironments/atg-prod-env/managedCertificates/example-cert"
     },
-    "aiWorkerUrl": {
-      "value": "https://worker.example.com"
-    },
-    "enableLocalCompanion": {
-      "value": false
-    },
     "enableCodexSdkPrototype": {
       "value": false
-    },
-    "aiWorkerToken": {
-      "value": "set-with-github-secret"
-    },
-    "atgCompanionToken": {
-      "value": "set-with-github-secret"
-    },
-    "openAiApiKey": {
-      "value": "set-with-github-secret"
     },
     "userSettingsEncryptionKey": {
       "value": "set-with-github-secret"

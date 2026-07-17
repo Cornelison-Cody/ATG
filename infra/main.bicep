@@ -20,26 +20,8 @@ param customDomainName string = ''
 @description('Optional managed certificate resource id to use for the custom hostname binding.')
 param customDomainCertificateId string = ''
 
-@description('Hosted AI editing worker URL. Production chat editing requires this.')
-param aiWorkerUrl string = ''
-
-@description('Enable trusted local companion job polling when no hosted AI worker is configured.')
-param enableLocalCompanion bool = false
-
 @description('Enable the server-side Codex SDK dashboard chat endpoint.')
 param enableCodexSdkPrototype bool = false
-
-@secure()
-@description('Bearer token for the hosted AI editing worker.')
-param aiWorkerToken string = ''
-
-@secure()
-@description('Bearer token used by trusted local companion processes.')
-param atgCompanionToken string = ''
-
-@secure()
-@description('OpenAI API key for hosted AI/worker integration.')
-param openAiApiKey string = ''
 
 @description('Enable ATG-managed AI billing mode for eligible closed-beta users.')
 param managedAiEnabled bool = false
@@ -118,24 +100,6 @@ var containerAppSecrets = concat(
     {
       name: 'storage-connection-string'
       value: storageConnectionString
-    }
-  ],
-  empty(aiWorkerToken) ? [] : [
-    {
-      name: 'ai-worker-token'
-      value: aiWorkerToken
-    }
-  ],
-  empty(atgCompanionToken) ? [] : [
-    {
-      name: 'atg-companion-token'
-      value: atgCompanionToken
-    }
-  ],
-  empty(openAiApiKey) ? [] : [
-    {
-      name: 'openai-api-key'
-      value: openAiApiKey
     }
   ],
   empty(managedOpenAiApiKey) ? [] : [
@@ -234,14 +198,6 @@ var containerAppEnv = concat(
       secretRef: 'storage-connection-string'
     }
     {
-      name: 'AI_WORKER_URL'
-      value: aiWorkerUrl
-    }
-    {
-      name: 'ENABLE_LOCAL_COMPANION'
-      value: enableLocalCompanion ? 'true' : 'false'
-    }
-    {
       name: 'ENTRA_TENANT_ID'
       value: entraTenantId
     }
@@ -258,10 +214,6 @@ var containerAppEnv = concat(
       value: entraAllowedAppIds
     }
     {
-      name: 'ENABLE_LOCAL_CODEX'
-      value: 'false'
-    }
-    {
       name: 'ENABLE_CODEX_SDK_PROTOTYPE'
       value: enableCodexSdkPrototype ? 'true' : 'false'
     }
@@ -276,24 +228,6 @@ var containerAppEnv = concat(
     {
       name: 'ATG_MANAGED_AI_RESERVATION_USD'
       value: '0.25'
-    }
-  ],
-  empty(aiWorkerToken) ? [] : [
-    {
-      name: 'AI_WORKER_TOKEN'
-      secretRef: 'ai-worker-token'
-    }
-  ],
-  empty(atgCompanionToken) ? [] : [
-    {
-      name: 'ATG_COMPANION_TOKEN'
-      secretRef: 'atg-companion-token'
-    }
-  ],
-  empty(openAiApiKey) ? [] : [
-    {
-      name: 'OPENAI_API_KEY'
-      secretRef: 'openai-api-key'
     }
   ],
   empty(managedOpenAiApiKey) ? [] : [

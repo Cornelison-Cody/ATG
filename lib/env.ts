@@ -12,22 +12,6 @@ export function getPublicBaseUrl() {
   return trimTrailingSlash(process.env.APP_BASE_URL || "");
 }
 
-export function getAiWorkerUrl() {
-  return trimTrailingSlash(process.env.AI_WORKER_URL || "");
-}
-
-export function getCompanionToken() {
-  return process.env.ATG_COMPANION_TOKEN || "";
-}
-
-export function canUseLocalCompanion() {
-  return process.env.ENABLE_LOCAL_COMPANION === "true";
-}
-
-export function canUseLocalCodex() {
-  return process.env.ENABLE_LOCAL_CODEX === "true" || process.env.NODE_ENV !== "production";
-}
-
 export function canUseCodexSdkPrototype() {
   return process.env.ENABLE_CODEX_SDK_PROTOTYPE === "true" || process.env.NODE_ENV !== "production";
 }

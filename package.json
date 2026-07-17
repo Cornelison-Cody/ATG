@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "node server.mjs",
     "build": "next build --webpack",
-    "companion": "node scripts/atg-companion.mjs",
     "start": "node server.mjs",
     "test": "node --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",

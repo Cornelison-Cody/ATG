@@ -1,18 +1,14 @@
-# Codex SDK server-side prototype
+# Codex SDK server-side editing
 
 ## Recommendation
 
-Proceed with the Codex SDK for local validation, but do not enable it in Azure
-until ATG has encrypted per-user API-key storage, distributed job coordination,
-and a deliberate session-storage strategy. The SDK can replace the local
-companion's execution and streaming path; production readiness depends more on
-multi-tenant credentials, durable jobs, and container lifecycle than on the SDK
-API itself.
+Use the Codex SDK endpoint for dashboard AI edits. Local development runs the SDK
+directly; production creates an isolated Azure Container Apps Job and streams job
+state back through the web app.
 
 ## Prototype endpoint
 
-`POST /api/chat/codex-sdk` accepts the same JSON fields as the existing chat
-endpoint:
+`POST /api/chat/codex-sdk` accepts:
 
 ```json
 {
@@ -23,12 +19,8 @@ endpoint:
 ```
 
 It streams newline-delimited JSON events. The endpoint is enabled automatically
-outside production. Production additionally requires
-`ENABLE_CODEX_SDK_PROTOTYPE=true`.
-
-The dashboard is intentionally not switched to this endpoint yet. This keeps the
-prototype independent of the existing local CLI, companion, and hosted-worker
-paths while it is validated.
+outside production. Production additionally requires `ENABLE_CODEX_SDK_PROTOTYPE=true`.
+The dashboard sends edits to this endpoint.
 
 ## End-to-end flow
 
@@ -56,19 +48,15 @@ turns. The default timeout is five minutes.
 
 ## Authentication
 
-For local development, leave `OPENAI_API_KEY` unset and the SDK's bundled Codex
-runtime uses the existing local Codex login, including ChatGPT subscription
-access.
+Account Settings selects the billing mode for each user:
 
-If `OPENAI_API_KEY` is present, the endpoint passes it directly to the SDK. This
-is useful for a single trusted local or service identity, but it is not the
-recommended final multi-user design.
+- ATG-managed AI uses `ATG_MANAGED_OPENAI_API_KEY` when `ATG_MANAGED_AI_ENABLED=true`.
+- BYOK uses the user's encrypted OpenAI API key.
 
-For Azure, account settings store each user's API key encrypted with AES-256-GCM
-and bind it to the authenticated Entra identity. The key is resolved server-side
-for each request and is never returned to the browser, logs, chat history,
-project files, or Codex workspace. The optional process-wide `OPENAI_API_KEY`
-remains a fallback billing mode.
+Per-user API keys are encrypted with AES-256-GCM and bound to the authenticated
+Entra identity. The selected key is resolved server-side for each request and is
+never returned to the browser, logs, chat history, or project files. Production
+job containers receive the key only through the authenticated job bundle request.
 
 ## Isolation and persistence
 
@@ -91,16 +79,10 @@ The prototype stores the SDK thread ID in the project's existing
 directory. Local resumes therefore work while that session data remains
 available.
 
-Before Azure deployment, choose one of:
-
-- Mount durable, encrypted session storage and pin/resume jobs where the session
-  is available.
-- Treat thread IDs as best-effort and start a new thread after container loss,
-  rebuilding context from project chat history.
-- Run Codex in a dedicated job service with durable per-user Codex homes.
-
-The second option is operationally simplest; the third provides the strongest
-long-running and multi-replica behavior.
+Azure executions intentionally start fresh Codex threads and include recent
+project chat context because session files do not survive disposable jobs. Local
+direct execution can resume threads while local Codex session data remains
+available.
 
 ## Azure gaps
 
@@ -108,9 +90,9 @@ long-running and multi-replica behavior.
   container and starts a disposable manual Container Apps Job through the web
   app's managed identity.
 - Each execution receives only a random job ID and short-lived job token. It
-  fetches the selected project bundle and user API key over HTTPS, runs Codex
-  with full access inside the disposable outer container boundary, and uploads
-  candidate files for validation and persistence by the main service.
+  fetches the selected project bundle and resolved API key over HTTPS, runs Codex
+  inside the disposable outer container boundary, and uploads candidate files for
+  validation and persistence by the main service.
 - Job records expire from Cosmos after one day. Tokens are stored only as hashes
   and rotate at terminal completion.
 - Azure executions intentionally start fresh Codex threads and include recent
@@ -121,7 +103,6 @@ long-running and multi-replica behavior.
 Remaining production hardening:
 
 - Replace the in-process project lock with a distributed project lease.
-- Add encrypted per-user API-key storage, rotation, revocation, and redaction.
 - Verify the Codex Linux binary and sandbox behavior in the final Container Apps
   image.
 - Decide how Codex session files survive replica replacement.
@@ -141,8 +122,7 @@ Run normal fixture tests:
 npm test
 ```
 
-Run the opt-in live SDK smoke test using the current Codex login or
-`OPENAI_API_KEY`:
+Run the opt-in live SDK smoke test using the current Codex login:
 
 ```bash
 ATG_RUN_CODEX_SDK_LIVE=true node --test \

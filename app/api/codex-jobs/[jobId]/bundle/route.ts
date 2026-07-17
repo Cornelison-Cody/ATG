@@ -13,7 +13,7 @@ export async function GET(request: Request, context: { params: Promise<{ jobId: 
       ? getManagedOpenAiApiKey()
       : record.billingMode === AI_BILLING_MODES.BYOK
         ? await getUserApiKey(record.userId)
-        : await getUserApiKey(record.userId) || process.env.OPENAI_API_KEY || "";
+        : await getUserApiKey(record.userId);
     if (!apiKey) return Response.json({ error: "No OpenAI API key is configured." }, { status: 503 });
     return Response.json({
       apiKey,

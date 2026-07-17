@@ -1,4 +1,4 @@
-import { getAiWorkerUrl, STORAGE_BACKEND } from "@/lib/env";
+import { STORAGE_BACKEND } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +10,6 @@ export function GET() {
     uptimeSeconds: Math.round(process.uptime()),
     timestamp: new Date().toISOString(),
     dependencies: {
-      aiWorkerConfigured: Boolean(getAiWorkerUrl()),
       storageBackend: STORAGE_BACKEND,
       azureCosmosConfigured: Boolean(process.env.AZURE_COSMOS_ENDPOINT && process.env.AZURE_COSMOS_DATABASE),
       azureBlobConfigured: Boolean(

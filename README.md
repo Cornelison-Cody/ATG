@@ -31,7 +31,7 @@ Normal OpenAI project API keys cannot read organization-wide Costs API data or a
 ATG is prepared for a container-based VPS deployment:
 
 - `npm start` runs `node server.mjs` so `/ws/game` WebSockets work in production.
-- `.env.example` documents required app, storage, and hosted AI worker variables.
+- `.env.example` documents required app, storage, and managed-AI variables.
 - `Dockerfile` builds a production image.
 - `.github/workflows/ci.yml` runs checks and publishes a GHCR image on `main`.
 - `/api/health` provides a deployment health check.
