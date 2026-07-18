@@ -8,6 +8,7 @@ const root = await mkdtemp(path.join(os.tmpdir(), "atg-ai-billing-test-"));
 const previousDataRoot = process.env.ATG_DATA_ROOT;
 const previousEnabled = process.env.ATG_MANAGED_AI_ENABLED;
 const previousManagedKey = process.env.ATG_MANAGED_OPENAI_API_KEY;
+const previousAllowlist = process.env.ATG_MANAGED_AI_BETA_ALLOWLIST;
 process.env.ATG_DATA_ROOT = root;
 
 const billing = await import("../lib/ai-billing.mjs");
@@ -21,12 +22,15 @@ test.after(async () => {
   else process.env.ATG_MANAGED_AI_ENABLED = previousEnabled;
   if (previousManagedKey === undefined) delete process.env.ATG_MANAGED_OPENAI_API_KEY;
   else process.env.ATG_MANAGED_OPENAI_API_KEY = previousManagedKey;
+  if (previousAllowlist === undefined) delete process.env.ATG_MANAGED_AI_BETA_ALLOWLIST;
+  else process.env.ATG_MANAGED_AI_BETA_ALLOWLIST = previousAllowlist;
   await rm(root, { recursive: true, force: true });
 });
 
 test("managed AI requires kill switch and managed key", async () => {
   delete process.env.ATG_MANAGED_AI_ENABLED;
   delete process.env.ATG_MANAGED_OPENAI_API_KEY;
+  process.env.ATG_MANAGED_AI_BETA_ALLOWLIST = "billing-user-a";
   await assert.rejects(
     billing.prepareAiBillingForRun({ projectId: "project-a", userId: "billing-user-a" }),
     /temporarily disabled/
@@ -42,6 +46,7 @@ test("managed AI requires kill switch and managed key", async () => {
 test("managed AI reserves credit and BYOK uses only personal keys", async () => {
   process.env.ATG_MANAGED_AI_ENABLED = "true";
   process.env.ATG_MANAGED_OPENAI_API_KEY = "sk-managed";
+  process.env.ATG_MANAGED_AI_BETA_ALLOWLIST = "billing-user-b";
 
   const managed = await billing.prepareAiBillingForRun({
     projectId: "project-a",
@@ -62,4 +67,24 @@ test("managed AI reserves credit and BYOK uses only personal keys", async () => 
   assert.equal(byok.billingMode, "byok");
   assert.equal(byok.apiKey, "sk-user");
   assert.equal(byok.reservationId, "");
+});
+
+test("managed AI eligibility uses the explicit beta allowlist", async () => {
+  process.env.ATG_MANAGED_AI_ENABLED = "true";
+  process.env.ATG_MANAGED_OPENAI_API_KEY = "sk-managed";
+  delete process.env.ATG_MANAGED_AI_BETA_ALLOWLIST;
+
+  assert.equal(billing.isManagedAiEligible("billing-user-c"), false);
+  await assert.rejects(
+    billing.prepareAiBillingForRun({ projectId: "project-a", userId: "billing-user-c" }),
+    /not available/
+  );
+
+  process.env.ATG_MANAGED_AI_BETA_ALLOWLIST = " owner@example.com , BILLING-USER-C ";
+  assert.equal(billing.isManagedAiEligible("billing-user-c"), true);
+  assert.equal(billing.isManagedAiEligible("owner@example.com"), true);
+  assert.equal(billing.isManagedAiEligible("other-user"), false);
+
+  process.env.ATG_MANAGED_AI_BETA_ALLOWLIST = "*";
+  assert.equal(billing.isManagedAiEligible("other-user"), true);
 });

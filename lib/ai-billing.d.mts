@@ -17,4 +17,5 @@ export function prepareAiBillingForRun(input: {
 export function getManagedOpenAiApiKey(): string;
 export function isManagedAiEnabled(): boolean;
 export function isManagedAiKeyConfigured(): boolean;
-export function isManagedAiEligible(): boolean;
+export function isManagedAiEligible(userId: string): boolean;
+export function managedAiBetaAllowlist(): Set<string>;

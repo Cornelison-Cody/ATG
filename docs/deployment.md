@@ -27,6 +27,7 @@ Create a GitHub `production` environment and configure these repository or envir
 - `APP_BASE_URL` optional on first deploy; leave blank to use the generated Container Apps URL.
 - `ENABLE_CODEX_SDK_PROTOTYPE` set to `true` to route dashboard chat through the server-side SDK.
 - `ATG_MANAGED_AI_ENABLED` set to `true` to enable ATG-managed AI after the managed OpenAI project key is configured.
+- `ATG_MANAGED_AI_BETA_ALLOWLIST`, a comma-separated list of closed-beta principal ids or names eligible for ATG-funded managed AI. Use `*` only for an intentionally open beta.
 - `ENTRA_TENANT_ID`
 - `ENTRA_CLIENT_ID`
 - `GHCR_USERNAME` if the GHCR package is private
@@ -81,6 +82,7 @@ managed identity or job resource is replaced.
 - Direct local Codex CLI execution stays out of the production web container.
 - When `ENABLE_CODEX_SDK_PROTOTYPE=true`, dashboard chat uses the Codex SDK endpoint. Production edits run in the isolated Container Apps Job. Account Settings selects either ATG-managed AI or BYOK explicitly; the app does not silently switch between them when a request fails.
 - `ATG_MANAGED_AI_ENABLED=true` enables ATG-managed AI for authenticated tenant users. Managed jobs use only `ATG_MANAGED_OPENAI_API_KEY`, reserve $0.25 of the user's monthly beta credit before launch, and reconcile the reservation after reported usage arrives. Set `ATG_MANAGED_AI_ENABLED=false` to disable managed AI without disabling BYOK.
+- `ATG_MANAGED_AI_BETA_ALLOWLIST` keeps ATG-funded beta eligibility explicit. Users not in the allowlist can still use BYOK after saving a personal key.
 - Per-user OpenAI API keys are stored in the dedicated Cosmos DB `user-settings` container. Keep `ATG_USER_SETTINGS_ENCRYPTION_KEY` stable across deployments; rotating it requires re-encrypting or clearing existing keys.
 - ATG-local AI usage estimates and monthly budget preferences are stored in the dedicated Cosmos DB `ai-usage-budget` container. If Account Settings usage calls fail after an image-only deployment, rerun the Bicep deployment so this container and `AZURE_COSMOS_AI_USAGE_CONTAINER` are present.
 - Deployed Codex edits run in a manual Container Apps Job. The web app managed
@@ -97,3 +99,7 @@ npm run dev
 ```
 
 Use `ATG_STORAGE_BACKEND=azure` only when testing against deployed Azure resources.
+
+See [managed-ai-operations.md](managed-ai-operations.md) for the closed-beta
+OpenAI project setup, secret-handling, smoke-test, rotation, revocation, and
+weekly reconciliation runbook.

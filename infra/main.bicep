@@ -26,6 +26,9 @@ param enableCodexSdkPrototype bool = false
 @description('Enable ATG-managed AI billing mode for eligible closed-beta users.')
 param managedAiEnabled bool = false
 
+@description('Comma-separated user ids or principal names eligible for ATG-managed AI closed-beta credit. Use * only for an intentionally open beta.')
+param managedAiBetaAllowlist string = ''
+
 @secure()
 @description('OpenAI project service-account API key for ATG-managed AI. Never use a user BYOK key here.')
 param managedOpenAiApiKey string = ''
@@ -228,6 +231,10 @@ var containerAppEnv = concat(
     {
       name: 'ATG_MANAGED_AI_RESERVATION_USD'
       value: '0.25'
+    }
+    {
+      name: 'ATG_MANAGED_AI_BETA_ALLOWLIST'
+      value: managedAiBetaAllowlist
     }
   ],
   empty(managedOpenAiApiKey) ? [] : [

@@ -22,6 +22,8 @@ Account Settings tracks token usage and estimated cost for Codex edits made thro
 
 Closed-beta users can choose ATG-managed AI or BYOK in Account Settings. ATG-managed AI uses a dedicated service-account key configured as `ATG_MANAGED_OPENAI_API_KEY`, is controlled by the `ATG_MANAGED_AI_ENABLED` kill switch, and grants eligible users $5.00 of monthly promotional credit in UTC calendar months. The app reserves $0.25 before each managed edit and reconciles that reservation against reported token usage after completion.
 
+ATG-funded closed-beta eligibility is explicit through `ATG_MANAGED_AI_BETA_ALLOWLIST`. See [docs/managed-ai-operations.md](docs/managed-ai-operations.md) for the OpenAI project, secret-handling, smoke-test, rotation, revocation, and reconciliation runbook.
+
 ATG keeps local usage records scoped to the signed-in user and does not store prompts, generated file contents, or OpenAI API keys in the usage ledger. Cost values are estimates calculated from server-maintained model pricing; unknown model prices show token totals without a dollar estimate.
 
 Normal OpenAI project API keys cannot read organization-wide Costs API data or a universal remaining-credit balance. Users should use the official [OpenAI Usage Dashboard](https://platform.openai.com/usage) for authoritative account billing, because ATG-local totals only cover requests made through ATG.

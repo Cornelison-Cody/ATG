@@ -86,6 +86,7 @@ jobs:
           CUSTOM_DOMAIN_NAME: ${{ vars.CUSTOM_DOMAIN_NAME }}
           ENABLE_CODEX_SDK_PROTOTYPE: ${{ vars.ENABLE_CODEX_SDK_PROTOTYPE }}
           ATG_MANAGED_AI_ENABLED: ${{ vars.ATG_MANAGED_AI_ENABLED }}
+          ATG_MANAGED_AI_BETA_ALLOWLIST: ${{ vars.ATG_MANAGED_AI_BETA_ALLOWLIST }}
           ATG_MANAGED_OPENAI_API_KEY: ${{ secrets.ATG_MANAGED_OPENAI_API_KEY }}
           ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
           ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
@@ -114,6 +115,7 @@ jobs:
                 customDomainCertificateId="${CUSTOM_DOMAIN_CERTIFICATE_ID:-}" \
                 enableCodexSdkPrototype="${ENABLE_CODEX_SDK_PROTOTYPE:-false}" \
                 managedAiEnabled="${ATG_MANAGED_AI_ENABLED:-false}" \
+                managedAiBetaAllowlist="${ATG_MANAGED_AI_BETA_ALLOWLIST:-}" \
                 managedOpenAiApiKey="${ATG_MANAGED_OPENAI_API_KEY:-}" \
                 userSettingsEncryptionKey="${ATG_USER_SETTINGS_ENCRYPTION_KEY:-}" \
                 ghcrUsername="${GHCR_USERNAME:-}" \
