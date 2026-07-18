@@ -57,6 +57,16 @@ param entraApiAudience string = ''
 @description('Comma-separated service principal application ids allowed to call protected editor APIs.')
 param entraAllowedAppIds string = ''
 
+@description('GitHub repository where in-app feedback issues are created, for example Cornelison-Cody/ATG.')
+param githubFeedbackRepository string = ''
+
+@secure()
+@description('GitHub token used only server-side for in-app feedback issue creation.')
+param githubFeedbackToken string = ''
+
+@description('Optional comma-separated GitHub labels applied to feedback issues.')
+param githubFeedbackLabels string = 'atg-feedback'
+
 @description('Minimum number of Container App replicas.')
 param minReplicas int = 0
 
@@ -124,6 +134,12 @@ var containerAppSecrets = concat(
     {
       name: 'entra-client-secret'
       value: entraClientSecret
+    }
+  ],
+  empty(githubFeedbackToken) ? [] : [
+    {
+      name: 'github-feedback-token'
+      value: githubFeedbackToken
     }
   ]
 )
@@ -214,6 +230,14 @@ var containerAppEnv = concat(
       value: entraAllowedAppIds
     }
     {
+      name: 'ATG_GITHUB_FEEDBACK_REPOSITORY'
+      value: githubFeedbackRepository
+    }
+    {
+      name: 'ATG_GITHUB_FEEDBACK_LABELS'
+      value: githubFeedbackLabels
+    }
+    {
       name: 'ENABLE_CODEX_SDK_PROTOTYPE'
       value: enableCodexSdkPrototype ? 'true' : 'false'
     }
@@ -240,6 +264,12 @@ var containerAppEnv = concat(
     {
       name: 'ATG_USER_SETTINGS_ENCRYPTION_KEY'
       secretRef: 'user-settings-encryption-key'
+    }
+  ],
+  empty(githubFeedbackToken) ? [] : [
+    {
+      name: 'ATG_GITHUB_FEEDBACK_TOKEN'
+      secretRef: 'github-feedback-token'
     }
   ]
 )
