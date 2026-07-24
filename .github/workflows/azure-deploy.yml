@@ -95,6 +95,9 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
           ATG_USER_SETTINGS_ENCRYPTION_KEY: ${{ secrets.ATG_USER_SETTINGS_ENCRYPTION_KEY }}
+          ATG_GITHUB_FEEDBACK_REPOSITORY: ${{ vars.ATG_GITHUB_FEEDBACK_REPOSITORY }}
+          ATG_GITHUB_FEEDBACK_TOKEN: ${{ secrets.ATG_GITHUB_FEEDBACK_TOKEN }}
+          ATG_GITHUB_FEEDBACK_LABELS: ${{ vars.ATG_GITHUB_FEEDBACK_LABELS }}
         with:
           inlineScript: |
             set -euo pipefail
@@ -123,6 +126,9 @@ jobs:
                 entraClientSecret="${ENTRA_CLIENT_SECRET:-}" \
                 entraApiAudience="${ENTRA_API_AUDIENCE:-}" \
                 entraAllowedAppIds="${ENTRA_ALLOWED_APP_IDS:-}" \
+                githubFeedbackRepository="${ATG_GITHUB_FEEDBACK_REPOSITORY:-${{ github.repository }}}" \
+                githubFeedbackToken="${ATG_GITHUB_FEEDBACK_TOKEN:-}" \
+                githubFeedbackLabels="${ATG_GITHUB_FEEDBACK_LABELS:-atg-feedback}" \
                 minReplicas="${AZURE_MIN_REPLICAS:-0}" \
                 maxReplicas="${AZURE_MAX_REPLICAS:-1}" \
               --query properties.outputs \

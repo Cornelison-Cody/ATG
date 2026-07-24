@@ -29,12 +29,15 @@ Create a GitHub `production` environment and configure these repository or envir
 - `ATG_MANAGED_AI_ENABLED` set to `true` to enable ATG-managed AI after the managed OpenAI project key is configured.
 - `ENTRA_TENANT_ID`
 - `ENTRA_CLIENT_ID`
+- `ATG_GITHUB_FEEDBACK_REPOSITORY`, the GitHub repository that receives feedback issues, for example `Cornelison-Cody/ATG`.
+- `ATG_GITHUB_FEEDBACK_LABELS`, optional comma-separated labels for feedback issues, defaulting to `atg-feedback`.
 - `GHCR_USERNAME` if the GHCR package is private
 
 Configure these secrets:
 
 - `ENTRA_CLIENT_SECRET`
 - `GHCR_TOKEN` with `read:packages` if the GHCR package is private
+- `ATG_GITHUB_FEEDBACK_TOKEN`, a fine-grained GitHub token with Issues read/write access to the feedback repository
 - `ATG_MANAGED_OPENAI_API_KEY`, the dedicated OpenAI project service-account key used only for ATG-managed AI
 - `ATG_USER_SETTINGS_ENCRYPTION_KEY`, generated once with `openssl rand -base64 32`.
 
@@ -77,6 +80,7 @@ managed identity or job resource is replaced.
 - Editable game files are stored in Blob Storage under project-scoped keys.
 - `/`, `/tv/*`, `/join/*`, `/ws/game`, join-info, health, and game asset routes remain public.
 - Dashboard, editor, chat, and project mutation routes require Entra-backed Container Apps auth headers in production.
+- Authenticated users can submit in-app feedback to GitHub Issues when the `ATG_GITHUB_FEEDBACK_*` settings are configured. The GitHub token stays server-side, and the submitter's app identity is added dynamically to each issue.
 - The Bicep template enables Container Apps authentication when `ENTRA_CLIENT_SECRET` is provided. Its global validation allows anonymous traffic so TV/phone routes can stay public; the app middleware enforces editor-only auth.
 - Direct local Codex CLI execution stays out of the production web container.
 - When `ENABLE_CODEX_SDK_PROTOTYPE=true`, dashboard chat uses the Codex SDK endpoint. Production edits run in the isolated Container Apps Job. Account Settings selects either ATG-managed AI or BYOK explicitly; the app does not silently switch between them when a request fails.
