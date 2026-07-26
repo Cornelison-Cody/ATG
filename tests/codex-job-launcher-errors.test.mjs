@@ -13,6 +13,7 @@ test("Azure authorization failures explain the missing Codex job RBAC", () => {
   assert.match(message, /managed identity is missing RBAC permission/);
   assert.match(message, /Microsoft\.App\/jobs\/start\/action/);
   assert.match(message, /\/subscriptions\/sub\/resourceGroups\/rg\/providers\/Microsoft\.App\/jobs\/job-name/);
+  assert.match(message, /Container Apps Jobs Operator/);
   assert.match(message, /one-time Codex job RBAC bootstrap/);
 });
 
