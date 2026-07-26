@@ -58,7 +58,7 @@ Owner or User Access Administrator must run the one-time command printed by the
 az role assignment create \
   --assignee-object-id "<container-app-principal-id>" \
   --assignee-principal-type ServicePrincipal \
-  --role "Container Apps Contributor" \
+  --role "Container Apps Jobs Operator" \
   --scope "<codex-job-resource-id>"
 ```
 
@@ -88,7 +88,7 @@ managed identity or job resource is replaced.
 - Per-user OpenAI API keys are stored in the dedicated Cosmos DB `user-settings` container. Keep `ATG_USER_SETTINGS_ENCRYPTION_KEY` stable across deployments; rotating it requires re-encrypting or clearing existing keys.
 - ATG-local AI usage estimates and monthly budget preferences are stored in the dedicated Cosmos DB `ai-usage-budget` container. If Account Settings usage calls fail after an image-only deployment, rerun the Bicep deployment so this container and `AZURE_COSMOS_AI_USAGE_CONTAINER` are present.
 - Deployed Codex edits run in a manual Container Apps Job. The web app managed
-  identity receives `Container Apps Contributor` scoped only to that job through
+  identity receives `Container Apps Jobs Operator` scoped only to that job through
   the one-time RBAC bootstrap. The execution receives a short-lived job token
   rather than Cosmos, Blob, Entra, or account-key encryption secrets.
 ## Local development

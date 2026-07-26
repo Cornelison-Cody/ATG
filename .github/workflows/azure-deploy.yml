@@ -149,7 +149,7 @@ jobs:
           echo "az role assignment create \\"
           echo "  --assignee-object-id '${{ steps.deploy.outputs.container_app_principal_id }}' \\"
           echo "  --assignee-principal-type ServicePrincipal \\"
-          echo "  --role 'Container Apps Contributor' \\"
+          echo "  --role 'Container Apps Jobs Operator' \\"
           echo "  --scope '${{ steps.deploy.outputs.codex_job_id }}'"
 
       - name: Verify Codex job RBAC
@@ -162,7 +162,7 @@ jobs:
             assignment_count="$(az role assignment list \
               --assignee "$principal_id" \
               --scope "$codex_job_id" \
-              --role 'Container Apps Contributor' \
+              --role 'Container Apps Jobs Operator' \
               --query 'length(@)' \
               --output tsv)"
             if [ "$assignment_count" != "0" ]; then
@@ -174,7 +174,7 @@ jobs:
             echo "az role assignment create \\"
             echo "  --assignee-object-id '$principal_id' \\"
             echo "  --assignee-principal-type ServicePrincipal \\"
-            echo "  --role 'Container Apps Contributor' \\"
+            echo "  --role 'Container Apps Jobs Operator' \\"
             echo "  --scope '$codex_job_id'"
             exit 1
 
