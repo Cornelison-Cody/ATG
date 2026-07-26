@@ -1,4 +1,5 @@
 import { ManagedIdentityCredential } from "@azure/identity";
+import { formatAzureCodexJobStartError } from "@/lib/codex-job-launcher-errors.mjs";
 
 export async function startAzureCodexJob(jobId: string, token: string) {
   const subscriptionId = required("AZURE_SUBSCRIPTION_ID");
@@ -29,7 +30,7 @@ export async function startAzureCodexJob(jobId: string, token: string) {
     })
   });
   if (!response.ok) {
-    throw new Error(`Unable to start isolated Codex job (${response.status}): ${await response.text()}`);
+    throw new Error(formatAzureCodexJobStartError(response.status, await response.text()));
   }
 }
 

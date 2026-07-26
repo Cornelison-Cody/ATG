@@ -152,6 +152,32 @@ jobs:
           echo "  --role 'Container Apps Contributor' \\"
           echo "  --scope '${{ steps.deploy.outputs.codex_job_id }}'"
 
+      - name: Verify Codex job RBAC
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -euo pipefail
+            principal_id='${{ steps.deploy.outputs.container_app_principal_id }}'
+            codex_job_id='${{ steps.deploy.outputs.codex_job_id }}'
+            assignment_count="$(az role assignment list \
+              --assignee "$principal_id" \
+              --scope "$codex_job_id" \
+              --role 'Container Apps Contributor' \
+              --query 'length(@)' \
+              --output tsv)"
+            if [ "$assignment_count" != "0" ]; then
+              echo "Codex job RBAC is configured for $principal_id."
+              exit 0
+            fi
+
+            echo "::error title=Missing Codex job RBAC::The Container App managed identity cannot start the Codex Container Apps Job. Run the printed role assignment command as an Azure Owner or User Access Administrator, then rerun this workflow."
+            echo "az role assignment create \\"
+            echo "  --assignee-object-id '$principal_id' \\"
+            echo "  --assignee-principal-type ServicePrincipal \\"
+            echo "  --role 'Container Apps Contributor' \\"
+            echo "  --scope '$codex_job_id'"
+            exit 1
+
       - name: Set generated app base URL
         if: ${{ vars.APP_BASE_URL == '' }}
         uses: azure/cli@v2
