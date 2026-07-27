@@ -162,8 +162,58 @@
 .dashboard {
   display: grid;
   gap: 20px;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
+}
+
+.dashboardGuide {
+  align-items: center;
+  background: rgba(16, 21, 31, 0.72);
+  border: 1px solid rgba(77, 214, 201, 0.24);
+  border-radius: 8px;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(260px, 1.1fr) minmax(280px, 1fr) auto;
+  padding: 18px;
+}
+
+.dashboardGuide h2 {
+  font-size: 1.08rem;
+  margin: 0;
+}
+
+.dashboardGuide p {
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+
+.dashboardGuide ol {
+  color: var(--text);
+  display: grid;
+  font-size: 0.9rem;
+  gap: 5px;
+  line-height: 1.35;
+  margin: 0;
+  padding-left: 22px;
+}
+
+.dashboardGuide button {
+  background: var(--accent);
+  border: 0;
+  border-radius: 8px;
+  color: #04110f;
+  font: inherit;
+  font-weight: 800;
+  min-height: 44px;
+  padding: 12px 16px;
+}
+
+.dashboardGuide button:hover,
+.dashboardGuide button:focus-visible {
+  box-shadow: 0 14px 36px rgba(77, 214, 201, 0.18), 0 0 0 3px rgba(77, 214, 201, 0.14);
+  filter: brightness(1.05);
+  outline: none;
 }
 
 .modal h2,
@@ -228,6 +278,12 @@
 
 .emptyText p {
   margin: 0 0 14px;
+}
+
+.emptyText .emptyHint {
+  color: var(--muted);
+  margin-top: -4px;
+  max-width: 64ch;
 }
 
 .emptyText button {
@@ -766,6 +822,14 @@
   color: var(--accent);
 }
 
+.composerTip {
+  color: var(--muted);
+  font-size: 0.88rem;
+  grid-column: 1 / -1;
+  line-height: 1.45;
+  margin: -2px 0 0;
+}
+
 .composer textarea {
   background: #0b1018;
   border: 1px solid var(--line);
@@ -869,6 +933,7 @@
   background: rgba(7, 9, 13, 0.24);
   border-bottom: 1px solid var(--line);
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 12px 20px;
 }
@@ -1325,6 +1390,14 @@
   padding: 12px 20px;
 }
 
+.instructionsHelp {
+  color: var(--muted);
+  flex: 1 1 320px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
 .instructionsToolbar button {
   background: transparent;
   border: 1px solid var(--line);
@@ -1366,6 +1439,29 @@
   color: var(--muted);
   line-height: 1.5;
   margin: 0;
+}
+
+.fieldHelp {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.exampleNames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.exampleNames span {
+  background: rgba(77, 214, 201, 0.1);
+  border: 1px solid rgba(77, 214, 201, 0.28);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 6px 10px;
 }
 
 .modalBody .createControls {
@@ -1495,6 +1591,11 @@
 
   .accountSettingsTabs {
     flex-wrap: wrap;
+  }
+
+  .dashboardGuide {
+    align-items: stretch;
+    grid-template-columns: 1fr;
   }
 
   .createControls,

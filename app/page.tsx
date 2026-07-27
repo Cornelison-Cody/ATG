@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Gamepad2, Zap, Palette } from "lucide-react";
+import { MonitorSmartphone, Sparkles, Tv } from "lucide-react";
 import styles from "./page.module.css";
 
 export default function LandingPage() {
@@ -21,8 +21,7 @@ export default function LandingPage() {
         <div className={styles.content}>
           <h1 className={styles.title}>Azure Tides Gaming</h1>
           <p className={styles.subtitle}>
-            Dive into the next generation of real-time multiplayer experiences. 
-            Where immersive worlds meet cutting-edge web technology.
+            Create party games with Codex, show the main game on a TV, and let players join from their phones.
           </p>
           <div className={styles.actions}>
             <Link href="/dashboard" className={styles.primaryButton}>
@@ -35,35 +34,70 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section className={styles.howItWorks} aria-labelledby="how-it-works-title">
+        <div className={styles.sectionHeader}>
+          <h2 id="how-it-works-title">How ATG Works</h2>
+          <p>
+            You do not need to write code. Start with a game idea, use Plan mode to shape the rules, then
+            ask Codex to build the TV display and phone controller.
+          </p>
+        </div>
+        <div className={styles.stepsGrid}>
+          <article className={styles.stepCard}>
+            <span className={styles.stepNumber}>1</span>
+            <h3>Create a game</h3>
+            <p>Name the game you want to make. A simple idea like Trivia Night, Guess the Song, or Team
+              Challenge is enough to begin.</p>
+          </article>
+          <article className={styles.stepCard}>
+            <span className={styles.stepNumber}>2</span>
+            <h3>Plan the rules</h3>
+            <p>Use Plan mode to decide rounds, scoring, player actions, and what should happen on the TV
+              and phones.</p>
+          </article>
+          <article className={styles.stepCard}>
+            <span className={styles.stepNumber}>3</span>
+            <h3>Build both screens</h3>
+            <p>Switch between TV and Phone targets, then use Build mode to ask Codex for visible changes.</p>
+          </article>
+          <article className={styles.stepCard}>
+            <span className={styles.stepNumber}>4</span>
+            <h3>Play together</h3>
+            <p>Open the TV view on the shared screen and the Phone view for players. Keep the instructions
+              updated as your game changes.</p>
+          </article>
+        </div>
+      </section>
+
       <section className={styles.features}>
         <div className={styles.featuresGrid}>
           <div className={styles.featureCard}>
             <div className={styles.featureIcon}>
-              <Zap size={24} />
+              <MonitorSmartphone size={24} />
             </div>
-            <h3 className={styles.featureTitle}>Lightning Fast Lobbies</h3>
+            <h3 className={styles.featureTitle}>TV and Phone Views</h3>
             <p className={styles.featureDescription}>
-              Experience zero-latency real-time interactions with our optimized WebSocket architecture. Jump straight into the action.
+              Design the shared TV screen and the player phone controls from the same project editor.
             </p>
           </div>
           
           <div className={styles.featureCard}>
             <div className={styles.featureIcon}>
-              <Gamepad2 size={24} />
+              <Sparkles size={24} />
             </div>
-            <h3 className={styles.featureTitle}>Immersive Gameplay</h3>
+            <h3 className={styles.featureTitle}>Plan Before You Build</h3>
             <p className={styles.featureDescription}>
-              Join a universe of interactive party games right from your phone while watching the main action unfold on the big screen.
+              Ask Codex to help turn a loose idea into rules, rounds, scoring, and player flow before it changes files.
             </p>
           </div>
           
           <div className={styles.featureCard}>
             <div className={styles.featureIcon}>
-              <Palette size={24} />
+              <Tv size={24} />
             </div>
-            <h3 className={styles.featureTitle}>AI-Powered Creator</h3>
+            <h3 className={styles.featureTitle}>Ready to Host</h3>
             <p className={styles.featureDescription}>
-              Build and customize your own game modes instantly with our built-in Codex integration. Your imagination is the only limit.
+              Open the TV display for the room, share the phone join link, and keep a simple rule sheet with each game.
             </p>
           </div>
         </div>

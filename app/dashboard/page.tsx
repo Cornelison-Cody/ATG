@@ -1626,11 +1626,33 @@ function ProjectDashboard({
 }) {
   return (
     <section className={styles.dashboard}>
+      <section className={styles.dashboardGuide} aria-labelledby="dashboard-guide-title">
+        <div>
+          <h2 id="dashboard-guide-title">Start With a Game Idea</h2>
+          <p>
+            Create a game, use Plan mode to shape the rules, then switch to Build mode to update the TV
+            display and phone controller.
+          </p>
+        </div>
+        <ol aria-label="Game creation steps">
+          <li>Create or open a game.</li>
+          <li>Plan rounds, scoring, and player actions.</li>
+          <li>Build the TV screen and phone controls.</li>
+          <li>Open TV and Phone links when you are ready to play.</li>
+        </ol>
+        <button onClick={onCreateProject} type="button">
+          New Game
+        </button>
+      </section>
       <section className={styles.projectList} aria-label="Projects">
         {isLoadingProjects ? <p className={styles.emptyText}>Loading projects...</p> : null}
         {!isLoadingProjects && projects.length === 0 ? (
           <div className={styles.emptyText}>
-            <p>No projects yet. Create one to open a sandboxed Codex session.</p>
+            <p>No games yet. Create one to open a Codex game-building session.</p>
+            <p className={styles.emptyHint}>
+              Start with a name like Trivia Night, Guess the Song, or Team Challenge. Codex can help you
+              plan the rules before it builds anything.
+            </p>
             <button onClick={onCreateProject} type="button">
               New Game
             </button>
@@ -1770,6 +1792,14 @@ function CreateProjectModal({
               placeholder="Project name"
               value={newProjectName}
             />
+            <p className={styles.fieldHelp}>
+              Name the kind of game you want to make. You can change this later.
+            </p>
+            <div className={styles.exampleNames} aria-label="Example game names">
+              <span>Trivia Night</span>
+              <span>Guess the Song</span>
+              <span>Team Challenge</span>
+            </div>
           </div>
         </div>
         <div className={styles.modalFooter}>
@@ -1805,7 +1835,7 @@ function InstructionsModal({
     <div className={styles.modalOverlay} role="presentation">
       <section aria-label="Game instructions" className={`${styles.modal} ${styles.instructionsModal}`}>
         <div className={styles.modalHeader}>
-          <h2>Instructions</h2>
+          <h2>Game Instructions</h2>
           <button
             aria-label="Close instructions dialog"
             className={styles.closeButton}
@@ -1816,6 +1846,9 @@ function InstructionsModal({
           </button>
         </div>
         <div className={styles.instructionsToolbar} role="tablist" aria-label="Instructions mode">
+          <p className={styles.instructionsHelp}>
+            This is the player-facing rule sheet. Keep it updated with the goal, setup, controls, and scoring.
+          </p>
           <button
             aria-selected={mode === "edit"}
             className={mode === "edit" ? styles.activeModeButton : undefined}
@@ -2034,6 +2067,11 @@ function ProjectChat({
               <strong>{targetName}</strong>
             </div>
           ) : null}
+          <p className={styles.composerTip}>
+            {chatMode === "plan"
+              ? "Plan mode is for rules, rounds, scoring, and player flow. It will help you decide what to build next."
+              : `Build mode changes the ${targetName}. Use the TV target for the shared screen and Phone for player controls.`}
+          </p>
           <textarea
             aria-label="Message Codex"
             disabled={isRunning}
@@ -2082,7 +2120,7 @@ function ProjectChat({
                   Open Phone
                 </a>
                 <button onClick={onOpenInstructions} role="menuitem" type="button">
-                  Instructions
+                  Game Instructions
                 </button>
                 <button onClick={onOpenProjectSettings} role="menuitem" type="button">
                   Project Settings
