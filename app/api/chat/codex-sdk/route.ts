@@ -141,6 +141,7 @@ export async function POST(request: Request) {
   const encoder = new TextEncoder();
   const abortController = new AbortController();
   const directUsageKey = randomUUID();
+  const planningContext = formatRecentProjectConversation(projectForAccess.messages);
   let streamCancelled = false;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -181,7 +182,9 @@ export async function POST(request: Request) {
           apiKey: billing.apiKey,
           files,
           message: buildProjectPrompt(
-            chatMode === "plan" ? buildPlanningRequest(message, editingTarget) : message,
+            chatMode === "plan" ? buildPlanningRequest(message, editingTarget, {
+              recentContext: planningContext
+            }) : message,
             editingTarget
           ),
           model: process.env.ATG_CODEX_SDK_MODEL,
@@ -284,9 +287,7 @@ async function streamAzureJob({
   runningProjects: Set<string>;
   userId: string;
 }) {
-  const recentContext = project.messages.slice(-8)
-    .map((item) => `${item.role}: ${item.content}`)
-    .join("\n");
+  const recentContext = formatRecentProjectConversation(project.messages);
   let job;
   let token = "";
   const encoder = new TextEncoder();
@@ -299,9 +300,11 @@ async function streamAzureJob({
       model: process.env.ATG_CODEX_SDK_MODEL || "",
       projectId,
       prompt: `${buildProjectPrompt(
-        chatMode === "plan" ? buildPlanningRequest(message, editingTarget) : message,
+        chatMode === "plan" ? buildPlanningRequest(message, editingTarget, {
+          recentContext
+        }) : message,
         editingTarget
-      )}${recentContext ? `\n\nRecent project conversation:\n${recentContext}` : ""}`,
+      )}${chatMode === "build" && recentContext ? `\n\nRecent project conversation:\n${recentContext}` : ""}`,
       reservationId: billing.reservationId,
       userId
     });
@@ -363,6 +366,12 @@ function streamHeaders() {
     "Content-Type": "application/x-ndjson; charset=utf-8",
     "X-Accel-Buffering": "no"
   };
+}
+
+function formatRecentProjectConversation(messages: ChatMessage[]) {
+  return messages.slice(-10)
+    .map((item) => `${item.role}: ${item.content}`)
+    .join("\n");
 }
 
 function forwardEvent(
