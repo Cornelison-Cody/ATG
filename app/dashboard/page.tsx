@@ -1659,9 +1659,6 @@ function ProjectDashboard({
           <li>Build the TV screen and phone controls.</li>
           <li>Open TV and Phone links when you are ready to play.</li>
         </ol>
-        <button onClick={onCreateProject} type="button">
-          New Game
-        </button>
       </section>
       <section className={styles.projectList} aria-label="Projects">
         {isLoadingProjects ? <p className={styles.emptyText}>Loading projects...</p> : null}
