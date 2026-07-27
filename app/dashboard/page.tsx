@@ -77,6 +77,10 @@ type ChatRunFeedback = {
 
 type EditingTarget = "tv" | "phone";
 type ChatMode = "build" | "plan";
+type ChatSubmitOptions = {
+  chatMode?: ChatMode;
+  editingTarget?: EditingTarget;
+};
 
 type AccountUsageBudget = {
   budget: {
@@ -754,11 +758,13 @@ export default function Home() {
     }
   }
 
-  async function submitChat(promptValue?: string) {
+  async function submitChat(promptValue?: string, options: ChatSubmitOptions = {}) {
     const prompt = (promptValue ?? input).trim();
     if (!prompt || isRunning || !activeProject) {
       return;
     }
+    const effectiveChatMode = options.chatMode ?? chatMode;
+    const effectiveEditingTarget = options.editingTarget ?? editingTarget;
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -785,9 +791,9 @@ export default function Home() {
       state: "connecting",
       label: "Connecting to Codex",
       details: [
-        chatMode === "plan"
-          ? `Queued your ${editingTarget === "tv" ? "TV" : "phone"} planning request.`
-          : `Queued your ${editingTarget === "tv" ? "TV" : "phone"} build request.`
+        effectiveChatMode === "plan"
+          ? `Queued your ${effectiveEditingTarget === "tv" ? "TV" : "phone"} planning request.`
+          : `Queued your ${effectiveEditingTarget === "tv" ? "TV" : "phone"} build request.`
       ],
       lastUpdateAt: now,
       startedAt: now
@@ -797,7 +803,12 @@ export default function Home() {
       const response = await fetch("/api/chat/codex-sdk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatMode, editingTarget, projectId: activeProject.id, message: prompt })
+        body: JSON.stringify({
+          chatMode: effectiveChatMode,
+          editingTarget: effectiveEditingTarget,
+          projectId: activeProject.id,
+          message: prompt
+        })
       });
 
       if (!response.ok || !response.body) {
@@ -964,7 +975,15 @@ export default function Home() {
           onOpenInstructions={openInstructions}
           onOpenProjectSettings={openProjectSettings}
           onModeChange={setChatMode}
-          onQuickAnswer={(answer) => void submitChat(answer)}
+          onQuickAnswer={(answer, options) => {
+            if (options?.chatMode) {
+              setChatMode(options.chatMode);
+            }
+            if (options?.editingTarget) {
+              setEditingTarget(options.editingTarget);
+            }
+            void submitChat(answer, options);
+          }}
           onReturnToProjects={returnToProjects}
           onTargetChange={setEditingTarget}
           onToggleProjectMenu={() => setIsProjectMenuOpen((current) => !current)}
@@ -1931,7 +1950,7 @@ function ProjectChat({
   onOpenAccountSettings: () => void;
   onOpenInstructions: () => void;
   onOpenProjectSettings: () => void;
-  onQuickAnswer: (answer: string) => void;
+  onQuickAnswer: (answer: string, options?: ChatSubmitOptions) => void;
   onReturnToProjects: () => void;
   onTargetChange: (target: EditingTarget) => void;
   onToggleProjectMenu: () => void;
@@ -1954,6 +1973,7 @@ function ProjectChat({
   const quickAnswersKey = quickAnswers.map((answer) => `${answer.label}:${answer.text}`).join("|");
   const hasConversation = messages.length > 0 || quickAnswers.length > 0;
   const targetName = editingTarget === "tv" ? "TV display" : "phone controller";
+  const hasBuildHandoff = quickAnswers.some((answer) => Boolean(getPlanningQuickAction(answer.text).options?.chatMode));
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
@@ -2044,13 +2064,16 @@ function ProjectChat({
         {quickAnswers.length > 0 && !isRunning ? (
           <div className={styles.quickAnswers} aria-label="Planning answer choices">
             <div className={styles.planningQuestion}>
-              <span>Codex asks</span>
+              <span>{hasBuildHandoff ? "Next step" : "Codex asks"}</span>
               <p>{planningQuestion || "Choose the next planning direction."}</p>
             </div>
             {quickAnswers.map((answer) => (
               <button
                 key={answer.label}
-                onClick={() => onQuickAnswer(`${answer.label}. ${answer.text}`)}
+                onClick={() => {
+                  const action = getPlanningQuickAction(answer.text);
+                  onQuickAnswer(action.prompt ?? `${answer.label}. ${answer.text}`, action.options);
+                }}
                 type="button"
               >
                 <span>{answer.label}</span>
@@ -2156,6 +2179,15 @@ function extractPlanningChoices(content: string) {
 }
 
 function extractPlanningQuestion(content: string) {
+  if (/Ready to build\?/i.test(content)) {
+    return "Ready to build?";
+  }
+
+  const questionLine = content.match(/^\s*Question\s*[:\-]\s*(.+)$/im);
+  if (questionLine) {
+    return questionLine[1].trim();
+  }
+
   const compactContent = content.replace(/\s+/g, " ").trim();
   const beforeChoices = compactContent.match(/^(.*?)(?=\s(?:[-*]\s*)?[A-D][).:-]\s+)/i)?.[1] ?? compactContent;
 
@@ -2163,6 +2195,29 @@ function extractPlanningQuestion(content: string) {
     .replace(/^Question\s*[:\-]\s*/i, "")
     .replace(/^Codex asks\s*[:\-]\s*/i, "")
     .trim();
+}
+
+function getPlanningQuickAction(text: string): { prompt?: string; options?: ChatSubmitOptions } {
+  const normalized = text.trim().toLowerCase();
+  if (/^implement\s+tv\b/.test(normalized)) {
+    return {
+      prompt: "Implement the proposed plan for the TV display.",
+      options: { chatMode: "build", editingTarget: "tv" }
+    };
+  }
+  if (/^implement\s+phone\b/.test(normalized)) {
+    return {
+      prompt: "Implement the proposed plan for the phone controller.",
+      options: { chatMode: "build", editingTarget: "phone" }
+    };
+  }
+  if (/^implement\s+both\b/.test(normalized) || /^build\s+both\b/.test(normalized)) {
+    return {
+      prompt: "Implement the proposed plan across both the TV display and phone controller.",
+      options: { chatMode: "build" }
+    };
+  }
+  return {};
 }
 
 function ScaledPreviewFrame({
