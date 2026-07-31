@@ -230,14 +230,18 @@
 }
 
 .instructionsModal {
+  grid-template-rows: auto minmax(0, 1fr);
   max-height: min(760px, calc(100dvh - 56px));
   max-width: 900px;
+  min-height: 0;
+  overflow: hidden;
   width: min(100%, 900px);
 }
 
 .instructionsBody {
-  min-height: 260px;
+  min-height: 0;
   overflow: auto;
+  padding: 16px;
 }
 
 .loadingInstructions {
