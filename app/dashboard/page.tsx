@@ -1658,17 +1658,35 @@ function ProjectDashboard({
   onOpenProject: (projectId: string) => void;
   projects: ProjectSummary[];
 }) {
+  const [isMobileGuideExpanded, setIsMobileGuideExpanded] = useState(false);
+  const hasProjects = projects.length > 0;
+
   return (
-    <section className={styles.dashboard}>
+    <section className={`${styles.dashboard} ${hasProjects ? styles.dashboardHasProjects : ""}`}>
       <section className={styles.dashboardGuide} aria-labelledby="dashboard-guide-title">
-        <div>
+        <div className={styles.dashboardGuideIntro}>
           <h2 id="dashboard-guide-title">Start With a Game Idea</h2>
+          {hasProjects ? (
+            <button
+              aria-controls="dashboard-guide-steps"
+              aria-expanded={isMobileGuideExpanded}
+              className={styles.dashboardGuideToggle}
+              onClick={() => setIsMobileGuideExpanded((current) => !current)}
+              type="button"
+            >
+              {isMobileGuideExpanded ? "Hide" : "Show"}
+            </button>
+          ) : null}
           <p>
             Create a game, use Plan mode to shape the rules, then switch to Build mode to update the TV
             display and phone controller.
           </p>
         </div>
-        <ol aria-label="Game creation steps">
+        <ol
+          aria-label="Game creation steps"
+          className={isMobileGuideExpanded || !hasProjects ? styles.dashboardGuideStepsExpanded : undefined}
+          id="dashboard-guide-steps"
+        >
           <li>Create or open a game.</li>
           <li>Plan rounds, scoring, and player actions.</li>
           <li>Build the TV screen and phone controls.</li>

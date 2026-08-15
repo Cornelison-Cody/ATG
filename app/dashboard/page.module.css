@@ -182,6 +182,14 @@
   margin: 0;
 }
 
+.dashboardGuideIntro {
+  min-width: 0;
+}
+
+.dashboardGuideToggle {
+  display: none;
+}
+
 .dashboardGuide p {
   color: var(--muted);
   line-height: 1.45;
@@ -1681,6 +1689,10 @@
 @media (max-width: 760px) {
   .shell {
     gap: 18px;
+    grid-template-rows: auto auto auto;
+    min-height: 100dvh;
+    height: auto;
+    overflow-y: auto;
     padding: 18px;
   }
 
@@ -1702,6 +1714,70 @@
   .dashboardGuide {
     align-items: stretch;
     grid-template-columns: 1fr;
+  }
+
+  .dashboardHasProjects {
+    grid-template-rows: auto auto;
+  }
+
+  .dashboardHasProjects .projectList {
+    order: 1;
+  }
+
+  .dashboardHasProjects .dashboardGuide {
+    gap: 0;
+    order: 2;
+    padding: 12px 14px;
+  }
+
+  .dashboardGuideIntro {
+    align-items: center;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .dashboardGuideIntro h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dashboardHasProjects .dashboardGuideIntro p {
+    display: none;
+  }
+
+  .dashboardGuideToggle {
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text);
+    display: inline-flex;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 850;
+    min-height: 36px;
+    padding: 8px 10px;
+  }
+
+  .dashboardGuideToggle:hover,
+  .dashboardGuideToggle:focus-visible {
+    background: rgba(77, 214, 201, 0.12);
+    border-color: rgba(77, 214, 201, 0.52);
+    outline: none;
+  }
+
+  .dashboardHasProjects .dashboardGuide ol {
+    display: none;
+  }
+
+  .dashboardHasProjects .dashboardGuide .dashboardGuideStepsExpanded {
+    display: grid;
+    margin-top: 12px;
+  }
+
+  .projectList {
+    overflow: visible;
   }
 
   .createControls,
