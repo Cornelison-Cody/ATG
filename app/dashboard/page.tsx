@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, FormEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeDollarSign,
   CheckCircle2,
@@ -81,6 +81,12 @@ type ChatSubmitOptions = {
   chatMode?: ChatMode;
   editingTarget?: EditingTarget;
 };
+
+const EDITOR_SPLIT_STORAGE_KEY = "atg.dashboard.editorSplitRatio";
+const EDITOR_SPLIT_DESKTOP_QUERY = "(min-width: 981px)";
+const EDITOR_PANEL_MIN_WIDTH = 420;
+const PREVIEW_PANEL_MIN_WIDTH = 360;
+const EDITOR_SPLIT_CHROME_WIDTH = 28;
 
 type AccountUsageBudget = {
   budget: {
@@ -1958,6 +1964,10 @@ function ProjectChat({
   runFeedback: ChatRunFeedback;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const workspaceRef = useRef<HTMLElement | null>(null);
+  const [editorSplitRatio, setEditorSplitRatio] = useState<number | null>(null);
+  const [isDesktopSplit, setIsDesktopSplit] = useState(false);
+  const [isResizingEditor, setIsResizingEditor] = useState(false);
   const showFeedback = runFeedback.state !== "idle";
   const previewPath = buildGameAssetUrl(projectId, editingTarget, projectRevision);
   const latestAssistantMessage = [...messages]
@@ -1976,8 +1986,90 @@ function ProjectChat({
     messagesEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages, quickAnswers.length, quickAnswersKey]);
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(EDITOR_SPLIT_DESKTOP_QUERY);
+    const updateDesktopSplit = () => setIsDesktopSplit(mediaQuery.matches);
+    updateDesktopSplit();
+    mediaQuery.addEventListener("change", updateDesktopSplit);
+
+    const storedRatio = Number.parseFloat(window.localStorage.getItem(EDITOR_SPLIT_STORAGE_KEY) ?? "");
+    if (Number.isFinite(storedRatio)) {
+      setEditorSplitRatio(Math.min(0.82, Math.max(0.34, storedRatio)));
+    }
+
+    return () => mediaQuery.removeEventListener("change", updateDesktopSplit);
+  }, []);
+
+  useEffect(() => {
+    if (editorSplitRatio === null) return;
+    window.localStorage.setItem(EDITOR_SPLIT_STORAGE_KEY, editorSplitRatio.toFixed(4));
+  }, [editorSplitRatio]);
+
+  useEffect(() => {
+    if (!isResizingEditor) return;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizingEditor]);
+
+  const updateEditorSplit = (clientX: number) => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+
+    const rect = workspace.getBoundingClientRect();
+    const availablePanelWidth = rect.width - EDITOR_SPLIT_CHROME_WIDTH;
+    if (availablePanelWidth < EDITOR_PANEL_MIN_WIDTH + PREVIEW_PANEL_MIN_WIDTH) return;
+
+    const nextEditorWidth = Math.min(
+      availablePanelWidth - PREVIEW_PANEL_MIN_WIDTH,
+      Math.max(EDITOR_PANEL_MIN_WIDTH, clientX - rect.left - 8)
+    );
+
+    setEditorSplitRatio(nextEditorWidth / availablePanelWidth);
+  };
+
+  const startEditorResize = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!isDesktopSplit) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateEditorSplit(event.clientX);
+    setIsResizingEditor(true);
+  };
+
+  useEffect(() => {
+    if (!isResizingEditor) return;
+
+    const handlePointerMove = (event: globalThis.PointerEvent) => updateEditorSplit(event.clientX);
+    const handlePointerUp = () => setIsResizingEditor(false);
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [isResizingEditor]);
+
+  const workspaceStyle =
+    editorSplitRatio === null
+      ? undefined
+      : ({
+          "--editor-panel-ratio": editorSplitRatio.toFixed(4)
+        } as CSSProperties & Record<"--editor-panel-ratio", string>);
+
   return (
-    <section className={styles.editorWorkspace} aria-label="Project editor">
+    <section
+      className={`${styles.editorWorkspace} ${isResizingEditor ? styles.resizingEditorWorkspace : ""}`}
+      aria-label="Project editor"
+      ref={workspaceRef}
+      style={workspaceStyle}
+    >
       <section
         className={`${styles.chatPanel} ${messages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
         aria-label="Project chat"
@@ -2114,6 +2206,13 @@ function ProjectChat({
           </button>
         </form>
       </section>
+
+      <button
+        aria-label="Resize editor and preview panes"
+        className={styles.editorResizeHandle}
+        onPointerDown={startEditorResize}
+        type="button"
+      />
 
       <aside className={styles.previewPanel} aria-label={`${editingTarget} UI preview`}>
         <div className={styles.previewHeader}>

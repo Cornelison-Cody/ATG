@@ -390,9 +390,16 @@
 
 .editorWorkspace {
   display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(420px, 1.08fr) minmax(360px, 0.92fr);
+  gap: 8px;
+  grid-template-columns:
+    minmax(420px, calc((100% - 28px) * var(--editor-panel-ratio, 0.54)))
+    12px
+    minmax(360px, 1fr);
   min-height: 0;
+}
+
+.resizingEditorWorkspace {
+  cursor: col-resize;
 }
 
 .chatPanel {
@@ -413,6 +420,45 @@
 
 .emptyChatPanel .composer {
   border-top: 0;
+}
+
+.editorResizeHandle {
+  align-self: stretch;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: col-resize;
+  display: grid;
+  min-height: 0;
+  padding: 0;
+  place-items: center;
+  position: relative;
+}
+
+.editorResizeHandle::before {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  content: "";
+  height: 56px;
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease;
+  width: 4px;
+}
+
+.editorResizeHandle:hover::before,
+.editorResizeHandle:focus-visible::before,
+.resizingEditorWorkspace .editorResizeHandle::before {
+  background: rgba(77, 214, 201, 0.72);
+  box-shadow: 0 0 0 4px rgba(77, 214, 201, 0.12);
+}
+
+.editorResizeHandle:focus-visible {
+  outline: none;
+}
+
+.resizingEditorWorkspace .scaledPreviewFrame iframe {
+  pointer-events: none;
 }
 
 .editorToolbar {
@@ -1551,6 +1597,10 @@
   .editorWorkspace {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(420px, 1fr) minmax(360px, 0.75fr);
+  }
+
+  .editorResizeHandle {
+    display: none;
   }
 }
 
