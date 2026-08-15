@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
   const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
   const message = typeof body.message === "string" ? body.message.trim() : "";
-  const editingTarget = body.editingTarget === "phone" ? "phone" : "tv";
+  const editingTarget = body.editingTarget === "both" ? "both" : body.editingTarget === "phone" ? "phone" : "tv";
   const chatMode = normalizeChatMode(body.chatMode);
 
   if (!projectId) {
@@ -182,7 +182,7 @@ export async function POST(request: Request) {
           apiKey: billing.apiKey,
           files,
           message: buildProjectPrompt(
-            chatMode === "plan" ? buildPlanningRequest(message, editingTarget, {
+            chatMode === "plan" ? buildPlanningRequest(message, editingTarget === "both" ? "tv" : editingTarget, {
               recentContext: planningContext
             }) : message,
             editingTarget
@@ -279,7 +279,7 @@ async function streamAzureJob({
 }: {
   billing: { apiKey: string; billingMode: "managed" | "byok"; reservationId: string };
   chatMode: "build" | "plan";
-  editingTarget: "tv" | "phone";
+  editingTarget: "tv" | "phone" | "both";
   files: { path: string; content: string }[];
   message: string;
   project: NonNullable<Awaited<ReturnType<typeof getProject>>>;
@@ -300,7 +300,7 @@ async function streamAzureJob({
       model: process.env.ATG_CODEX_SDK_MODEL || "",
       projectId,
       prompt: `${buildProjectPrompt(
-        chatMode === "plan" ? buildPlanningRequest(message, editingTarget, {
+        chatMode === "plan" ? buildPlanningRequest(message, editingTarget === "both" ? "tv" : editingTarget, {
           recentContext
         }) : message,
         editingTarget

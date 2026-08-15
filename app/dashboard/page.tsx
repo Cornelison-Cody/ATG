@@ -80,11 +80,12 @@ type ChatRunFeedback = {
 };
 
 type EditingTarget = "tv" | "phone";
+type BuildTarget = EditingTarget | "both";
 type ChatMode = "build" | "plan";
 type HiddenEditorPanel = "editor" | "preview" | null;
 type ChatSubmitOptions = {
   chatMode?: ChatMode;
-  editingTarget?: EditingTarget;
+  editingTarget?: BuildTarget;
 };
 
 const EDITOR_SPLIT_STORAGE_KEY = "atg.dashboard.editorSplitRatio";
@@ -776,7 +777,9 @@ export default function Home() {
       return;
     }
     const effectiveChatMode = options.chatMode ?? chatMode;
-    const effectiveEditingTarget = options.editingTarget ?? editingTarget;
+    const effectiveEditingTarget: BuildTarget = options.editingTarget ?? editingTarget;
+    const effectiveTargetName =
+      effectiveEditingTarget === "both" ? "full plan" : effectiveEditingTarget === "tv" ? "TV" : "phone";
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -804,8 +807,8 @@ export default function Home() {
       label: "Connecting to Codex",
       details: [
         effectiveChatMode === "plan"
-          ? `Queued your ${effectiveEditingTarget === "tv" ? "TV" : "phone"} planning request.`
-          : `Queued your ${effectiveEditingTarget === "tv" ? "TV" : "phone"} build request.`
+          ? `Queued your ${effectiveTargetName} planning request.`
+          : `Queued your ${effectiveTargetName} build request.`
       ],
       lastUpdateAt: now,
       startedAt: now
@@ -991,7 +994,7 @@ export default function Home() {
             if (options?.chatMode) {
               setChatMode(options.chatMode);
             }
-            if (options?.editingTarget) {
+            if (options?.editingTarget === "tv" || options?.editingTarget === "phone") {
               setEditingTarget(options.editingTarget);
             }
             void submitChat(answer, options);
@@ -1987,11 +1990,12 @@ function ProjectChat({
   const quickAnswersKey = quickAnswers.map((answer) => `${answer.label}:${answer.text}`).join("|");
   const hasConversation = messages.length > 0 || quickAnswers.length > 0;
   const targetName = editingTarget === "tv" ? "TV display" : "phone controller";
-  const hasBuildHandoff = quickAnswers.some((answer) => Boolean(getPlanningQuickAction(answer.text).options?.chatMode));
+  const buildHandoffAnswer = quickAnswers.find((answer) => Boolean(getPlanningQuickAction(answer.text).options?.chatMode));
+  const planningAnswers = buildHandoffAnswer ? [buildHandoffAnswer] : quickAnswers;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, quickAnswers.length, quickAnswersKey]);
+  }, [messages, planningAnswers.length, quickAnswersKey]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(EDITOR_SPLIT_DESKTOP_QUERY);
@@ -2196,13 +2200,13 @@ function ProjectChat({
 
           {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
 
-          {quickAnswers.length > 0 && !isRunning ? (
+          {planningAnswers.length > 0 && !isRunning ? (
             <div className={styles.quickAnswers} aria-label="Planning answer choices">
               <div className={styles.planningQuestion}>
-                <span>{hasBuildHandoff ? "Next step" : "Codex asks"}</span>
+                <span>{buildHandoffAnswer ? "Next step" : "Codex asks"}</span>
                 <p>{planningQuestion || "Choose the next planning direction."}</p>
               </div>
-              {quickAnswers.map((answer) => (
+              {planningAnswers.map((answer) => (
                 <button
                   key={answer.label}
                   onClick={() => {
@@ -2363,22 +2367,10 @@ function extractPlanningQuestion(content: string) {
 
 function getPlanningQuickAction(text: string): { prompt?: string; options?: ChatSubmitOptions } {
   const normalized = text.trim().toLowerCase();
-  if (/^implement\s+tv\b/.test(normalized)) {
+  if (/^(implement|build)\s+(the\s+)?(proposed\s+)?plan\b/.test(normalized)) {
     return {
-      prompt: "Implement the proposed plan for the TV display.",
-      options: { chatMode: "build", editingTarget: "tv" }
-    };
-  }
-  if (/^implement\s+phone\b/.test(normalized)) {
-    return {
-      prompt: "Implement the proposed plan for the phone controller.",
-      options: { chatMode: "build", editingTarget: "phone" }
-    };
-  }
-  if (/^implement\s+both\b/.test(normalized) || /^build\s+both\b/.test(normalized)) {
-    return {
-      prompt: "Implement the proposed plan across both the TV display and phone controller.",
-      options: { chatMode: "build" }
+      prompt: "Implement the proposed plan across every affected part of the game.",
+      options: { chatMode: "build", editingTarget: "both" }
     };
   }
   return {};

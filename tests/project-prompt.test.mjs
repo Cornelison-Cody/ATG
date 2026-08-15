@@ -27,3 +27,14 @@ test("phone build prompts prioritize the phone controller target", () => {
   assert.match(prompt, /rules, setup, player actions, scoring, win conditions, controls, or assets/);
   assert.match(prompt, /Add a buzz button/);
 });
+
+test("full-plan build prompts allow coordinated TV and phone changes", () => {
+  const prompt = buildProjectPrompt("Implement the proposed plan.", "both");
+
+  assert.match(prompt, /ACTIVE EDITING TARGET: Full game plan/);
+  assert.match(prompt, /Primary target file: game\/tv\.html and game\/phone\.html/);
+  assert.match(prompt, /Implement the requested plan across every affected game file/);
+  assert.match(prompt, /Edit both game\/tv\.html and game\/phone\.html when the plan affects both experiences/);
+  assert.match(prompt, /Keep game\/instructions\.md in sync with gameplay changes/);
+  assert.match(prompt, /Implement the proposed plan/);
+});

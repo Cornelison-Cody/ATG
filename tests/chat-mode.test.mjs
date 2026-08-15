@@ -21,9 +21,11 @@ test("planning requests ask bounded questions and offer implementation handoff",
   assert.match(prompt, /Decisions so far:/);
   assert.match(prompt, /Proposed plan:/);
   assert.match(prompt, /Ready to build\?/);
-  assert.match(prompt, /Implement TV display/);
-  assert.match(prompt, /Implement phone controller/);
-  assert.match(prompt, /Implement both TV and phone/);
+  assert.match(prompt, /A\. Implement plan/);
+  assert.match(prompt, /B\. Keep planning/);
+  assert.doesNotMatch(prompt, /Implement TV display/);
+  assert.doesNotMatch(prompt, /Implement phone controller/);
+  assert.doesNotMatch(prompt, /Implement both TV and phone/);
   assert.match(prompt, /A\. <choice>/);
   assert.match(prompt, /phone controller/);
   assert.match(prompt, /user: It should use teams/);
