@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, FormEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeDollarSign,
   CheckCircle2,
@@ -14,6 +14,10 @@ import {
   Menu,
   MessageSquareWarning,
   Monitor,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Pencil,
   Settings,
   Smartphone,
@@ -77,10 +81,18 @@ type ChatRunFeedback = {
 
 type EditingTarget = "tv" | "phone";
 type ChatMode = "build" | "plan";
+type HiddenEditorPanel = "editor" | "preview" | null;
 type ChatSubmitOptions = {
   chatMode?: ChatMode;
   editingTarget?: EditingTarget;
 };
+
+const EDITOR_SPLIT_STORAGE_KEY = "atg.dashboard.editorSplitRatio";
+const EDITOR_HIDDEN_PANEL_STORAGE_KEY = "atg.dashboard.hiddenEditorPanel";
+const EDITOR_SPLIT_DESKTOP_QUERY = "(min-width: 981px)";
+const EDITOR_PANEL_MIN_WIDTH = 420;
+const PREVIEW_PANEL_MIN_WIDTH = 360;
+const EDITOR_SPLIT_CHROME_WIDTH = 28;
 
 type AccountUsageBudget = {
   budget: {
@@ -1958,6 +1970,11 @@ function ProjectChat({
   runFeedback: ChatRunFeedback;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const workspaceRef = useRef<HTMLElement | null>(null);
+  const [editorSplitRatio, setEditorSplitRatio] = useState<number | null>(null);
+  const [hiddenEditorPanel, setHiddenEditorPanel] = useState<HiddenEditorPanel>(null);
+  const [isDesktopSplit, setIsDesktopSplit] = useState(false);
+  const [isResizingEditor, setIsResizingEditor] = useState(false);
   const showFeedback = runFeedback.state !== "idle";
   const previewPath = buildGameAssetUrl(projectId, editingTarget, projectRevision);
   const latestAssistantMessage = [...messages]
@@ -1976,191 +1993,341 @@ function ProjectChat({
     messagesEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages, quickAnswers.length, quickAnswersKey]);
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(EDITOR_SPLIT_DESKTOP_QUERY);
+    const updateDesktopSplit = () => setIsDesktopSplit(mediaQuery.matches);
+    updateDesktopSplit();
+    mediaQuery.addEventListener("change", updateDesktopSplit);
+
+    const storedRatio = Number.parseFloat(window.localStorage.getItem(EDITOR_SPLIT_STORAGE_KEY) ?? "");
+    if (Number.isFinite(storedRatio)) {
+      setEditorSplitRatio(Math.min(0.82, Math.max(0.34, storedRatio)));
+    }
+
+    const storedHiddenPanel = window.localStorage.getItem(EDITOR_HIDDEN_PANEL_STORAGE_KEY);
+    if (storedHiddenPanel === "editor" || storedHiddenPanel === "preview") {
+      setHiddenEditorPanel(storedHiddenPanel);
+    }
+
+    return () => mediaQuery.removeEventListener("change", updateDesktopSplit);
+  }, []);
+
+  useEffect(() => {
+    if (editorSplitRatio === null) return;
+    window.localStorage.setItem(EDITOR_SPLIT_STORAGE_KEY, editorSplitRatio.toFixed(4));
+  }, [editorSplitRatio]);
+
+  useEffect(() => {
+    if (hiddenEditorPanel) {
+      window.localStorage.setItem(EDITOR_HIDDEN_PANEL_STORAGE_KEY, hiddenEditorPanel);
+      return;
+    }
+
+    window.localStorage.removeItem(EDITOR_HIDDEN_PANEL_STORAGE_KEY);
+  }, [hiddenEditorPanel]);
+
+  useEffect(() => {
+    if (!isResizingEditor) return;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizingEditor]);
+
+  const updateEditorSplit = (clientX: number) => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+
+    const rect = workspace.getBoundingClientRect();
+    const availablePanelWidth = rect.width - EDITOR_SPLIT_CHROME_WIDTH;
+    if (availablePanelWidth < EDITOR_PANEL_MIN_WIDTH + PREVIEW_PANEL_MIN_WIDTH) return;
+
+    const nextEditorWidth = Math.min(
+      availablePanelWidth - PREVIEW_PANEL_MIN_WIDTH,
+      Math.max(EDITOR_PANEL_MIN_WIDTH, clientX - rect.left - 8)
+    );
+
+    setEditorSplitRatio(nextEditorWidth / availablePanelWidth);
+  };
+
+  const startEditorResize = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!isDesktopSplit || hiddenEditorPanel !== null) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateEditorSplit(event.clientX);
+    setIsResizingEditor(true);
+  };
+
+  useEffect(() => {
+    if (!isResizingEditor) return;
+
+    const handlePointerMove = (event: globalThis.PointerEvent) => updateEditorSplit(event.clientX);
+    const handlePointerUp = () => setIsResizingEditor(false);
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [isResizingEditor]);
+
+  const workspaceStyle =
+    editorSplitRatio === null
+      ? undefined
+      : ({
+          "--editor-panel-ratio": editorSplitRatio.toFixed(4)
+        } as CSSProperties & Record<"--editor-panel-ratio", string>);
+  const activeHiddenPanel = isDesktopSplit ? hiddenEditorPanel : null;
+  const workspaceClassName = [
+    styles.editorWorkspace,
+    isResizingEditor ? styles.resizingEditorWorkspace : "",
+    activeHiddenPanel === "editor" ? styles.editorPanelHidden : "",
+    activeHiddenPanel === "preview" ? styles.previewPanelHidden : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <section className={styles.editorWorkspace} aria-label="Project editor">
-      <section
-        className={`${styles.chatPanel} ${messages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
-        aria-label="Project chat"
-      >
-        <div className={styles.editorToolbar}>
-          <div className={styles.targetToggle} role="tablist" aria-label="Editing target">
-            <button
-              aria-selected={editingTarget === "tv"}
-              className={editingTarget === "tv" ? styles.activeTargetButton : undefined}
-              onClick={() => onTargetChange("tv")}
-              role="tab"
-              type="button"
-            >
-              <Monitor aria-hidden="true" />
-              TV
-            </button>
-            <button
-              aria-selected={editingTarget === "phone"}
-              className={editingTarget === "phone" ? styles.activeTargetButton : undefined}
-              onClick={() => onTargetChange("phone")}
-              role="tab"
-              type="button"
-            >
-              <Smartphone aria-hidden="true" />
-              Phone
-            </button>
-          </div>
-          <div className={styles.modeToggle} role="tablist" aria-label="Chat mode">
-            <button
-              aria-selected={chatMode === "build"}
-              className={chatMode === "build" ? styles.activeModeButton : undefined}
-              disabled={isRunning}
-              onClick={() => onModeChange("build")}
-              role="tab"
-              type="button"
-            >
-              <Hammer aria-hidden="true" />
-              Build
-            </button>
-            <button
-              aria-selected={chatMode === "plan"}
-              className={chatMode === "plan" ? styles.activeModeButton : undefined}
-              disabled={isRunning}
-              onClick={() => onModeChange("plan")}
-              role="tab"
-              type="button"
-            >
-              <Lightbulb aria-hidden="true" />
-              Plan
-            </button>
-          </div>
-        </div>
-
-        {hasConversation ? (
-          <div className={styles.messages}>
-            {messages.map((message) => {
-              return (
-                <div className={styles.messageGroup} key={message.id}>
-                  <article
-                    className={`${styles.message} ${styles[message.role]} ${
-                      message.status === "error" ? styles.error : ""
-                    }`}
-                  >
-                    <div className={styles.messageMeta}>
-                      <span>
-                        {message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}
-                      </span>
-                      {message.status === "running" ? <span>Running</span> : null}
-                    </div>
-                    <p>{message.content}</p>
-                  </article>
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-        ) : null}
-
-        {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
-
-        {quickAnswers.length > 0 && !isRunning ? (
-          <div className={styles.quickAnswers} aria-label="Planning answer choices">
-            <div className={styles.planningQuestion}>
-              <span>{hasBuildHandoff ? "Next step" : "Codex asks"}</span>
-              <p>{planningQuestion || "Choose the next planning direction."}</p>
-            </div>
-            {quickAnswers.map((answer) => (
+    <section
+      className={workspaceClassName}
+      aria-label="Project editor"
+      ref={workspaceRef}
+      style={workspaceStyle}
+    >
+      {activeHiddenPanel === "editor" ? (
+        <button className={styles.panelRestoreRail} onClick={() => setHiddenEditorPanel(null)} type="button">
+          <PanelLeftOpen aria-hidden="true" />
+          Show editor
+        </button>
+      ) : (
+        <section
+          className={`${styles.chatPanel} ${messages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
+          aria-label="Project chat"
+        >
+          <div className={styles.editorToolbar}>
+            <div className={styles.targetToggle} role="tablist" aria-label="Editing target">
               <button
-                key={answer.label}
-                onClick={() => {
-                  const action = getPlanningQuickAction(answer.text);
-                  onQuickAnswer(action.prompt ?? `${answer.label}. ${answer.text}`, action.options);
-                }}
+                aria-selected={editingTarget === "tv"}
+                className={editingTarget === "tv" ? styles.activeTargetButton : undefined}
+                onClick={() => onTargetChange("tv")}
+                role="tab"
                 type="button"
               >
-                <span>{answer.label}</span>
-                {answer.text}
+                <Monitor aria-hidden="true" />
+                TV
               </button>
-            ))}
-          </div>
-        ) : null}
-
-        <form className={styles.composer} onSubmit={onSubmit}>
-          {chatMode === "build" ? (
-            <div className={styles.composerMeta}>
-              <span>Build target</span>
-              <strong>{targetName}</strong>
+              <button
+                aria-selected={editingTarget === "phone"}
+                className={editingTarget === "phone" ? styles.activeTargetButton : undefined}
+                onClick={() => onTargetChange("phone")}
+                role="tab"
+                type="button"
+              >
+                <Smartphone aria-hidden="true" />
+                Phone
+              </button>
             </div>
-          ) : null}
-          <p className={styles.composerTip}>
-            {chatMode === "plan"
-              ? "Plan mode is for rules, rounds, scoring, and player flow. It will help you decide what to build next."
-              : `Build mode changes the ${targetName}. Use the TV target for the shared screen and Phone for player controls.`}
-          </p>
-          <textarea
-            aria-label="Message Codex"
-            disabled={isRunning}
-            onChange={(event) => onInputChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-            placeholder={
-              chatMode === "plan"
-                ? "Ask Codex to help plan gameplay choices..."
-                : `Ask Codex to update the ${targetName}...`
-            }
-            rows={4}
-            value={input}
-          />
-          <button disabled={!canSubmit} type="submit">
-            {isRunning ? "Running" : chatMode === "plan" ? "Plan" : `Build ${editingTarget === "tv" ? "TV" : "Phone"}`}
-          </button>
-        </form>
-      </section>
-
-      <aside className={styles.previewPanel} aria-label={`${editingTarget} UI preview`}>
-        <div className={styles.previewHeader}>
-          <div className={styles.previewTitleGroup}>
-            <h2>{projectName}</h2>
-            <span>{editingTarget === "tv" ? "TV Preview" : "Phone Preview"}</span>
-          </div>
-          <div className={styles.previewMenuActions}>
-            <button
-              aria-expanded={isProjectMenuOpen}
-              aria-label="Open game menu"
-              className={styles.menuButton}
-              onClick={onToggleProjectMenu}
-              type="button"
-            >
-              <Menu aria-hidden="true" />
-            </button>
-            {isProjectMenuOpen ? (
-              <div className={styles.menu} role="menu">
-                <a href={`/tv/${projectId}`} role="menuitem">
-                  Open TV
-                </a>
-                <a href={`/join/${projectId}`} role="menuitem">
-                  Open Phone
-                </a>
-                <button onClick={onOpenInstructions} role="menuitem" type="button">
-                  Game Instructions
+            <div className={styles.editorToolbarActions}>
+              <div className={styles.modeToggle} role="tablist" aria-label="Chat mode">
+                <button
+                  aria-selected={chatMode === "build"}
+                  className={chatMode === "build" ? styles.activeModeButton : undefined}
+                  disabled={isRunning}
+                  onClick={() => onModeChange("build")}
+                  role="tab"
+                  type="button"
+                >
+                  <Hammer aria-hidden="true" />
+                  Build
                 </button>
-                <button onClick={onOpenProjectSettings} role="menuitem" type="button">
-                  Project Settings
-                </button>
-                <button onClick={onOpenAccountSettings} role="menuitem" type="button">
-                  Account Settings
-                </button>
-                <button onClick={onReturnToProjects} role="menuitem" type="button">
-                  Dashboard
+                <button
+                  aria-selected={chatMode === "plan"}
+                  className={chatMode === "plan" ? styles.activeModeButton : undefined}
+                  disabled={isRunning}
+                  onClick={() => onModeChange("plan")}
+                  role="tab"
+                  type="button"
+                >
+                  <Lightbulb aria-hidden="true" />
+                  Plan
                 </button>
               </div>
-            ) : null}
+              <button
+                aria-label="Hide editor pane"
+                className={styles.panelVisibilityButton}
+                onClick={() => setHiddenEditorPanel("editor")}
+                type="button"
+              >
+                <PanelLeftClose aria-hidden="true" />
+              </button>
+            </div>
           </div>
-        </div>
-        <ScaledPreviewFrame
-          editingTarget={editingTarget}
-          previewPath={previewPath}
-          title={`${projectName} ${editingTarget} preview`}
+
+          {hasConversation ? (
+            <div className={styles.messages}>
+              {messages.map((message) => {
+                return (
+                  <div className={styles.messageGroup} key={message.id}>
+                    <article
+                      className={`${styles.message} ${styles[message.role]} ${
+                        message.status === "error" ? styles.error : ""
+                      }`}
+                    >
+                      <div className={styles.messageMeta}>
+                        <span>
+                          {message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}
+                        </span>
+                        {message.status === "running" ? <span>Running</span> : null}
+                      </div>
+                      <p>{message.content}</p>
+                    </article>
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+          ) : null}
+
+          {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
+
+          {quickAnswers.length > 0 && !isRunning ? (
+            <div className={styles.quickAnswers} aria-label="Planning answer choices">
+              <div className={styles.planningQuestion}>
+                <span>{hasBuildHandoff ? "Next step" : "Codex asks"}</span>
+                <p>{planningQuestion || "Choose the next planning direction."}</p>
+              </div>
+              {quickAnswers.map((answer) => (
+                <button
+                  key={answer.label}
+                  onClick={() => {
+                    const action = getPlanningQuickAction(answer.text);
+                    onQuickAnswer(action.prompt ?? `${answer.label}. ${answer.text}`, action.options);
+                  }}
+                  type="button"
+                >
+                  <span>{answer.label}</span>
+                  {answer.text}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <form className={styles.composer} onSubmit={onSubmit}>
+            {chatMode === "build" ? (
+              <div className={styles.composerMeta}>
+                <span>Build target</span>
+                <strong>{targetName}</strong>
+              </div>
+            ) : null}
+            <p className={styles.composerTip}>
+              {chatMode === "plan"
+                ? "Plan mode is for rules, rounds, scoring, and player flow. It will help you decide what to build next."
+                : `Build mode changes the ${targetName}. Use the TV target for the shared screen and Phone for player controls.`}
+            </p>
+            <textarea
+              aria-label="Message Codex"
+              disabled={isRunning}
+              onChange={(event) => onInputChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+              placeholder={
+                chatMode === "plan"
+                  ? "Ask Codex to help plan gameplay choices..."
+                  : `Ask Codex to update the ${targetName}...`
+              }
+              rows={4}
+              value={input}
+            />
+            <button disabled={!canSubmit} type="submit">
+              {isRunning
+                ? "Running"
+                : chatMode === "plan"
+                  ? "Plan"
+                  : `Build ${editingTarget === "tv" ? "TV" : "Phone"}`}
+            </button>
+          </form>
+        </section>
+      )}
+
+      {activeHiddenPanel === null ? (
+        <button
+          aria-label="Resize editor and preview panes"
+          className={styles.editorResizeHandle}
+          onPointerDown={startEditorResize}
+          type="button"
         />
-      </aside>
+      ) : null}
+
+      {activeHiddenPanel === "preview" ? (
+        <button className={styles.panelRestoreRail} onClick={() => setHiddenEditorPanel(null)} type="button">
+          <PanelRightOpen aria-hidden="true" />
+          Show preview
+        </button>
+      ) : (
+        <aside className={styles.previewPanel} aria-label={`${editingTarget} UI preview`}>
+          <div className={styles.previewHeader}>
+            <div className={styles.previewTitleGroup}>
+              <h2>{projectName}</h2>
+              <span>{editingTarget === "tv" ? "TV Preview" : "Phone Preview"}</span>
+            </div>
+            <div className={styles.previewMenuActions}>
+              <button
+                aria-label="Hide preview pane"
+                className={styles.panelVisibilityButton}
+                onClick={() => setHiddenEditorPanel("preview")}
+                type="button"
+              >
+                <PanelRightClose aria-hidden="true" />
+              </button>
+              <button
+                aria-expanded={isProjectMenuOpen}
+                aria-label="Open game menu"
+                className={styles.menuButton}
+                onClick={onToggleProjectMenu}
+                type="button"
+              >
+                <Menu aria-hidden="true" />
+              </button>
+              {isProjectMenuOpen ? (
+                <div className={styles.menu} role="menu">
+                  <a href={`/tv/${projectId}`} role="menuitem">
+                    Open TV
+                  </a>
+                  <a href={`/join/${projectId}`} role="menuitem">
+                    Open Phone
+                  </a>
+                  <button onClick={onOpenInstructions} role="menuitem" type="button">
+                    Game Instructions
+                  </button>
+                  <button onClick={onOpenProjectSettings} role="menuitem" type="button">
+                    Project Settings
+                  </button>
+                  <button onClick={onOpenAccountSettings} role="menuitem" type="button">
+                    Account Settings
+                  </button>
+                  <button onClick={onReturnToProjects} role="menuitem" type="button">
+                    Dashboard
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <ScaledPreviewFrame
+            editingTarget={editingTarget}
+            previewPath={previewPath}
+            title={`${projectName} ${editingTarget} preview`}
+          />
+        </aside>
+      )}
     </section>
   );
 }
