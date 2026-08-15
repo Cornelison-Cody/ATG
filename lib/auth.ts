@@ -92,7 +92,7 @@ export function isPublicRuntimePath(pathname: string) {
     return false;
   }
 
-  if (pathname.startsWith("/tv/") || pathname.startsWith("/join/") || pathname === "/ws/game") {
+  if (pathname.startsWith("/join/") || pathname === "/ws/game") {
     return true;
   }
 
@@ -101,6 +101,10 @@ export function isPublicRuntimePath(pathname: string) {
   }
 
   if (/^\/api\/game\/[^/]+\/join-info$/.test(pathname)) {
+    return true;
+  }
+
+  if (/^\/api\/game\/[^/]+\/instructions$/.test(pathname)) {
     return true;
   }
 
