@@ -1,5 +1,4 @@
 import { getProject } from "@/lib/projects";
-import { requireProjectRuntimeAccess } from "@/lib/project-access";
 import { readGameAsset } from "@/lib/project-game";
 
 export const runtime = "nodejs";
@@ -15,11 +14,6 @@ export async function GET(request: Request, context: RouteContext) {
 
   if (!project || project.status === "deleted") {
     return Response.json({ error: "Project was not found." }, { status: 404 });
-  }
-
-  const authResponse = await requireProjectRuntimeAccess(request, project);
-  if (authResponse) {
-    return authResponse;
   }
 
   try {
