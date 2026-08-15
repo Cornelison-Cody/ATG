@@ -1,1 +1,1 @@
-export function buildProjectPrompt(message: string, editingTarget: "tv" | "phone"): string;
+export function buildProjectPrompt(message: string, editingTarget: "tv" | "phone" | "both"): string;
