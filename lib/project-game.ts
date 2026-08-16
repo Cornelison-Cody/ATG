@@ -27,6 +27,21 @@ export async function readGameAsset(project: ProjectRecord, segments: string[]) 
   return getProjectStore().readGameAsset(project, segments);
 }
 
+export async function listUploadedGameAssets(project: ProjectRecord) {
+  return getProjectStore().listUploadedGameAssets(project);
+}
+
+export async function uploadGameAsset(
+  project: ProjectRecord,
+  asset: { content: Buffer; contentType: string; filename: string }
+) {
+  return getProjectStore().uploadGameAsset(project, asset);
+}
+
+export async function deleteGameAsset(project: ProjectRecord, assetPath: string) {
+  return getProjectStore().deleteGameAsset(project, assetPath);
+}
+
 export async function exportGameTextFiles(project: ProjectRecord) {
   return getProjectStore().exportGameTextFiles(project);
 }

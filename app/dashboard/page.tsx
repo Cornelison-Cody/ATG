@@ -5,6 +5,8 @@ import {
   BadgeDollarSign,
   CheckCircle2,
   ChevronDown,
+  Copy,
+  File,
   Globe2,
   Hammer,
   KeyRound,
@@ -22,6 +24,7 @@ import {
   Settings,
   Smartphone,
   Trash2,
+  Upload,
   UserPlus,
   X
 } from "lucide-react";
@@ -63,6 +66,14 @@ type ProjectDetail = Omit<ProjectSummary, "messageCount"> & {
 type ProjectCollaborator = {
   principalName: string;
   invitedAt: string;
+};
+
+type GameAssetSummary = {
+  contentType: string;
+  name: string;
+  path: string;
+  size: number;
+  updatedAt: string;
 };
 
 type StreamEvent =
@@ -181,6 +192,7 @@ export default function Home() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
+  const [isAssetsOpen, setIsAssetsOpen] = useState(false);
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const [accountApiKey, setAccountApiKey] = useState("");
   const [isAccountKeyConfigured, setIsAccountKeyConfigured] = useState(false);
@@ -194,6 +206,11 @@ export default function Home() {
   const [instructions, setInstructions] = useState("");
   const [isLoadingInstructions, setIsLoadingInstructions] = useState(false);
   const [isSavingInstructions, setIsSavingInstructions] = useState(false);
+  const [assets, setAssets] = useState<GameAssetSummary[]>([]);
+  const [assetsMessage, setAssetsMessage] = useState("");
+  const [isLoadingAssets, setIsLoadingAssets] = useState(false);
+  const [isUploadingAsset, setIsUploadingAsset] = useState(false);
+  const [deletingAssetPath, setDeletingAssetPath] = useState("");
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -339,6 +356,7 @@ export default function Home() {
     setIsProjectMenuOpen(false);
     setIsProjectSettingsOpen(false);
     setIsInstructionsOpen(false);
+    setIsAssetsOpen(false);
     setActiveProject(null);
     setMessages([]);
     setInput("");
@@ -525,6 +543,104 @@ export default function Home() {
       setError(instructionsError instanceof Error ? instructionsError.message : "Unable to save instructions.");
     } finally {
       setIsSavingInstructions(false);
+    }
+  }
+
+  async function loadAssets(projectId: string) {
+    setIsLoadingAssets(true);
+    setAssetsMessage("");
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/assets`, { cache: "no-store" });
+      const data = (await response.json()) as { assets?: GameAssetSummary[]; error?: string };
+      if (!response.ok || !Array.isArray(data.assets)) {
+        throw new Error(data.error || `Failed to load assets (${response.status})`);
+      }
+      setAssets(data.assets);
+    } catch (assetError) {
+      setAssets([]);
+      setAssetsMessage(assetError instanceof Error ? assetError.message : "Unable to load assets.");
+    } finally {
+      setIsLoadingAssets(false);
+    }
+  }
+
+  async function openAssets() {
+    if (!activeProject) {
+      return;
+    }
+
+    setIsProjectMenuOpen(false);
+    setIsAssetsOpen(true);
+    await loadAssets(activeProject.id);
+  }
+
+  async function uploadAsset(file: File) {
+    if (!activeProject || isUploadingAsset) {
+      return;
+    }
+
+    setIsUploadingAsset(true);
+    setAssetsMessage("");
+    setError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`/api/projects/${activeProject.id}/assets`, {
+        body: formData,
+        method: "POST"
+      });
+      const data = (await response.json()) as { asset?: GameAssetSummary; error?: string };
+      if (!response.ok || !data.asset) {
+        throw new Error(data.error || `Failed to upload asset (${response.status})`);
+      }
+
+      setAssets((current) => [data.asset as GameAssetSummary, ...current.filter((item) => item.path !== data.asset?.path)]);
+      const relativePath = `./${data.asset.path}`;
+      setInput((current) => {
+        const trimmed = current.trimEnd();
+        return trimmed ? `${trimmed}\nUse asset ${relativePath}` : `Use asset ${relativePath}`;
+      });
+      setAssetsMessage(`Uploaded ${data.asset.name}.`);
+      setActiveProject((current) =>
+        current && current.id === activeProject.id ? { ...current, updatedAt: new Date().toISOString() } : current
+      );
+    } catch (assetError) {
+      const message = assetError instanceof Error ? assetError.message : "Unable to upload asset.";
+      setAssetsMessage(message);
+      setError(message);
+    } finally {
+      setIsUploadingAsset(false);
+    }
+  }
+
+  async function deleteAsset(assetPath: string) {
+    if (!activeProject || deletingAssetPath) {
+      return;
+    }
+
+    setDeletingAssetPath(assetPath);
+    setAssetsMessage("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${activeProject.id}/assets?path=${encodeURIComponent(assetPath)}`,
+        { method: "DELETE" }
+      );
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || `Failed to delete asset (${response.status})`);
+      }
+      setAssets((current) => current.filter((item) => item.path !== assetPath));
+      setAssetsMessage("Asset deleted.");
+      setActiveProject((current) =>
+        current && current.id === activeProject.id ? { ...current, updatedAt: new Date().toISOString() } : current
+      );
+    } catch (assetError) {
+      setAssetsMessage(assetError instanceof Error ? assetError.message : "Unable to delete asset.");
+    } finally {
+      setDeletingAssetPath("");
     }
   }
 
@@ -985,8 +1101,10 @@ export default function Home() {
           input={input}
           isRunning={isRunning}
           messages={messages}
+          isUploadingAsset={isUploadingAsset}
           onInputChange={setInput}
           onOpenAccountSettings={openAccountSettings}
+          onOpenAssets={openAssets}
           onOpenInstructions={openInstructions}
           onOpenProjectSettings={openProjectSettings}
           onModeChange={setChatMode}
@@ -1000,6 +1118,7 @@ export default function Home() {
             void submitChat(answer, options);
           }}
           onReturnToProjects={returnToProjects}
+          onUploadAsset={uploadAsset}
           onTargetChange={setEditingTarget}
           onToggleProjectMenu={() => setIsProjectMenuOpen((current) => !current)}
           projectId={activeProject.id}
@@ -1117,6 +1236,18 @@ export default function Home() {
           onChange={setInstructions}
           onClose={() => setIsInstructionsOpen(false)}
           onSave={saveInstructions}
+          projectId={activeProject.id}
+        />
+      ) : null}
+
+      {isAssetsOpen && activeProject ? (
+        <AssetsModal
+          assets={assets}
+          deletingAssetPath={deletingAssetPath}
+          isLoading={isLoadingAssets}
+          message={assetsMessage}
+          onClose={() => setIsAssetsOpen(false)}
+          onDelete={deleteAsset}
           projectId={activeProject.id}
         />
       ) : null}
@@ -1945,23 +2076,117 @@ function InstructionsModal({
   );
 }
 
+function AssetsModal({
+  assets,
+  deletingAssetPath,
+  isLoading,
+  message,
+  onClose,
+  onDelete,
+  projectId
+}: {
+  assets: GameAssetSummary[];
+  deletingAssetPath: string;
+  isLoading: boolean;
+  message: string;
+  onClose: () => void;
+  onDelete: (assetPath: string) => void;
+  projectId: string;
+}) {
+  return (
+    <div className={styles.modalOverlay} role="presentation">
+      <section aria-label="Game assets" className={`${styles.modal} ${styles.assetsModal}`}>
+        <div className={styles.modalHeader}>
+          <div>
+            <h2>Game Assets</h2>
+            <p>Uploaded images and audio available to this game.</p>
+          </div>
+          <button
+            aria-label="Close assets dialog"
+            className={styles.closeButton}
+            onClick={onClose}
+            type="button"
+          >
+            <X aria-hidden="true" />
+          </button>
+        </div>
+        <div className={styles.assetsBody}>
+          {isLoading ? <p className={styles.emptyInstructions}>Loading assets...</p> : null}
+          {!isLoading && assets.length === 0 ? (
+            <p className={styles.emptyInstructions}>No assets uploaded yet.</p>
+          ) : null}
+          {!isLoading && assets.length > 0 ? (
+            <ul className={styles.assetList}>
+              {assets.map((asset) => {
+                const url = `/api/projects/${projectId}/game-assets/${asset.path}`;
+                const relativePath = `./${asset.path}`;
+                return (
+                  <li className={styles.assetItem} key={asset.path}>
+                    <div className={styles.assetPreview}>
+                      {asset.contentType.startsWith("image/") ? (
+                        <img alt="" src={url} />
+                      ) : asset.contentType.startsWith("audio/") ? (
+                        <audio controls src={url} />
+                      ) : (
+                        <File aria-hidden="true" />
+                      )}
+                    </div>
+                    <div className={styles.assetDetails}>
+                      <strong>{asset.name}</strong>
+                      <code>{relativePath}</code>
+                      <span>
+                        {asset.contentType || "application/octet-stream"} - {formatAssetSize(asset.size)}
+                      </span>
+                    </div>
+                    <div className={styles.assetActions}>
+                      <button
+                        aria-label={`Copy path for ${asset.name}`}
+                        onClick={() => void navigator.clipboard?.writeText(relativePath)}
+                        type="button"
+                      >
+                        <Copy aria-hidden="true" />
+                      </button>
+                      <button
+                        aria-label={`Delete ${asset.name}`}
+                        disabled={deletingAssetPath === asset.path}
+                        onClick={() => onDelete(asset.path)}
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          {message ? <p className={styles.settingsMessage}>{message}</p> : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ProjectChat({
   canSubmit,
   chatMode,
   editingTarget,
   input,
+  isUploadingAsset,
   isRunning,
   isProjectMenuOpen,
   messages,
   onInputChange,
   onModeChange,
   onOpenAccountSettings,
+  onOpenAssets,
   onOpenInstructions,
   onOpenProjectSettings,
   onQuickAnswer,
   onReturnToProjects,
   onTargetChange,
   onToggleProjectMenu,
+  onUploadAsset,
   onSubmit,
   projectId,
   projectName,
@@ -1972,18 +2197,21 @@ function ProjectChat({
   chatMode: ChatMode;
   editingTarget: EditingTarget;
   input: string;
+  isUploadingAsset: boolean;
   isRunning: boolean;
   isProjectMenuOpen: boolean;
   messages: ChatMessage[];
   onInputChange: (value: string) => void;
   onModeChange: (mode: ChatMode) => void;
   onOpenAccountSettings: () => void;
+  onOpenAssets: () => void;
   onOpenInstructions: () => void;
   onOpenProjectSettings: () => void;
   onQuickAnswer: (answer: string, options?: ChatSubmitOptions) => void;
   onReturnToProjects: () => void;
   onTargetChange: (target: EditingTarget) => void;
   onToggleProjectMenu: () => void;
+  onUploadAsset: (file: File) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   projectId: string;
   projectName: string;
@@ -1992,6 +2220,7 @@ function ProjectChat({
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLElement | null>(null);
+  const assetInputRef = useRef<HTMLInputElement | null>(null);
   const [editorSplitRatio, setEditorSplitRatio] = useState<number | null>(null);
   const [hiddenEditorPanel, setHiddenEditorPanel] = useState<HiddenEditorPanel>(null);
   const [isDesktopSplit, setIsDesktopSplit] = useState(false);
@@ -2269,6 +2498,29 @@ function ProjectChat({
               rows={4}
               value={input}
             />
+            <input
+              accept="image/gif,image/jpeg,image/png,image/svg+xml,image/webp,audio/mpeg,audio/ogg,audio/wav,.mp3,.ogg,.wav"
+              className={styles.assetUploadInput}
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) {
+                  onUploadAsset(file);
+                }
+                event.currentTarget.value = "";
+              }}
+              ref={assetInputRef}
+              type="file"
+            />
+            <button
+              aria-label="Upload game asset"
+              className={styles.assetUploadButton}
+              disabled={isRunning || isUploadingAsset}
+              onClick={() => assetInputRef.current?.click()}
+              type="button"
+            >
+              <Upload aria-hidden="true" />
+              {isUploadingAsset ? "Uploading" : "Asset"}
+            </button>
             <button disabled={!canSubmit} type="submit">
               {isRunning
                 ? "Running"
@@ -2330,6 +2582,9 @@ function ProjectChat({
                   <button onClick={onOpenInstructions} role="menuitem" type="button">
                     Game Instructions
                   </button>
+                  <button onClick={onOpenAssets} role="menuitem" type="button">
+                    Game Assets
+                  </button>
                   <button onClick={onOpenProjectSettings} role="menuitem" type="button">
                     Project Settings
                   </button>
@@ -2362,6 +2617,23 @@ function extractPlanningChoices(content: string) {
       return match ? { label: match[1].toUpperCase(), text: match[2].trim() } : null;
     })
     .filter((choice): choice is { label: string; text: string } => Boolean(choice));
+}
+
+function formatAssetSize(size: number) {
+  if (!Number.isFinite(size) || size <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB"];
+  let value = size;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
 }
 
 function extractPlanningQuestion(content: string) {
