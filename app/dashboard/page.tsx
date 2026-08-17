@@ -2226,7 +2226,7 @@ function ProjectChat({
   const [isDesktopSplit, setIsDesktopSplit] = useState(false);
   const [isResizingEditor, setIsResizingEditor] = useState(false);
   const showFeedback = runFeedback.state !== "idle";
-  const previewPath = buildGameAssetUrl(projectId, editingTarget, projectRevision);
+  const previewPath = `${buildGameAssetUrl(projectId, editingTarget, projectRevision)}&atgEditorPreview=1`;
   const latestAssistantMessage = [...messages]
     .reverse()
     .find((message) => message.role === "assistant" && message.status === "done");

@@ -10,6 +10,7 @@ ATG serves game-engine libraries from same-origin, versioned URLs. Games must ne
 | `atg-2d-1.0.1` | `/api/engine/atg-2d-1.0.1/pixi.min.mjs` | `pixi.js` 8.19.0 | `sha384-xfbAeTbJR9wkgBgr3TUzVjX99MxVMJNZQ8gkusM6vzhyeHmjWlx75GwwgaENHGAh` | MIT, `engine-bundles/pixi-8.19.0/LICENSE` |
 | `atg-2d-1.1.0` | `/api/engine/atg-2d-1.1.0/atg-tv-runtime.mjs` | ATG TV runtime 1.1.0 with `pixi.js` 8.19.0 | `sha384-UIJDMMHeNBBT52VS/SJ/ISQg+kDyHf6ACovvEw3O3Unx67eD9sBo/UYOVejX/SJZ` | ATG-owned runtime; PixiJS remains MIT |
 | `atg-2d-1.2.0` | `/api/engine/atg-2d-1.2.0/atg-tv-runtime.mjs` | ATG TV runtime 1.2.0 with gameplay primitives, `pixi.js` 8.19.0, and `@tweenjs/tween.js` 25.0.0 | `sha384-sZORoNhXEegRDSWphqslS1grk/tkdpAs0oXjI7fT0wmUSPrXlE2PG7WWBtZoCoRd` | ATG-owned runtime; PixiJS and Tween.js remain MIT |
+| `atg-2d-1.3.0` | `/api/engine/atg-2d-1.3.0/atg-tv-runtime.mjs` | ATG TV runtime 1.3.0 with audio manager, `pixi.js` 8.19.0, Tween.js 25.0.0, and `@pixi/sound` 6.0.1 | `sha384-N2W5pxZvsscqZnjKtblRHpy/lV9gWWtr0qPBJiu0uf1dTrMh4SlkFvViOgyI0A/B` | ATG-owned runtime; PixiJS, Tween.js, and Pixi Sound remain MIT |
 
 The releases intentionally share the same PixiJS payload while ATG-owned capabilities evolve. They remain separately addressable so an ATG runtime update can be added without changing games already pinned to an earlier release.
 
@@ -28,4 +29,4 @@ Engine-backed game iframes will use a same-origin-only `script-src` policy. The 
 
 ## Provenance
 
-The vendored `pixi.min.mjs` file comes from the `dist/pixi.min.mjs` artifact in the `pixi.js` 8.19.0 npm package, installed from the repository lockfile. Its optional Basis and KTX transcoder defaults are rewritten to the same-origin `/api/engine/pixi-8.19.0/*` copies, which are vendored alongside the artifact. Its MIT license is copied alongside the artifact. Runtime `1.2.0` also vendors the ESM build and MIT license for `@tweenjs/tween.js` 25.0.0. Manifest integrity values are SHA-384 digests of the deployed modules.
+The vendored `pixi.min.mjs` file comes from the `dist/pixi.min.mjs` artifact in the `pixi.js` 8.19.0 npm package, installed from the repository lockfile. Its optional Basis and KTX transcoder defaults are rewritten to the same-origin `/api/engine/pixi-8.19.0/*` copies, which are vendored alongside the artifact. Its MIT license is copied alongside the artifact. Runtime `1.2.0` also vendors the ESM build and MIT license for `@tweenjs/tween.js` 25.0.0; runtime `1.3.0` vendors `@pixi/sound` 6.0.1 with its MIT license and rewrites its Pixi import to the pinned same-runtime asset. Manifest integrity values are SHA-384 digests of the deployed modules.

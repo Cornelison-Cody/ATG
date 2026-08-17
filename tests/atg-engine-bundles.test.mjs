@@ -11,7 +11,7 @@ import {
 
 test("pinned ATG engine runtimes coexist at distinct same-origin URLs", () => {
   const runtimes = listAtgEngineRuntimes();
-  assert.deepEqual(runtimes, ["atg-2d-1.0.0", "atg-2d-1.0.1", "atg-2d-1.1.0", "atg-2d-1.2.0"]);
+  assert.deepEqual(runtimes, ["atg-2d-1.0.0", "atg-2d-1.0.1", "atg-2d-1.1.0", "atg-2d-1.2.0", "atg-2d-1.3.0"]);
   assert.equal(getAtgEngineBundleUrl(runtimes[0]), "/api/engine/atg-2d-1.0.0/pixi.min.mjs");
   assert.equal(getAtgEngineBundleUrl(runtimes[1]), "/api/engine/atg-2d-1.0.1/pixi.min.mjs");
 
@@ -23,6 +23,20 @@ test("pinned ATG engine runtimes coexist at distinct same-origin URLs", () => {
   assert.equal(getAtgEngineBundle("atg-2d-1.1.0", "atg-engine-bridge.mjs").packageVersion, "1.1.0");
   assert.equal(getAtgEngineBundle("atg-2d-1.2.0", "atg-gameplay.mjs").packageVersion, "1.2.0");
   assert.equal(getAtgEngineBundle("atg-2d-1.2.0", "tween.esm.mjs").packageVersion, "25.0.0");
+  assert.equal(getAtgEngineBundle("atg-2d-1.3.0", "pixi-sound.mjs").packageVersion, "6.0.1");
+});
+
+test("ATG audio runtime uses a pinned same-runtime Pixi sound module", async () => {
+  const audio = getAtgEngineBundle("atg-2d-1.3.0", "atg-audio.mjs");
+  const sound = getAtgEngineBundle("atg-2d-1.3.0", "pixi-sound.mjs");
+  const [audioSource, soundSource] = await Promise.all([
+    readFile(new URL("../engine-bundles/atg-tv-runtime-1.3.0/atg-audio.mjs", import.meta.url)),
+    readFile(new URL("../engine-bundles/atg-tv-runtime-1.3.0/pixi-sound.mjs", import.meta.url))
+  ]);
+  assert.equal(`sha384-${createHash("sha384").update(audioSource).digest("base64")}`, audio.integrity);
+  assert.equal(`sha384-${createHash("sha384").update(soundSource).digest("base64")}`, sound.integrity);
+  assert.match(audioSource.toString("utf8"), /atg-audio-error/);
+  assert.match(soundSource.toString("utf8"), /from"\.\/pixi\.min\.mjs"/);
 });
 
 test("engine bundle manifest records provenance, integrity, and license", () => {
