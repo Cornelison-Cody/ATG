@@ -28,7 +28,8 @@ export async function GET(_request: Request, context: RouteContext) {
       headers: {
         "Cache-Control": "public, max-age=31536000, immutable",
         "Content-Type": bundle.contentType,
-        "Cross-Origin-Resource-Policy": "same-origin",
+        "Access-Control-Allow-Origin": "*",
+        "Cross-Origin-Resource-Policy": "cross-origin",
         "ETag": `\"${bundle.integrity}\"`,
         "X-Content-Type-Options": "nosniff",
         "X-ATG-Engine-Integrity": bundle.integrity,
