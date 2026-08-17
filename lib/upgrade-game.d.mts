@@ -6,4 +6,6 @@ export function getUpgradeGameAvailability(options?: {
   isRunning?: boolean;
 }): { available: boolean; reason: string };
 
+export function buildEngineConversionPrompt(runtimeVersion?: string): string;
+
 export const UPGRADE_GAME_PROMPT: string;

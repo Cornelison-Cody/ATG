@@ -384,9 +384,10 @@ export default function Home() {
   function startUpgradeGame() {
     if (!activeProject || !upgradeGameAvailability.available) return;
     setIsUpgradeGameOpen(false);
-    setChatMode("plan");
+    setChatMode("build");
     setEditingTarget("tv");
-    setInput(UPGRADE_GAME_PROMPT);
+    setInput("");
+    void submitChat(UPGRADE_GAME_PROMPT, { chatMode: "build", editingTarget: "both" });
   }
 
   function openProjectSettings() {
