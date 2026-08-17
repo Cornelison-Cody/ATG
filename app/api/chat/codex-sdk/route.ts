@@ -185,7 +185,8 @@ export async function POST(request: Request) {
           apiKey: billing.apiKey,
           files,
           message: buildProjectPrompt(
-            chatMode === "plan" ? buildPlanningRequest(message, editingTarget === "both" ? "tv" : editingTarget, {
+            chatMode === "plan" ? buildPlanningRequest(message, editingTarget, {
+              engineMetadata: config.engine,
               recentContext: planningContext
             }) : message,
             editingTarget,
@@ -305,7 +306,8 @@ async function streamAzureJob({
       model: process.env.ATG_CODEX_SDK_MODEL || "",
       projectId,
       prompt: `${buildProjectPrompt(
-        chatMode === "plan" ? buildPlanningRequest(message, editingTarget === "both" ? "tv" : editingTarget, {
+        chatMode === "plan" ? buildPlanningRequest(message, editingTarget, {
+          engineMetadata: config.engine,
           recentContext
         }) : message,
         editingTarget,
