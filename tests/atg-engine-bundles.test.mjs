@@ -46,6 +46,22 @@ test("vendored Pixi module matches its integrity record and has no public CDN fa
   assert.match(source.toString("utf8"), /\/api\/engine\/pixi-8\.19\.0\/basis_transcoder\.js/);
 });
 
+test("ATG TV runtime uses a capped WebGL-first logical stage", async () => {
+  const bundle = getAtgEngineBundle("atg-2d-1.0.0", "atg-tv-runtime.mjs");
+  const source = await readFile(new URL("../engine-bundles/atg-tv-runtime-1.0.0/atg-tv-runtime.mjs", import.meta.url));
+  const integrity = `sha384-${createHash("sha384").update(source).digest("base64")}`;
+  const text = source.toString("utf8");
+
+  assert.equal(bundle.integrity, integrity);
+  assert.match(text, /const LOGICAL_WIDTH = 1920/);
+  assert.match(text, /const LOGICAL_HEIGHT = 1080/);
+  assert.match(text, /const MAX_FPS = 30/);
+  assert.match(text, /preference: "webgl"/);
+  assert.match(text, /app\.ticker\.maxFPS = MAX_FPS/);
+  assert.match(text, /new ResizeObserver/);
+  assert.match(text, /app\.destroy\(\{ children: true, removeView: true, texture: true, textureSource: true \}\)/);
+});
+
 test("optional Pixi transcoders stay on the same origin", () => {
   const basisTranscoder = getAtgEngineBundle("pixi-8.19.0", "basis_transcoder.js");
   const ktxTranscoder = getAtgEngineBundle("pixi-8.19.0", "libktx.wasm");

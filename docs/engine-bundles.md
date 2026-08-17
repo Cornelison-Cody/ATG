@@ -15,6 +15,7 @@ The two releases intentionally share the same PixiJS payload while the ATG gamep
 
 - Engine modules are served only at `/api/engine/<runtime-version>/<bundle>`.
 - A valid bundle response uses `Cache-Control: public, max-age=31536000, immutable` and includes its SHA-384 integrity value in `X-ATG-Engine-Integrity`.
+- Bundle responses allow anonymous module loading from ATG's sandboxed game iframes. They are public, immutable code assets and contain no project data.
 - Unknown runtime or bundle requests return a JSON `404` compatibility error; missing deployed artifacts return a JSON `503` error. The TV bootstrap in #141 will render these as an ATG-owned recovery experience.
 - The engine URL and integrity string come from `lib/atg-engine-bundles.mjs`; generated games must not invent URLs or integrity values.
 - A runtime release is append-only. Do not replace or delete a vendored bundle while any project is pinned to its runtime version.
