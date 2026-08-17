@@ -9,9 +9,9 @@ import {
   listAtgEngineRuntimes
 } from "../lib/atg-engine-bundles.mjs";
 
-test("two pinned ATG engine runtimes coexist at distinct same-origin URLs", () => {
+test("pinned ATG engine runtimes coexist at distinct same-origin URLs", () => {
   const runtimes = listAtgEngineRuntimes();
-  assert.deepEqual(runtimes, ["atg-2d-1.0.0", "atg-2d-1.0.1"]);
+  assert.deepEqual(runtimes, ["atg-2d-1.0.0", "atg-2d-1.0.1", "atg-2d-1.1.0"]);
   assert.equal(getAtgEngineBundleUrl(runtimes[0]), "/api/engine/atg-2d-1.0.0/pixi.min.mjs");
   assert.equal(getAtgEngineBundleUrl(runtimes[1]), "/api/engine/atg-2d-1.0.1/pixi.min.mjs");
 
@@ -20,6 +20,7 @@ test("two pinned ATG engine runtimes coexist at distinct same-origin URLs", () =
   assert.equal(first.packageVersion, "8.19.0");
   assert.equal(second.packageVersion, "8.19.0");
   assert.notEqual(first.runtimeVersion, second.runtimeVersion);
+  assert.equal(getAtgEngineBundle("atg-2d-1.1.0", "atg-engine-bridge.mjs").packageVersion, "1.1.0");
 });
 
 test("engine bundle manifest records provenance, integrity, and license", () => {
@@ -47,8 +48,8 @@ test("vendored Pixi module matches its integrity record and has no public CDN fa
 });
 
 test("ATG TV runtime uses a capped WebGL-first logical stage", async () => {
-  const bundle = getAtgEngineBundle("atg-2d-1.0.0", "atg-tv-runtime.mjs");
-  const source = await readFile(new URL("../engine-bundles/atg-tv-runtime-1.0.0/atg-tv-runtime.mjs", import.meta.url));
+  const bundle = getAtgEngineBundle("atg-2d-1.1.0", "atg-tv-runtime.mjs");
+  const source = await readFile(new URL("../engine-bundles/atg-tv-runtime-1.1.0/atg-tv-runtime.mjs", import.meta.url));
   const integrity = `sha384-${createHash("sha384").update(source).digest("base64")}`;
   const text = source.toString("utf8");
 
@@ -60,6 +61,8 @@ test("ATG TV runtime uses a capped WebGL-first logical stage", async () => {
   assert.match(text, /app\.ticker\.maxFPS = MAX_FPS/);
   assert.match(text, /new ResizeObserver/);
   assert.match(text, /app\.destroy\(\{ children: true, removeView: true, texture: true, textureSource: true \}\)/);
+  assert.match(text, /createAtgEngineBridge/);
+  assert.match(text, /target\.bridge\?\.destroy\(\)/);
 });
 
 test("optional Pixi transcoders stay on the same origin", () => {
