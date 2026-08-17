@@ -59,4 +59,29 @@ test("build prompts expose the normalized game engine metadata", () => {
   assert.match(prompt, /"type":"pixi"/);
   assert.match(prompt, /"runtimeVersion":"8\.19\.0"/);
   assert.match(prompt, /Preserve it unless the creator explicitly asks/);
+  assert.match(prompt, /ENGINE-BACKED GAME CONTRACT/);
+  assert.match(prompt, /window\.ATGEngine/);
+  assert.match(prompt, /engine\.gameplay\.createScene/);
+  assert.match(prompt, /game\/scenes\/\*\.mjs/);
+  assert.match(prompt, /scene\.createParticlePool/);
+  assert.match(prompt, /engine\.bridge\.onState/);
+  assert.match(prompt, /approved game asset paths and manifests/);
+  assert.match(prompt, /4K\/30 FPS budgets/);
+  assert.match(prompt, /public CDNs/);
+});
+
+test("engine prompts preserve phone DOM ownership and legacy prompts avoid engine APIs", () => {
+  const phonePrompt = buildProjectPrompt("Add a ready button.", "phone", {
+    formatVersion: 1,
+    migrationStatus: "upgraded",
+    runtimeVersion: "atg-2d-1.3.0",
+    type: "pixi"
+  });
+  assert.match(phonePrompt, /Phone edits must remain accessible DOM controls/);
+  assert.doesNotMatch(phonePrompt, /fall back to ad hoc TV DOM/);
+
+  const legacyPrompt = buildProjectPrompt("Polish the display.", "tv");
+  assert.match(legacyPrompt, /LEGACY GAME CONTRACT/);
+  assert.match(legacyPrompt, /Do not add PixiJS/);
+  assert.doesNotMatch(legacyPrompt, /ENGINE-BACKED GAME CONTRACT/);
 });
