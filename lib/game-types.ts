@@ -1,3 +1,6 @@
+import { DEFAULT_GAME_CONFIG as defaultGameConfig } from "./game-config.mjs";
+import type { GameEngineMetadata } from "./game-engine-metadata.mjs";
+
 export type GameConfig = {
   title: string;
   promptLabel: string;
@@ -5,15 +8,12 @@ export type GameConfig = {
   resetLabel: string;
   accentColor: string;
   initialPrompt: string;
+  engine: GameEngineMetadata;
 };
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
-  accentColor: "#4dd6c9",
-  buzzLabel: "",
-  initialPrompt: "",
-  promptLabel: "",
-  resetLabel: "",
-  title: "Buzzer Lobby"
+  ...defaultGameConfig,
+  engine: { ...defaultGameConfig.engine }
 };
 
 export type GamePlayer = {

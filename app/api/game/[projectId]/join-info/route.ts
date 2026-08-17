@@ -1,6 +1,7 @@
 import { getGameUrls } from "@/lib/network";
 import { getProject } from "@/lib/projects";
 import { readGameConfig } from "@/lib/project-game";
+import { GameEngineMetadataError } from "@/lib/game-engine-metadata.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,15 @@ export async function GET(request: Request, context: RouteContext) {
     return Response.json({ error: "Project was not found." }, { status: 404 });
   }
 
-  const config = await readGameConfig(project);
+  let config;
+  try {
+    config = await readGameConfig(project);
+  } catch (error) {
+    if (error instanceof GameEngineMetadataError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
 
   return Response.json({
     config,

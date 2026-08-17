@@ -4,6 +4,8 @@ import { randomUUID } from "crypto";
 import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { ATG_ROOT, PROJECTS_ROOT, TRASH_ROOT, useAzureStorageBackend } from "./env";
+import { normalizeGameConfig, parseGameConfig } from "./game-config.mjs";
+import { GameEngineMetadataError } from "./game-engine-metadata.mjs";
 import { isAllowedGameTextPath, normalizeGameTextFiles, validateGameTextPath } from "./game-file-rules.mjs";
 import { renderGameInstructionsTemplate } from "./game-instructions-template.mjs";
 import { DEFAULT_GAME_CONFIG, GameConfig } from "./game-types";
@@ -222,7 +224,10 @@ class LocalProjectStore implements ProjectStore {
     try {
       const raw = await readFile(path.join(getGamePath(project), GAME_CONFIG_FILE), "utf8");
       return parseGameConfig(raw, project.name);
-    } catch {
+    } catch (error) {
+      if (error instanceof GameEngineMetadataError) {
+        throw error;
+      }
       return { ...DEFAULT_GAME_CONFIG, title: project.name };
     }
   }
@@ -487,7 +492,10 @@ class AzureProjectStore implements ProjectStore {
     try {
       const raw = await this.readTextBlob(blobName(project, `${GAME_DIR}/${GAME_CONFIG_FILE}`));
       return parseGameConfig(raw, project.name);
-    } catch {
+    } catch (error) {
+      if (error instanceof GameEngineMetadataError) {
+        throw error;
+      }
       return { ...DEFAULT_GAME_CONFIG, title: project.name };
     }
   }
@@ -904,29 +912,8 @@ window.ATG.onState((state) => {
 `
 };
 
-function parseGameConfig(raw: string, projectName: string) {
-  const parsed = JSON.parse(raw) as Partial<GameConfig>;
-  return normalizeGameConfig({ ...DEFAULT_GAME_CONFIG, title: projectName, ...parsed });
-}
-
 function asConfigPatch(patch: unknown) {
   return typeof patch === "object" && patch !== null ? (patch as Partial<GameConfig>) : {};
-}
-
-function normalizeGameConfig(config: Partial<GameConfig>): GameConfig {
-  return {
-    accentColor: normalizeColor(config.accentColor, DEFAULT_GAME_CONFIG.accentColor),
-    buzzLabel: normalizeText(config.buzzLabel, DEFAULT_GAME_CONFIG.buzzLabel, 40),
-    initialPrompt: normalizeText(config.initialPrompt, DEFAULT_GAME_CONFIG.initialPrompt, 240),
-    promptLabel: normalizeText(config.promptLabel, DEFAULT_GAME_CONFIG.promptLabel, 40),
-    resetLabel: normalizeText(config.resetLabel, DEFAULT_GAME_CONFIG.resetLabel, 40),
-    title: normalizeText(config.title, DEFAULT_GAME_CONFIG.title, 80)
-  };
-}
-
-function normalizeText(value: unknown, fallback: string, maxLength: number) {
-  const text = typeof value === "string" ? value.trim() : "";
-  return (text || fallback).slice(0, maxLength);
 }
 
 function normalizeGameInstructions(value: unknown) {
@@ -1006,10 +993,6 @@ function assetSummary(assetPath: string, size: number, updatedAt: string): GameA
     size,
     updatedAt
   };
-}
-
-function normalizeColor(value: unknown, fallback: string) {
-  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
 }
 
 function normalizeGameAssetPath(segments: string[]) {
