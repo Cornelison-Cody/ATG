@@ -8,6 +8,7 @@ ATG serves game-engine libraries from same-origin, versioned URLs. Games must ne
 | --- | --- | --- | --- | --- |
 | `atg-2d-1.0.0` | `/api/engine/atg-2d-1.0.0/pixi.min.mjs` | `pixi.js` 8.19.0 | `sha384-xfbAeTbJR9wkgBgr3TUzVjX99MxVMJNZQ8gkusM6vzhyeHmjWlx75GwwgaENHGAh` | MIT, `engine-bundles/pixi-8.19.0/LICENSE` |
 | `atg-2d-1.0.1` | `/api/engine/atg-2d-1.0.1/pixi.min.mjs` | `pixi.js` 8.19.0 | `sha384-xfbAeTbJR9wkgBgr3TUzVjX99MxVMJNZQ8gkusM6vzhyeHmjWlx75GwwgaENHGAh` | MIT, `engine-bundles/pixi-8.19.0/LICENSE` |
+| `atg-2d-1.1.0` | `/api/engine/atg-2d-1.1.0/atg-tv-runtime.mjs` | ATG TV runtime 1.1.0 with `pixi.js` 8.19.0 | `sha384-UIJDMMHeNBBT52VS/SJ/ISQg+kDyHf6ACovvEw3O3Unx67eD9sBo/UYOVejX/SJZ` | ATG-owned runtime; PixiJS remains MIT |
 
 The two releases intentionally share the same PixiJS payload while the ATG gameplay layer is still being introduced. They remain separately addressable so an ATG runtime update can be added without changing games already pinned to an earlier release.
 
