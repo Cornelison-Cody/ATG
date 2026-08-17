@@ -4,8 +4,7 @@ import {
   canEditProject,
   getProjectPrincipal,
   principalRequiredResponse,
-  projectAccessResponse,
-  requireProjectRuntimeAccess
+  projectAccessResponse
 } from "@/lib/project-access";
 import { readGameInstructions, updateGameInstructions } from "@/lib/project-game";
 
@@ -22,11 +21,6 @@ export async function GET(request: Request, context: RouteContext) {
 
   if (!project || project.status === "deleted") {
     return Response.json({ error: "Project was not found." }, { status: 404 });
-  }
-
-  const authResponse = await requireProjectRuntimeAccess(request, project);
-  if (authResponse) {
-    return authResponse;
   }
 
   return Response.json({ instructions: await readGameInstructions(project) });

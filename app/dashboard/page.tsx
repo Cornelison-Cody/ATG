@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, FormEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeDollarSign,
   CheckCircle2,
   ChevronDown,
+  Copy,
+  File,
   Globe2,
   Hammer,
   KeyRound,
@@ -14,10 +16,15 @@ import {
   Menu,
   MessageSquareWarning,
   Monitor,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Pencil,
   Settings,
   Smartphone,
   Trash2,
+  Upload,
   UserPlus,
   X
 } from "lucide-react";
@@ -61,6 +68,14 @@ type ProjectCollaborator = {
   invitedAt: string;
 };
 
+type GameAssetSummary = {
+  contentType: string;
+  name: string;
+  path: string;
+  size: number;
+  updatedAt: string;
+};
+
 type StreamEvent =
   | { type: "status"; message: string }
   | { type: "session"; sessionId: string }
@@ -76,7 +91,20 @@ type ChatRunFeedback = {
 };
 
 type EditingTarget = "tv" | "phone";
+type BuildTarget = EditingTarget | "both";
 type ChatMode = "build" | "plan";
+type HiddenEditorPanel = "editor" | "preview" | null;
+type ChatSubmitOptions = {
+  chatMode?: ChatMode;
+  editingTarget?: BuildTarget;
+};
+
+const EDITOR_SPLIT_STORAGE_KEY = "atg.dashboard.editorSplitRatio";
+const EDITOR_HIDDEN_PANEL_STORAGE_KEY = "atg.dashboard.hiddenEditorPanel";
+const EDITOR_SPLIT_DESKTOP_QUERY = "(min-width: 981px)";
+const EDITOR_PANEL_MIN_WIDTH = 420;
+const PREVIEW_PANEL_MIN_WIDTH = 360;
+const EDITOR_SPLIT_CHROME_WIDTH = 28;
 
 type AccountUsageBudget = {
   budget: {
@@ -164,6 +192,7 @@ export default function Home() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
+  const [isAssetsOpen, setIsAssetsOpen] = useState(false);
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const [accountApiKey, setAccountApiKey] = useState("");
   const [isAccountKeyConfigured, setIsAccountKeyConfigured] = useState(false);
@@ -177,6 +206,11 @@ export default function Home() {
   const [instructions, setInstructions] = useState("");
   const [isLoadingInstructions, setIsLoadingInstructions] = useState(false);
   const [isSavingInstructions, setIsSavingInstructions] = useState(false);
+  const [assets, setAssets] = useState<GameAssetSummary[]>([]);
+  const [assetsMessage, setAssetsMessage] = useState("");
+  const [isLoadingAssets, setIsLoadingAssets] = useState(false);
+  const [isUploadingAsset, setIsUploadingAsset] = useState(false);
+  const [deletingAssetPath, setDeletingAssetPath] = useState("");
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -322,6 +356,7 @@ export default function Home() {
     setIsProjectMenuOpen(false);
     setIsProjectSettingsOpen(false);
     setIsInstructionsOpen(false);
+    setIsAssetsOpen(false);
     setActiveProject(null);
     setMessages([]);
     setInput("");
@@ -508,6 +543,104 @@ export default function Home() {
       setError(instructionsError instanceof Error ? instructionsError.message : "Unable to save instructions.");
     } finally {
       setIsSavingInstructions(false);
+    }
+  }
+
+  async function loadAssets(projectId: string) {
+    setIsLoadingAssets(true);
+    setAssetsMessage("");
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/assets`, { cache: "no-store" });
+      const data = (await response.json()) as { assets?: GameAssetSummary[]; error?: string };
+      if (!response.ok || !Array.isArray(data.assets)) {
+        throw new Error(data.error || `Failed to load assets (${response.status})`);
+      }
+      setAssets(data.assets);
+    } catch (assetError) {
+      setAssets([]);
+      setAssetsMessage(assetError instanceof Error ? assetError.message : "Unable to load assets.");
+    } finally {
+      setIsLoadingAssets(false);
+    }
+  }
+
+  async function openAssets() {
+    if (!activeProject) {
+      return;
+    }
+
+    setIsProjectMenuOpen(false);
+    setIsAssetsOpen(true);
+    await loadAssets(activeProject.id);
+  }
+
+  async function uploadAsset(file: File) {
+    if (!activeProject || isUploadingAsset) {
+      return;
+    }
+
+    setIsUploadingAsset(true);
+    setAssetsMessage("");
+    setError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`/api/projects/${activeProject.id}/assets`, {
+        body: formData,
+        method: "POST"
+      });
+      const data = (await response.json()) as { asset?: GameAssetSummary; error?: string };
+      if (!response.ok || !data.asset) {
+        throw new Error(data.error || `Failed to upload asset (${response.status})`);
+      }
+
+      setAssets((current) => [data.asset as GameAssetSummary, ...current.filter((item) => item.path !== data.asset?.path)]);
+      const relativePath = `./${data.asset.path}`;
+      setInput((current) => {
+        const trimmed = current.trimEnd();
+        return trimmed ? `${trimmed}\nUse asset ${relativePath}` : `Use asset ${relativePath}`;
+      });
+      setAssetsMessage(`Uploaded ${data.asset.name}.`);
+      setActiveProject((current) =>
+        current && current.id === activeProject.id ? { ...current, updatedAt: new Date().toISOString() } : current
+      );
+    } catch (assetError) {
+      const message = assetError instanceof Error ? assetError.message : "Unable to upload asset.";
+      setAssetsMessage(message);
+      setError(message);
+    } finally {
+      setIsUploadingAsset(false);
+    }
+  }
+
+  async function deleteAsset(assetPath: string) {
+    if (!activeProject || deletingAssetPath) {
+      return;
+    }
+
+    setDeletingAssetPath(assetPath);
+    setAssetsMessage("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${activeProject.id}/assets?path=${encodeURIComponent(assetPath)}`,
+        { method: "DELETE" }
+      );
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || `Failed to delete asset (${response.status})`);
+      }
+      setAssets((current) => current.filter((item) => item.path !== assetPath));
+      setAssetsMessage("Asset deleted.");
+      setActiveProject((current) =>
+        current && current.id === activeProject.id ? { ...current, updatedAt: new Date().toISOString() } : current
+      );
+    } catch (assetError) {
+      setAssetsMessage(assetError instanceof Error ? assetError.message : "Unable to delete asset.");
+    } finally {
+      setDeletingAssetPath("");
     }
   }
 
@@ -754,11 +887,15 @@ export default function Home() {
     }
   }
 
-  async function submitChat(promptValue?: string) {
+  async function submitChat(promptValue?: string, options: ChatSubmitOptions = {}) {
     const prompt = (promptValue ?? input).trim();
     if (!prompt || isRunning || !activeProject) {
       return;
     }
+    const effectiveChatMode = options.chatMode ?? chatMode;
+    const effectiveEditingTarget: BuildTarget = options.editingTarget ?? editingTarget;
+    const effectiveTargetName =
+      effectiveEditingTarget === "both" ? "full plan" : effectiveEditingTarget === "tv" ? "TV" : "phone";
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -785,9 +922,9 @@ export default function Home() {
       state: "connecting",
       label: "Connecting to Codex",
       details: [
-        chatMode === "plan"
-          ? `Queued your ${editingTarget === "tv" ? "TV" : "phone"} planning request.`
-          : `Queued your ${editingTarget === "tv" ? "TV" : "phone"} build request.`
+        effectiveChatMode === "plan"
+          ? `Queued your ${effectiveTargetName} planning request.`
+          : `Queued your ${effectiveTargetName} build request.`
       ],
       lastUpdateAt: now,
       startedAt: now
@@ -797,7 +934,12 @@ export default function Home() {
       const response = await fetch("/api/chat/codex-sdk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatMode, editingTarget, projectId: activeProject.id, message: prompt })
+        body: JSON.stringify({
+          chatMode: effectiveChatMode,
+          editingTarget: effectiveEditingTarget,
+          projectId: activeProject.id,
+          message: prompt
+        })
       });
 
       if (!response.ok || !response.body) {
@@ -959,13 +1101,24 @@ export default function Home() {
           input={input}
           isRunning={isRunning}
           messages={messages}
+          isUploadingAsset={isUploadingAsset}
           onInputChange={setInput}
           onOpenAccountSettings={openAccountSettings}
+          onOpenAssets={openAssets}
           onOpenInstructions={openInstructions}
           onOpenProjectSettings={openProjectSettings}
           onModeChange={setChatMode}
-          onQuickAnswer={(answer) => void submitChat(answer)}
+          onQuickAnswer={(answer, options) => {
+            if (options?.chatMode) {
+              setChatMode(options.chatMode);
+            }
+            if (options?.editingTarget === "tv" || options?.editingTarget === "phone") {
+              setEditingTarget(options.editingTarget);
+            }
+            void submitChat(answer, options);
+          }}
           onReturnToProjects={returnToProjects}
+          onUploadAsset={uploadAsset}
           onTargetChange={setEditingTarget}
           onToggleProjectMenu={() => setIsProjectMenuOpen((current) => !current)}
           projectId={activeProject.id}
@@ -1083,6 +1236,18 @@ export default function Home() {
           onChange={setInstructions}
           onClose={() => setIsInstructionsOpen(false)}
           onSave={saveInstructions}
+          projectId={activeProject.id}
+        />
+      ) : null}
+
+      {isAssetsOpen && activeProject ? (
+        <AssetsModal
+          assets={assets}
+          deletingAssetPath={deletingAssetPath}
+          isLoading={isLoadingAssets}
+          message={assetsMessage}
+          onClose={() => setIsAssetsOpen(false)}
+          onDelete={deleteAsset}
           projectId={activeProject.id}
         />
       ) : null}
@@ -1624,17 +1789,35 @@ function ProjectDashboard({
   onOpenProject: (projectId: string) => void;
   projects: ProjectSummary[];
 }) {
+  const [isMobileGuideExpanded, setIsMobileGuideExpanded] = useState(false);
+  const hasProjects = projects.length > 0;
+
   return (
-    <section className={styles.dashboard}>
+    <section className={`${styles.dashboard} ${hasProjects ? styles.dashboardHasProjects : ""}`}>
       <section className={styles.dashboardGuide} aria-labelledby="dashboard-guide-title">
-        <div>
+        <div className={styles.dashboardGuideIntro}>
           <h2 id="dashboard-guide-title">Start With a Game Idea</h2>
+          {hasProjects ? (
+            <button
+              aria-controls="dashboard-guide-steps"
+              aria-expanded={isMobileGuideExpanded}
+              className={styles.dashboardGuideToggle}
+              onClick={() => setIsMobileGuideExpanded((current) => !current)}
+              type="button"
+            >
+              {isMobileGuideExpanded ? "Hide" : "Show"}
+            </button>
+          ) : null}
           <p>
             Create a game, use Plan mode to shape the rules, then switch to Build mode to update the TV
             display and phone controller.
           </p>
         </div>
-        <ol aria-label="Game creation steps">
+        <ol
+          aria-label="Game creation steps"
+          className={isMobileGuideExpanded || !hasProjects ? styles.dashboardGuideStepsExpanded : undefined}
+          id="dashboard-guide-steps"
+        >
           <li>Create or open a game.</li>
           <li>Plan rounds, scoring, and player actions.</li>
           <li>Build the TV screen and phone controls.</li>
@@ -1893,23 +2076,117 @@ function InstructionsModal({
   );
 }
 
+function AssetsModal({
+  assets,
+  deletingAssetPath,
+  isLoading,
+  message,
+  onClose,
+  onDelete,
+  projectId
+}: {
+  assets: GameAssetSummary[];
+  deletingAssetPath: string;
+  isLoading: boolean;
+  message: string;
+  onClose: () => void;
+  onDelete: (assetPath: string) => void;
+  projectId: string;
+}) {
+  return (
+    <div className={styles.modalOverlay} role="presentation">
+      <section aria-label="Game assets" className={`${styles.modal} ${styles.assetsModal}`}>
+        <div className={styles.modalHeader}>
+          <div>
+            <h2>Game Assets</h2>
+            <p>Uploaded images and audio available to this game.</p>
+          </div>
+          <button
+            aria-label="Close assets dialog"
+            className={styles.closeButton}
+            onClick={onClose}
+            type="button"
+          >
+            <X aria-hidden="true" />
+          </button>
+        </div>
+        <div className={styles.assetsBody}>
+          {isLoading ? <p className={styles.emptyInstructions}>Loading assets...</p> : null}
+          {!isLoading && assets.length === 0 ? (
+            <p className={styles.emptyInstructions}>No assets uploaded yet.</p>
+          ) : null}
+          {!isLoading && assets.length > 0 ? (
+            <ul className={styles.assetList}>
+              {assets.map((asset) => {
+                const url = `/api/projects/${projectId}/game-assets/${asset.path}`;
+                const relativePath = `./${asset.path}`;
+                return (
+                  <li className={styles.assetItem} key={asset.path}>
+                    <div className={styles.assetPreview}>
+                      {asset.contentType.startsWith("image/") ? (
+                        <img alt="" src={url} />
+                      ) : asset.contentType.startsWith("audio/") ? (
+                        <audio controls src={url} />
+                      ) : (
+                        <File aria-hidden="true" />
+                      )}
+                    </div>
+                    <div className={styles.assetDetails}>
+                      <strong>{asset.name}</strong>
+                      <code>{relativePath}</code>
+                      <span>
+                        {asset.contentType || "application/octet-stream"} - {formatAssetSize(asset.size)}
+                      </span>
+                    </div>
+                    <div className={styles.assetActions}>
+                      <button
+                        aria-label={`Copy path for ${asset.name}`}
+                        onClick={() => void navigator.clipboard?.writeText(relativePath)}
+                        type="button"
+                      >
+                        <Copy aria-hidden="true" />
+                      </button>
+                      <button
+                        aria-label={`Delete ${asset.name}`}
+                        disabled={deletingAssetPath === asset.path}
+                        onClick={() => onDelete(asset.path)}
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          {message ? <p className={styles.settingsMessage}>{message}</p> : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ProjectChat({
   canSubmit,
   chatMode,
   editingTarget,
   input,
+  isUploadingAsset,
   isRunning,
   isProjectMenuOpen,
   messages,
   onInputChange,
   onModeChange,
   onOpenAccountSettings,
+  onOpenAssets,
   onOpenInstructions,
   onOpenProjectSettings,
   onQuickAnswer,
   onReturnToProjects,
   onTargetChange,
   onToggleProjectMenu,
+  onUploadAsset,
   onSubmit,
   projectId,
   projectName,
@@ -1920,18 +2197,21 @@ function ProjectChat({
   chatMode: ChatMode;
   editingTarget: EditingTarget;
   input: string;
+  isUploadingAsset: boolean;
   isRunning: boolean;
   isProjectMenuOpen: boolean;
   messages: ChatMessage[];
   onInputChange: (value: string) => void;
   onModeChange: (mode: ChatMode) => void;
   onOpenAccountSettings: () => void;
+  onOpenAssets: () => void;
   onOpenInstructions: () => void;
   onOpenProjectSettings: () => void;
-  onQuickAnswer: (answer: string) => void;
+  onQuickAnswer: (answer: string, options?: ChatSubmitOptions) => void;
   onReturnToProjects: () => void;
   onTargetChange: (target: EditingTarget) => void;
   onToggleProjectMenu: () => void;
+  onUploadAsset: (file: File) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   projectId: string;
   projectName: string;
@@ -1939,6 +2219,12 @@ function ProjectChat({
   runFeedback: ChatRunFeedback;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const workspaceRef = useRef<HTMLElement | null>(null);
+  const assetInputRef = useRef<HTMLInputElement | null>(null);
+  const [editorSplitRatio, setEditorSplitRatio] = useState<number | null>(null);
+  const [hiddenEditorPanel, setHiddenEditorPanel] = useState<HiddenEditorPanel>(null);
+  const [isDesktopSplit, setIsDesktopSplit] = useState(false);
+  const [isResizingEditor, setIsResizingEditor] = useState(false);
   const showFeedback = runFeedback.state !== "idle";
   const previewPath = buildGameAssetUrl(projectId, editingTarget, projectRevision);
   const latestAssistantMessage = [...messages]
@@ -1951,193 +2237,374 @@ function ProjectChat({
   const quickAnswersKey = quickAnswers.map((answer) => `${answer.label}:${answer.text}`).join("|");
   const hasConversation = messages.length > 0 || quickAnswers.length > 0;
   const targetName = editingTarget === "tv" ? "TV display" : "phone controller";
+  const buildHandoffAnswer = quickAnswers.find((answer) => Boolean(getPlanningQuickAction(answer.text).options?.chatMode));
+  const planningAnswers = buildHandoffAnswer ? [buildHandoffAnswer] : quickAnswers;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, quickAnswers.length, quickAnswersKey]);
+  }, [messages, planningAnswers.length, quickAnswersKey]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(EDITOR_SPLIT_DESKTOP_QUERY);
+    const updateDesktopSplit = () => setIsDesktopSplit(mediaQuery.matches);
+    updateDesktopSplit();
+    mediaQuery.addEventListener("change", updateDesktopSplit);
+
+    const storedRatio = Number.parseFloat(window.localStorage.getItem(EDITOR_SPLIT_STORAGE_KEY) ?? "");
+    if (Number.isFinite(storedRatio)) {
+      setEditorSplitRatio(Math.min(0.82, Math.max(0.34, storedRatio)));
+    }
+
+    const storedHiddenPanel = window.localStorage.getItem(EDITOR_HIDDEN_PANEL_STORAGE_KEY);
+    if (storedHiddenPanel === "editor" || storedHiddenPanel === "preview") {
+      setHiddenEditorPanel(storedHiddenPanel);
+    }
+
+    return () => mediaQuery.removeEventListener("change", updateDesktopSplit);
+  }, []);
+
+  useEffect(() => {
+    if (editorSplitRatio === null) return;
+    window.localStorage.setItem(EDITOR_SPLIT_STORAGE_KEY, editorSplitRatio.toFixed(4));
+  }, [editorSplitRatio]);
+
+  useEffect(() => {
+    if (hiddenEditorPanel) {
+      window.localStorage.setItem(EDITOR_HIDDEN_PANEL_STORAGE_KEY, hiddenEditorPanel);
+      return;
+    }
+
+    window.localStorage.removeItem(EDITOR_HIDDEN_PANEL_STORAGE_KEY);
+  }, [hiddenEditorPanel]);
+
+  useEffect(() => {
+    if (!isResizingEditor) return;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizingEditor]);
+
+  const updateEditorSplit = (clientX: number) => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+
+    const rect = workspace.getBoundingClientRect();
+    const availablePanelWidth = rect.width - EDITOR_SPLIT_CHROME_WIDTH;
+    if (availablePanelWidth < EDITOR_PANEL_MIN_WIDTH + PREVIEW_PANEL_MIN_WIDTH) return;
+
+    const nextEditorWidth = Math.min(
+      availablePanelWidth - PREVIEW_PANEL_MIN_WIDTH,
+      Math.max(EDITOR_PANEL_MIN_WIDTH, clientX - rect.left - 8)
+    );
+
+    setEditorSplitRatio(nextEditorWidth / availablePanelWidth);
+  };
+
+  const startEditorResize = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!isDesktopSplit || hiddenEditorPanel !== null) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateEditorSplit(event.clientX);
+    setIsResizingEditor(true);
+  };
+
+  useEffect(() => {
+    if (!isResizingEditor) return;
+
+    const handlePointerMove = (event: globalThis.PointerEvent) => updateEditorSplit(event.clientX);
+    const handlePointerUp = () => setIsResizingEditor(false);
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [isResizingEditor]);
+
+  const workspaceStyle =
+    editorSplitRatio === null
+      ? undefined
+      : ({
+          "--editor-panel-ratio": editorSplitRatio.toFixed(4)
+        } as CSSProperties & Record<"--editor-panel-ratio", string>);
+  const activeHiddenPanel = isDesktopSplit ? hiddenEditorPanel : null;
+  const workspaceClassName = [
+    styles.editorWorkspace,
+    isResizingEditor ? styles.resizingEditorWorkspace : "",
+    activeHiddenPanel === "editor" ? styles.editorPanelHidden : "",
+    activeHiddenPanel === "preview" ? styles.previewPanelHidden : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <section className={styles.editorWorkspace} aria-label="Project editor">
-      <section
-        className={`${styles.chatPanel} ${messages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
-        aria-label="Project chat"
-      >
-        <div className={styles.editorToolbar}>
-          <div className={styles.targetToggle} role="tablist" aria-label="Editing target">
-            <button
-              aria-selected={editingTarget === "tv"}
-              className={editingTarget === "tv" ? styles.activeTargetButton : undefined}
-              onClick={() => onTargetChange("tv")}
-              role="tab"
-              type="button"
-            >
-              <Monitor aria-hidden="true" />
-              TV
-            </button>
-            <button
-              aria-selected={editingTarget === "phone"}
-              className={editingTarget === "phone" ? styles.activeTargetButton : undefined}
-              onClick={() => onTargetChange("phone")}
-              role="tab"
-              type="button"
-            >
-              <Smartphone aria-hidden="true" />
-              Phone
-            </button>
-          </div>
-          <div className={styles.modeToggle} role="tablist" aria-label="Chat mode">
-            <button
-              aria-selected={chatMode === "build"}
-              className={chatMode === "build" ? styles.activeModeButton : undefined}
-              disabled={isRunning}
-              onClick={() => onModeChange("build")}
-              role="tab"
-              type="button"
-            >
-              <Hammer aria-hidden="true" />
-              Build
-            </button>
-            <button
-              aria-selected={chatMode === "plan"}
-              className={chatMode === "plan" ? styles.activeModeButton : undefined}
-              disabled={isRunning}
-              onClick={() => onModeChange("plan")}
-              role="tab"
-              type="button"
-            >
-              <Lightbulb aria-hidden="true" />
-              Plan
-            </button>
-          </div>
-        </div>
-
-        {hasConversation ? (
-          <div className={styles.messages}>
-            {messages.map((message) => {
-              return (
-                <div className={styles.messageGroup} key={message.id}>
-                  <article
-                    className={`${styles.message} ${styles[message.role]} ${
-                      message.status === "error" ? styles.error : ""
-                    }`}
-                  >
-                    <div className={styles.messageMeta}>
-                      <span>
-                        {message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}
-                      </span>
-                      {message.status === "running" ? <span>Running</span> : null}
-                    </div>
-                    <p>{message.content}</p>
-                  </article>
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-        ) : null}
-
-        {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
-
-        {quickAnswers.length > 0 && !isRunning ? (
-          <div className={styles.quickAnswers} aria-label="Planning answer choices">
-            <div className={styles.planningQuestion}>
-              <span>Codex asks</span>
-              <p>{planningQuestion || "Choose the next planning direction."}</p>
-            </div>
-            {quickAnswers.map((answer) => (
+    <section
+      className={workspaceClassName}
+      aria-label="Project editor"
+      ref={workspaceRef}
+      style={workspaceStyle}
+    >
+      {activeHiddenPanel === "editor" ? (
+        <button className={styles.panelRestoreRail} onClick={() => setHiddenEditorPanel(null)} type="button">
+          <PanelLeftOpen aria-hidden="true" />
+          Show editor
+        </button>
+      ) : (
+        <section
+          className={`${styles.chatPanel} ${messages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
+          aria-label="Project chat"
+        >
+          <div className={styles.editorToolbar}>
+            <div className={styles.targetToggle} role="tablist" aria-label="Editing target">
               <button
-                key={answer.label}
-                onClick={() => onQuickAnswer(`${answer.label}. ${answer.text}`)}
+                aria-selected={editingTarget === "tv"}
+                className={editingTarget === "tv" ? styles.activeTargetButton : undefined}
+                onClick={() => onTargetChange("tv")}
+                role="tab"
                 type="button"
               >
-                <span>{answer.label}</span>
-                {answer.text}
+                <Monitor aria-hidden="true" />
+                TV
               </button>
-            ))}
-          </div>
-        ) : null}
-
-        <form className={styles.composer} onSubmit={onSubmit}>
-          {chatMode === "build" ? (
-            <div className={styles.composerMeta}>
-              <span>Build target</span>
-              <strong>{targetName}</strong>
+              <button
+                aria-selected={editingTarget === "phone"}
+                className={editingTarget === "phone" ? styles.activeTargetButton : undefined}
+                onClick={() => onTargetChange("phone")}
+                role="tab"
+                type="button"
+              >
+                <Smartphone aria-hidden="true" />
+                Phone
+              </button>
             </div>
-          ) : null}
-          <p className={styles.composerTip}>
-            {chatMode === "plan"
-              ? "Plan mode is for rules, rounds, scoring, and player flow. It will help you decide what to build next."
-              : `Build mode changes the ${targetName}. Use the TV target for the shared screen and Phone for player controls.`}
-          </p>
-          <textarea
-            aria-label="Message Codex"
-            disabled={isRunning}
-            onChange={(event) => onInputChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-            placeholder={
-              chatMode === "plan"
-                ? "Ask Codex to help plan gameplay choices..."
-                : `Ask Codex to update the ${targetName}...`
-            }
-            rows={4}
-            value={input}
-          />
-          <button disabled={!canSubmit} type="submit">
-            {isRunning ? "Running" : chatMode === "plan" ? "Plan" : `Build ${editingTarget === "tv" ? "TV" : "Phone"}`}
-          </button>
-        </form>
-      </section>
-
-      <aside className={styles.previewPanel} aria-label={`${editingTarget} UI preview`}>
-        <div className={styles.previewHeader}>
-          <div className={styles.previewTitleGroup}>
-            <h2>{projectName}</h2>
-            <span>{editingTarget === "tv" ? "TV Preview" : "Phone Preview"}</span>
-          </div>
-          <div className={styles.previewMenuActions}>
-            <button
-              aria-expanded={isProjectMenuOpen}
-              aria-label="Open game menu"
-              className={styles.menuButton}
-              onClick={onToggleProjectMenu}
-              type="button"
-            >
-              <Menu aria-hidden="true" />
-            </button>
-            {isProjectMenuOpen ? (
-              <div className={styles.menu} role="menu">
-                <a href={`/tv/${projectId}`} role="menuitem">
-                  Open TV
-                </a>
-                <a href={`/join/${projectId}`} role="menuitem">
-                  Open Phone
-                </a>
-                <button onClick={onOpenInstructions} role="menuitem" type="button">
-                  Game Instructions
+            <div className={styles.editorToolbarActions}>
+              <div className={styles.modeToggle} role="tablist" aria-label="Chat mode">
+                <button
+                  aria-selected={chatMode === "build"}
+                  className={chatMode === "build" ? styles.activeModeButton : undefined}
+                  disabled={isRunning}
+                  onClick={() => onModeChange("build")}
+                  role="tab"
+                  type="button"
+                >
+                  <Hammer aria-hidden="true" />
+                  Build
                 </button>
-                <button onClick={onOpenProjectSettings} role="menuitem" type="button">
-                  Project Settings
-                </button>
-                <button onClick={onOpenAccountSettings} role="menuitem" type="button">
-                  Account Settings
-                </button>
-                <button onClick={onReturnToProjects} role="menuitem" type="button">
-                  Dashboard
+                <button
+                  aria-selected={chatMode === "plan"}
+                  className={chatMode === "plan" ? styles.activeModeButton : undefined}
+                  disabled={isRunning}
+                  onClick={() => onModeChange("plan")}
+                  role="tab"
+                  type="button"
+                >
+                  <Lightbulb aria-hidden="true" />
+                  Plan
                 </button>
               </div>
-            ) : null}
+              <button
+                aria-label="Hide editor pane"
+                className={styles.panelVisibilityButton}
+                onClick={() => setHiddenEditorPanel("editor")}
+                type="button"
+              >
+                <PanelLeftClose aria-hidden="true" />
+              </button>
+            </div>
           </div>
-        </div>
-        <ScaledPreviewFrame
-          editingTarget={editingTarget}
-          previewPath={previewPath}
-          title={`${projectName} ${editingTarget} preview`}
+
+          {hasConversation ? (
+            <div className={styles.messages}>
+              {messages.map((message) => {
+                return (
+                  <div className={styles.messageGroup} key={message.id}>
+                    <article
+                      className={`${styles.message} ${styles[message.role]} ${
+                        message.status === "error" ? styles.error : ""
+                      }`}
+                    >
+                      <div className={styles.messageMeta}>
+                        <span>
+                          {message.role === "assistant" ? "Codex" : message.role === "user" ? "You" : "ATG"}
+                        </span>
+                        {message.status === "running" ? <span>Running</span> : null}
+                      </div>
+                      <p>{message.content}</p>
+                    </article>
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+          ) : null}
+
+          {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
+
+          {planningAnswers.length > 0 && !isRunning ? (
+            <div className={styles.quickAnswers} aria-label="Planning answer choices">
+              <div className={styles.planningQuestion}>
+                <span>{buildHandoffAnswer ? "Next step" : "Codex asks"}</span>
+                <p>{planningQuestion || "Choose the next planning direction."}</p>
+              </div>
+              {planningAnswers.map((answer) => (
+                <button
+                  key={answer.label}
+                  onClick={() => {
+                    const action = getPlanningQuickAction(answer.text);
+                    onQuickAnswer(action.prompt ?? `${answer.label}. ${answer.text}`, action.options);
+                  }}
+                  type="button"
+                >
+                  <span>{answer.label}</span>
+                  {answer.text}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <form className={styles.composer} onSubmit={onSubmit}>
+            {chatMode === "build" ? (
+              <div className={styles.composerMeta}>
+                <span>Build target</span>
+                <strong>{targetName}</strong>
+              </div>
+            ) : null}
+            <p className={styles.composerTip}>
+              {chatMode === "plan"
+                ? "Plan mode is for rules, rounds, scoring, and player flow. It will help you decide what to build next."
+                : `Build mode changes the ${targetName}. Use the TV target for the shared screen and Phone for player controls.`}
+            </p>
+            <textarea
+              aria-label="Message Codex"
+              disabled={isRunning}
+              onChange={(event) => onInputChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+              placeholder={
+                chatMode === "plan"
+                  ? "Ask Codex to help plan gameplay choices..."
+                  : `Ask Codex to update the ${targetName}...`
+              }
+              rows={4}
+              value={input}
+            />
+            <input
+              accept="image/gif,image/jpeg,image/png,image/svg+xml,image/webp,audio/mpeg,audio/ogg,audio/wav,.mp3,.ogg,.wav"
+              className={styles.assetUploadInput}
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) {
+                  onUploadAsset(file);
+                }
+                event.currentTarget.value = "";
+              }}
+              ref={assetInputRef}
+              type="file"
+            />
+            <button
+              aria-label="Upload game asset"
+              className={styles.assetUploadButton}
+              disabled={isRunning || isUploadingAsset}
+              onClick={() => assetInputRef.current?.click()}
+              type="button"
+            >
+              <Upload aria-hidden="true" />
+              {isUploadingAsset ? "Uploading" : "Asset"}
+            </button>
+            <button disabled={!canSubmit} type="submit">
+              {isRunning
+                ? "Running"
+                : chatMode === "plan"
+                  ? "Plan"
+                  : `Build ${editingTarget === "tv" ? "TV" : "Phone"}`}
+            </button>
+          </form>
+        </section>
+      )}
+
+      {activeHiddenPanel === null ? (
+        <button
+          aria-label="Resize editor and preview panes"
+          className={styles.editorResizeHandle}
+          onPointerDown={startEditorResize}
+          type="button"
         />
-      </aside>
+      ) : null}
+
+      {activeHiddenPanel === "preview" ? (
+        <button className={styles.panelRestoreRail} onClick={() => setHiddenEditorPanel(null)} type="button">
+          <PanelRightOpen aria-hidden="true" />
+          Show preview
+        </button>
+      ) : (
+        <aside className={styles.previewPanel} aria-label={`${editingTarget} UI preview`}>
+          <div className={styles.previewHeader}>
+            <div className={styles.previewTitleGroup}>
+              <h2>{projectName}</h2>
+              <span>{editingTarget === "tv" ? "TV Preview" : "Phone Preview"}</span>
+            </div>
+            <div className={styles.previewMenuActions}>
+              <button
+                aria-label="Hide preview pane"
+                className={styles.panelVisibilityButton}
+                onClick={() => setHiddenEditorPanel("preview")}
+                type="button"
+              >
+                <PanelRightClose aria-hidden="true" />
+              </button>
+              <button
+                aria-expanded={isProjectMenuOpen}
+                aria-label="Open game menu"
+                className={styles.menuButton}
+                onClick={onToggleProjectMenu}
+                type="button"
+              >
+                <Menu aria-hidden="true" />
+              </button>
+              {isProjectMenuOpen ? (
+                <div className={styles.menu} role="menu">
+                  <a href={`/tv/${projectId}`} role="menuitem">
+                    Open TV
+                  </a>
+                  <a href={`/join/${projectId}`} role="menuitem">
+                    Open Phone
+                  </a>
+                  <button onClick={onOpenInstructions} role="menuitem" type="button">
+                    Game Instructions
+                  </button>
+                  <button onClick={onOpenAssets} role="menuitem" type="button">
+                    Game Assets
+                  </button>
+                  <button onClick={onOpenProjectSettings} role="menuitem" type="button">
+                    Project Settings
+                  </button>
+                  <button onClick={onOpenAccountSettings} role="menuitem" type="button">
+                    Account Settings
+                  </button>
+                  <button onClick={onReturnToProjects} role="menuitem" type="button">
+                    Dashboard
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <ScaledPreviewFrame
+            editingTarget={editingTarget}
+            previewPath={previewPath}
+            title={`${projectName} ${editingTarget} preview`}
+          />
+        </aside>
+      )}
     </section>
   );
 }
@@ -2152,7 +2619,33 @@ function extractPlanningChoices(content: string) {
     .filter((choice): choice is { label: string; text: string } => Boolean(choice));
 }
 
+function formatAssetSize(size: number) {
+  if (!Number.isFinite(size) || size <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB"];
+  let value = size;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
+}
+
 function extractPlanningQuestion(content: string) {
+  if (/Ready to build\?/i.test(content)) {
+    return "Ready to build?";
+  }
+
+  const questionLine = content.match(/^\s*Question\s*[:\-]\s*(.+)$/im);
+  if (questionLine) {
+    return questionLine[1].trim();
+  }
+
   const compactContent = content.replace(/\s+/g, " ").trim();
   const beforeChoices = compactContent.match(/^(.*?)(?=\s(?:[-*]\s*)?[A-D][).:-]\s+)/i)?.[1] ?? compactContent;
 
@@ -2160,6 +2653,17 @@ function extractPlanningQuestion(content: string) {
     .replace(/^Question\s*[:\-]\s*/i, "")
     .replace(/^Codex asks\s*[:\-]\s*/i, "")
     .trim();
+}
+
+function getPlanningQuickAction(text: string): { prompt?: string; options?: ChatSubmitOptions } {
+  const normalized = text.trim().toLowerCase();
+  if (/^(implement|build)\s+(the\s+)?(proposed\s+)?plan\b/.test(normalized)) {
+    return {
+      prompt: "Implement the proposed plan across every affected part of the game.",
+      options: { chatMode: "build", editingTarget: "both" }
+    };
+  }
+  return {};
 }
 
 function ScaledPreviewFrame({

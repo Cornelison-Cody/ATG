@@ -1,7 +1,7 @@
 import { CosmosClient, type Container } from "@azure/cosmos";
 import { BlobServiceClient, type ContainerClient } from "@azure/storage-blob";
 import { randomUUID } from "crypto";
-import { mkdir, readFile, readdir, rename, stat, writeFile } from "fs/promises";
+import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { ATG_ROOT, PROJECTS_ROOT, TRASH_ROOT, useAzureStorageBackend } from "./env";
 import { isAllowedGameTextPath, normalizeGameTextFiles, validateGameTextPath } from "./game-file-rules.mjs";
@@ -16,10 +16,27 @@ export const GAME_INSTRUCTIONS_FILE = "instructions.md";
 
 const DB_PATH = path.join(ATG_ROOT, "projects.json");
 const PROJECTS_CONTAINER = process.env.AZURE_COSMOS_PROJECTS_CONTAINER || "projects";
+const UPLOADED_ASSETS_DIR = "assets";
+const MAX_UPLOADED_ASSET_BYTES = 10 * 1024 * 1024;
+const UPLOADED_ASSET_EXTENSIONS = new Set([".gif", ".jpg", ".jpeg", ".mp3", ".ogg", ".png", ".svg", ".wav", ".webp"]);
 
 type GameAsset = {
   content: Buffer;
   contentType: string;
+};
+
+export type GameAssetSummary = {
+  contentType: string;
+  name: string;
+  path: string;
+  size: number;
+  updatedAt: string;
+};
+
+export type GameAssetUpload = {
+  content: Buffer;
+  contentType: string;
+  filename: string;
 };
 
 export type GameTextFile = {
@@ -46,6 +63,9 @@ interface ProjectStore {
   readGameInstructions(project: ProjectRecord): Promise<string>;
   updateGameInstructions(project: ProjectRecord, instructions: string): Promise<string>;
   readGameAsset(project: ProjectRecord, segments: string[]): Promise<GameAsset>;
+  listUploadedGameAssets(project: ProjectRecord): Promise<GameAssetSummary[]>;
+  uploadGameAsset(project: ProjectRecord, asset: GameAssetUpload): Promise<GameAssetSummary>;
+  deleteGameAsset(project: ProjectRecord, assetPath: string): Promise<void>;
   exportGameTextFiles(project: ProjectRecord): Promise<GameTextFile[]>;
   updateGameTextFiles(project: ProjectRecord, files: GameTextFile[]): Promise<GameTextFile[]>;
 }
@@ -238,6 +258,39 @@ class LocalProjectStore implements ProjectStore {
       content,
       contentType: contentTypeForPath(assetPath)
     };
+  }
+
+  async listUploadedGameAssets(project: ProjectRecord) {
+    await this.ensureGameFiles(project);
+    return listLocalUploadedAssets(getGamePath(project));
+  }
+
+  async uploadGameAsset(project: ProjectRecord, asset: GameAssetUpload) {
+    const normalized = normalizeUploadedGameAsset(asset);
+    await this.ensureGameFiles(project);
+    const targetPath = resolveLocalGameAsset(project, normalized.path.split("/"));
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await writeFile(targetPath, normalized.content);
+    const info = await stat(targetPath);
+    await this.updateProject(project.id, (item) => {
+      item.updatedAt = new Date().toISOString();
+    });
+    return assetSummary(normalized.path, info.size, info.mtime.toISOString());
+  }
+
+  async deleteGameAsset(project: ProjectRecord, assetPath: string) {
+    const normalizedPath = normalizeUploadedAssetPath(assetPath);
+    try {
+      await unlink(resolveLocalGameAsset(project, normalizedPath.split("/")));
+    } catch (error) {
+      if (isMissingFileError(error)) {
+        throw new ProjectStoreError("Game asset was not found.", 404);
+      }
+      throw error;
+    }
+    await this.updateProject(project.id, (item) => {
+      item.updatedAt = new Date().toISOString();
+    });
   }
 
   async exportGameTextFiles(project: ProjectRecord) {
@@ -482,6 +535,45 @@ class AzureProjectStore implements ProjectStore {
     };
   }
 
+  async listUploadedGameAssets(project: ProjectRecord) {
+    await this.ensureGameFiles(project);
+    const prefix = blobName(project, `${GAME_DIR}/assets/`);
+    const assets: GameAssetSummary[] = [];
+
+    for await (const blob of this.getBlobContainer().listBlobsFlat({ prefix })) {
+      const assetPath = blob.name.slice(blobName(project, `${GAME_DIR}/`).length);
+      assets.push(assetSummary(assetPath, blob.properties.contentLength ?? 0, blob.properties.lastModified?.toISOString() ?? ""));
+    }
+
+    return assets.sort((left, right) => left.path.localeCompare(right.path));
+  }
+
+  async uploadGameAsset(project: ProjectRecord, asset: GameAssetUpload) {
+    const normalized = normalizeUploadedGameAsset(asset);
+    await this.ensureGameFiles(project);
+    await this.writeBinaryBlob(
+      blobName(project, `${GAME_DIR}/${normalized.path}`),
+      normalized.content,
+      contentTypeForPath(normalized.path)
+    );
+    await this.updateProject(project.id, (item) => {
+      item.updatedAt = new Date().toISOString();
+    });
+    return assetSummary(normalized.path, normalized.content.byteLength, new Date().toISOString());
+  }
+
+  async deleteGameAsset(project: ProjectRecord, assetPath: string) {
+    const normalizedPath = normalizeUploadedAssetPath(assetPath);
+    const blob = this.getBlobContainer().getBlockBlobClient(blobName(project, `${GAME_DIR}/${normalizedPath}`));
+    const result = await blob.deleteIfExists();
+    if (!result.succeeded) {
+      throw new ProjectStoreError("Game asset was not found.", 404);
+    }
+    await this.updateProject(project.id, (item) => {
+      item.updatedAt = new Date().toISOString();
+    });
+  }
+
   async exportGameTextFiles(project: ProjectRecord) {
     await this.ensureGameFiles(project);
     const prefix = blobName(project, `${GAME_DIR}/`);
@@ -583,6 +675,13 @@ class AzureProjectStore implements ProjectStore {
   private async writeBlob(name: string, content: string, contentType: string) {
     const blob = this.getBlobContainer().getBlockBlobClient(name);
     await blob.upload(content, Buffer.byteLength(content), {
+      blobHTTPHeaders: { blobContentType: contentType }
+    });
+  }
+
+  private async writeBinaryBlob(name: string, content: Buffer, contentType: string) {
+    const blob = this.getBlobContainer().getBlockBlobClient(name);
+    await blob.uploadData(content, {
       blobHTTPHeaders: { blobContentType: contentType }
     });
   }
@@ -847,6 +946,68 @@ function normalizeGameInstructions(value: unknown) {
   return `${value.replace(/\r\n?/g, "\n").trimEnd()}\n`;
 }
 
+function normalizeUploadedGameAsset(asset: GameAssetUpload) {
+  const cleanName = sanitizeAssetFileName(asset.filename);
+  const extension = path.extname(cleanName).toLowerCase();
+  if (!UPLOADED_ASSET_EXTENSIONS.has(extension)) {
+    throw new ProjectStoreError("Asset file type is not supported.", 400);
+  }
+
+  if (asset.content.byteLength === 0) {
+    throw new ProjectStoreError("Asset file cannot be empty.", 400);
+  }
+
+  if (asset.content.byteLength > MAX_UPLOADED_ASSET_BYTES) {
+    throw new ProjectStoreError("Asset files must be 10 MB or smaller.", 413);
+  }
+
+  return {
+    content: asset.content,
+    path: `${UPLOADED_ASSETS_DIR}/${cleanName}`
+  };
+}
+
+function sanitizeAssetFileName(filename: string) {
+  const parsed = path.parse(filename);
+  const extension = parsed.ext.toLowerCase();
+  const base = parsed.name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72);
+
+  if (!base || !extension) {
+    throw new ProjectStoreError("Asset file name is required.", 400);
+  }
+
+  return `${base}${extension}`;
+}
+
+function normalizeUploadedAssetPath(assetPath: string) {
+  const segments = normalizeGameAssetPath(assetPath.split("/")).split("/");
+  if (segments.length !== 2 || segments[0] !== UPLOADED_ASSETS_DIR) {
+    throw new ProjectStoreError("Only uploaded game assets can be deleted.", 400);
+  }
+
+  const extension = path.extname(segments[1]).toLowerCase();
+  if (!UPLOADED_ASSET_EXTENSIONS.has(extension)) {
+    throw new ProjectStoreError("Asset file type is not supported.", 400);
+  }
+
+  return segments.join("/");
+}
+
+function assetSummary(assetPath: string, size: number, updatedAt: string): GameAssetSummary {
+  return {
+    contentType: contentTypeForPath(assetPath),
+    name: path.basename(assetPath),
+    path: assetPath,
+    size,
+    updatedAt
+  };
+}
+
 function normalizeColor(value: unknown, fallback: string) {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
 }
@@ -878,6 +1039,39 @@ async function listLocalGameTextFiles(rootPath: string, relativePath = ""): Prom
   }
 
   return files.sort((left, right) => left.localeCompare(right));
+}
+
+async function listLocalUploadedAssets(gamePath: string) {
+  const assetsPath = path.join(gamePath, UPLOADED_ASSETS_DIR);
+  let entries;
+  try {
+    entries = await readdir(assetsPath, { withFileTypes: true });
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  const assets: GameAssetSummary[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    const assetPath = `${UPLOADED_ASSETS_DIR}/${entry.name}`;
+    try {
+      normalizeUploadedAssetPath(assetPath);
+      const info = await stat(path.join(assetsPath, entry.name));
+      assets.push(assetSummary(assetPath, info.size, info.mtime.toISOString()));
+    } catch (error) {
+      if (!(error instanceof ProjectStoreError)) {
+        throw error;
+      }
+    }
+  }
+
+  return assets.sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function resolveLocalGameAsset(project: ProjectRecord, segments: string[]) {
@@ -912,8 +1106,12 @@ function contentTypeForPath(filePath: string) {
     ".jpeg": "image/jpeg",
     ".json": "application/json; charset=utf-8",
     ".md": "text/markdown; charset=utf-8",
+    ".mp3": "audio/mpeg",
+    ".ogg": "audio/ogg",
     ".png": "image/png",
-    ".svg": "image/svg+xml"
+    ".svg": "image/svg+xml",
+    ".wav": "audio/wav",
+    ".webp": "image/webp"
   };
 
   return contentTypes[extension] ?? "application/octet-stream";

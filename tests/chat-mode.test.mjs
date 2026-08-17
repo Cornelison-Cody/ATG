@@ -9,13 +9,25 @@ test("chat mode defaults to build unless planning is requested", () => {
   assert.equal(normalizeChatMode(null), "build");
 });
 
-test("planning requests ask one multiple choice gameplay question without file edits", () => {
-  const prompt = buildPlanningRequest("Make a party trivia game.", "phone");
+test("planning requests ask bounded questions and offer implementation handoff", () => {
+  const prompt = buildPlanningRequest("Make a party trivia game.", "phone", {
+    recentContext: "user: It should use teams.\nassistant: Question: How should scoring work?"
+  });
 
   assert.match(prompt, /Do not edit files yet/);
-  assert.match(prompt, /Ask exactly one concise multiple-choice question/);
+  assert.match(prompt, /Planning should be bounded/);
+  assert.match(prompt, /Stop asking questions once the game loop/);
   assert.match(prompt, /Do not ask more than one question/);
+  assert.match(prompt, /Decisions so far:/);
+  assert.match(prompt, /Proposed plan:/);
+  assert.match(prompt, /Ready to build\?/);
+  assert.match(prompt, /A\. Implement plan/);
+  assert.match(prompt, /B\. Keep planning/);
+  assert.doesNotMatch(prompt, /Implement TV display/);
+  assert.doesNotMatch(prompt, /Implement phone controller/);
+  assert.doesNotMatch(prompt, /Implement both TV and phone/);
   assert.match(prompt, /A\. <choice>/);
   assert.match(prompt, /phone controller/);
+  assert.match(prompt, /user: It should use teams/);
   assert.match(prompt, /Make a party trivia game/);
 });
