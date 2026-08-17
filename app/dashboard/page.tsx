@@ -2543,10 +2543,6 @@ function ProjectChat({
 
       {activeHiddenPanel === "preview" ? (
         <div className={styles.collapsedPreviewRail}>
-          <button className={styles.panelRestoreRail} onClick={() => setHiddenEditorPanel(null)} type="button">
-            <PanelRightOpen aria-hidden="true" />
-            Show preview
-          </button>
           <ProjectMenu
             className={styles.collapsedPreviewMenuActions}
             isOpen={isProjectMenuOpen}
@@ -2558,6 +2554,10 @@ function ProjectChat({
             onToggle={onToggleProjectMenu}
             projectId={projectId}
           />
+          <button className={styles.panelRestoreRail} onClick={() => setHiddenEditorPanel(null)} type="button">
+            <PanelRightOpen aria-hidden="true" />
+            Show preview
+          </button>
         </div>
       ) : (
         <aside className={styles.previewPanel} aria-label={`${editingTarget} UI preview`}>
