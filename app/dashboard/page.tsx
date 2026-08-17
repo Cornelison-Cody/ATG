@@ -29,6 +29,7 @@ import {
   X
 } from "lucide-react";
 import { InstructionsViewer } from "@/components/instructions-viewer";
+import { EngineDiagnostics } from "@/components/engine-diagnostics";
 import { buildGameAssetUrl } from "@/lib/game-asset-url.mjs";
 import { PROJECT_NAME_MAX_LENGTH } from "@/lib/project-name-rules.mjs";
 import styles from "./page.module.css";
@@ -2726,6 +2727,7 @@ function ScaledPreviewFrame({
   title: string;
 }) {
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [scale, setScale] = useState(1);
   const virtualSize = editingTarget === "tv" ? { height: 720, width: 1280 } : { height: 844, width: 390 };
 
@@ -2751,6 +2753,7 @@ function ScaledPreviewFrame({
     <div className={styles.scaledPreviewFrame} ref={frameRef}>
       <iframe
         key={previewPath}
+        ref={iframeRef}
         sandbox="allow-scripts"
         src={previewPath}
         style={{
@@ -2760,6 +2763,7 @@ function ScaledPreviewFrame({
         }}
         title={title}
       />
+      {editingTarget === "tv" ? <EngineDiagnostics frameRef={iframeRef} /> : null}
     </div>
   );
 }

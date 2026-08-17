@@ -1,0 +1,83 @@
+.panel {
+  background: rgba(7, 9, 13, 0.94);
+  border: 1px solid rgba(77, 214, 201, 0.42);
+  border-radius: 8px;
+  bottom: 12px;
+  color: #eef5ff;
+  font-size: 0.72rem;
+  left: 12px;
+  max-width: min(420px, calc(100% - 24px));
+  padding: 10px;
+  position: absolute;
+  z-index: 2;
+}
+
+.heading {
+  align-items: center;
+  display: flex;
+  font-weight: 800;
+  justify-content: space-between;
+  text-transform: uppercase;
+}
+
+.live {
+  align-items: center;
+  color: #70e5d6;
+  display: inline-flex;
+  font-size: 0.62rem;
+  gap: 5px;
+}
+
+.live i {
+  background: #70e5d6;
+  border-radius: 50%;
+  display: block;
+  height: 6px;
+  width: 6px;
+}
+
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.metric,
+.metricWarning {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 5px;
+  display: grid;
+  gap: 2px;
+  min-width: 58px;
+  padding: 5px 7px;
+}
+
+.metric span,
+.metricWarning span {
+  color: #9aabbf;
+  font-size: 0.61rem;
+  text-transform: uppercase;
+}
+
+.metric strong,
+.metricWarning strong {
+  font-size: 0.75rem;
+}
+
+.metricWarning {
+  background: rgba(255, 196, 92, 0.14);
+  color: #ffd58a;
+}
+
+.warnings {
+  color: #ffd58a;
+  line-height: 1.35;
+  margin: 8px 0 0;
+  padding-left: 17px;
+}
+
+.note {
+  color: #9aabbf;
+  margin: 8px 0 0;
+}

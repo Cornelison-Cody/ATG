@@ -24,7 +24,7 @@ export async function GET(request: Request, context: RouteContext) {
     const engine = isHtml && isTvGameAsset(assetSegments) ? (await readGameConfig(project)).engine : null;
     const nonce = engine?.type === "pixi" ? randomBytes(18).toString("base64") : "";
     const body = isHtml
-      ? injectAtgSdk(asset.content.toString("utf8"), engine, nonce)
+      ? injectAtgSdk(asset.content.toString("utf8"), engine, nonce, request.url)
       : new Uint8Array(asset.content);
 
     return new Response(body, {
@@ -42,7 +42,12 @@ export async function GET(request: Request, context: RouteContext) {
   }
 }
 
-function injectAtgSdk(html: string, engine: Awaited<ReturnType<typeof readGameConfig>>["engine"] | null, nonce: string) {
+function injectAtgSdk(
+  html: string,
+  engine: Awaited<ReturnType<typeof readGameConfig>>["engine"] | null,
+  nonce: string,
+  requestUrl: string
+) {
   const script = `<script${nonce ? ` nonce="${nonce}"` : ""}>
 (() => {
   const listeners = new Set();
@@ -115,12 +120,107 @@ function injectAtgSdk(html: string, engine: Awaited<ReturnType<typeof readGameCo
   const engineScript = engine?.type === "pixi"
     ? engineBootstrapScript(engine, nonce)
     : "";
+  const diagnosticsScript = engine?.type === "pixi" && new URL(requestUrl).searchParams.has("atgEditorPreview")
+    ? engineDiagnosticsScript(nonce)
+    : "";
 
   if (html.includes("</head>")) {
-    return html.replace("</head>", `${script}${engineScript}</head>`);
+    return html.replace("</head>", `${script}${engineScript}${diagnosticsScript}</head>`);
   }
 
-  return `${script}${engineScript}${html}`;
+  return `${script}${engineScript}${diagnosticsScript}${html}`;
+}
+
+function engineDiagnosticsScript(nonce: string) {
+  return `<script nonce="${nonce}">
+(() => {
+  const FRAME_BUDGET_MS = 1000 / 30;
+  const frameTimes = [];
+  let frameCount = 0;
+  let lastFrame = 0;
+  let windowStarted = performance.now();
+  let animationFrame = 0;
+  let assetFailures = 0;
+  let audioFailures = 0;
+  let engineErrors = 0;
+  let lastError = "";
+  let reportTimer = 0;
+
+  const percentile = (values, rank) => {
+    const sorted = [...values].sort((left, right) => left - right);
+    return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * rank) - 1)] || 0;
+  };
+  const post = (status, engine) => {
+    const now = performance.now();
+    const elapsed = Math.max(1, now - windowStarted);
+    const averageFrameTime = frameTimes.length
+      ? frameTimes.reduce((sum, value) => sum + value, 0) / frameTimes.length
+      : 0;
+    const p95FrameTime = percentile(frameTimes, 0.95);
+    const warnings = [];
+    if (p95FrameTime > FRAME_BUDGET_MS) warnings.push("Frame time is above the 30 FPS target; reduce particles, filters, or changing text.");
+    if (assetFailures > 0) warnings.push("One or more assets failed to load; check the asset path, format, and project asset library.");
+    if (audioFailures > 0) warnings.push("Audio failed in the preview; check the sound asset and browser audio unlock state.");
+    if (engineErrors > 0) warnings.push("The engine reported an error; inspect the game code and runtime compatibility.");
+    window.parent.postMessage({
+      source: "atg-game",
+      type: "engineDiagnostics",
+      payload: {
+        status,
+        fps: frameCount * 1000 / elapsed,
+        frameTimeMs: averageFrameTime,
+        p95FrameTimeMs: p95FrameTime,
+        renderer: engine?.app?.renderer?.type || engine?.app?.renderer?.constructor?.name || "WebGL",
+        resolution: engine?.app?.renderer?.resolution || 1,
+        logicalSize: engine?.logicalSize || null,
+        assetFailures,
+        audioFailures,
+        engineErrors,
+        lastError,
+        warnings
+      }
+    }, "*");
+    frameCount = 0;
+    frameTimes.length = 0;
+    windowStarted = now;
+  };
+  const onFrame = (now) => {
+    if (lastFrame > 0) {
+      frameTimes.push(Math.min(1000, now - lastFrame));
+      if (frameTimes.length > 120) frameTimes.shift();
+    }
+    lastFrame = now;
+    frameCount += 1;
+    animationFrame = requestAnimationFrame(onFrame);
+  };
+  const classifyError = (message) => {
+    const text = String(message || "");
+    lastError = text.slice(0, 180);
+    if (/asset|texture|image|font|load/i.test(text)) assetFailures += 1;
+    else engineErrors += 1;
+  };
+  window.addEventListener("error", (event) => classifyError(event.message));
+  window.addEventListener("unhandledrejection", (event) => classifyError(event.reason));
+  window.addEventListener("atg-audio-error", (event) => {
+    audioFailures += 1;
+    lastError = String(event.detail?.message || "Audio error").slice(0, 180);
+  });
+  window.addEventListener("atg-engine-error", (event) => {
+    engineErrors += 1;
+    lastError = String(event.detail?.message || "Engine error").slice(0, 180);
+  });
+  window.addEventListener("pagehide", () => {
+    cancelAnimationFrame(animationFrame);
+    window.clearInterval(reportTimer);
+  }, { once: true });
+  window.addEventListener("atg-engine-ready", (event) => {
+    const engine = event.detail || window.ATGEngine;
+    post("ready", engine);
+    animationFrame = requestAnimationFrame(onFrame);
+    reportTimer = window.setInterval(() => post("sample", engine), 1000);
+  }, { once: true });
+})();
+</script>`;
 }
 
 function engineBootstrapScript(engine: Awaited<ReturnType<typeof readGameConfig>>["engine"], nonce: string) {
