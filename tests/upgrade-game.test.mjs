@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getUpgradeGameAvailability, UPGRADE_GAME_PROMPT } from "../lib/upgrade-game.mjs";
+import { buildEngineConversionPrompt, getUpgradeGameAvailability, UPGRADE_GAME_PROMPT } from "../lib/upgrade-game.mjs";
 
 const legacy = { formatVersion: 1, migrationStatus: "legacy", runtimeVersion: null, type: "legacy" };
 const engine = { formatVersion: 1, migrationStatus: "upgraded", runtimeVersion: "atg-2d-1.3.0", type: "pixi" };
@@ -17,6 +17,8 @@ test("engine-backed games and active edits are unavailable", () => {
 });
 
 test("conversion prompt preserves the no-publish boundary", () => {
-  assert.match(UPGRADE_GAME_PROMPT, /phone controls as DOM UI/);
+  assert.match(buildEngineConversionPrompt("atg-2d-1.3.0"), /window\.ATGEngine/);
+  assert.match(UPGRADE_GAME_PROMPT, /migrationStatus upgraded/);
+  assert.match(UPGRADE_GAME_PROMPT, /phone controls must remain accessible DOM UI/);
   assert.match(UPGRADE_GAME_PROMPT, /Do not publish or replace/);
 });
