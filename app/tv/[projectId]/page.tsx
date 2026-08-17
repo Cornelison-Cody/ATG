@@ -17,6 +17,11 @@ const EMPTY_STATE: GameState = {
 };
 
 type PageParams = Promise<{ projectId: string }>;
+type ActionFeedback = {
+  id: number;
+  label: string;
+  tone: "good" | "info" | "warning";
+};
 
 export default function TVPage({ params }: { params: PageParams }) {
   const { projectId } = isPromise(params) ? use(params) : params;
@@ -30,8 +35,16 @@ export default function TVPage({ params }: { params: PageParams }) {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isPlayersModalOpen, setIsPlayersModalOpen] = useState(false);
+  const [feedback, setFeedback] = useState<ActionFeedback | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastStateRef = useRef({
+    actionCount: 0,
+    buzzCount: 0,
+    hasSeenState: false,
+    players: new Map<string, boolean>()
+  });
 
   useEffect(() => {
     if (!projectId) {
@@ -82,6 +95,7 @@ export default function TVPage({ params }: { params: PageParams }) {
 
       socket.addEventListener("open", () => {
         setConnectionState("Live");
+        announceFeedback("TV connected", "good");
         socket.send(JSON.stringify({ config, projectId, role: "tv", type: "join" }));
       });
 
@@ -97,6 +111,7 @@ export default function TVPage({ params }: { params: PageParams }) {
       socket.addEventListener("close", () => {
         if (!closed) {
           setConnectionState("Reconnecting");
+          announceFeedback("Reconnecting", "warning");
           reconnectTimer = setTimeout(connect, 900);
         }
       });
@@ -112,6 +127,48 @@ export default function TVPage({ params }: { params: PageParams }) {
       socketRef.current?.close();
     };
   }, [joinInfo, projectId]);
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const snapshot = lastStateRef.current;
+    const nextPlayers = new Map(gameState.players.map((player) => [player.id, player.connected]));
+
+    if (!snapshot.hasSeenState) {
+      snapshot.hasSeenState = true;
+      snapshot.players = nextPlayers;
+      snapshot.actionCount = gameState.actions.length;
+      snapshot.buzzCount = gameState.buzzes.length;
+      return;
+    }
+
+    const joinedPlayer = gameState.players.find((player) => !snapshot.players.has(player.id));
+    if (joinedPlayer) {
+      announceFeedback(`${joinedPlayer.name} joined`, "good");
+    } else {
+      const disconnectedPlayer = gameState.players.find(
+        (player) => snapshot.players.get(player.id) === true && !player.connected
+      );
+      if (disconnectedPlayer) {
+        announceFeedback(`${disconnectedPlayer.name} disconnected`, "warning");
+      } else if (gameState.buzzes.length > snapshot.buzzCount) {
+        const latestBuzz = gameState.buzzes[gameState.buzzes.length - 1];
+        announceFeedback(latestBuzz ? `${latestBuzz.name} buzzed` : "Buzz received", "info");
+      } else if (gameState.actions.length > snapshot.actionCount) {
+        announceFeedback("Player action received", "info");
+      }
+    }
+
+    snapshot.players = nextPlayers;
+    snapshot.actionCount = gameState.actions.length;
+    snapshot.buzzCount = gameState.buzzes.length;
+  }, [gameState.actions, gameState.buzzes, gameState.players]);
 
   useEffect(() => {
     postStateToGameFrame();
@@ -142,17 +199,20 @@ export default function TVPage({ params }: { params: PageParams }) {
 
       if (message.type === "gameAction" && typeof message.actionType === "string") {
         send({ actionType: message.actionType, payload: message.payload ?? {}, type: "gameAction" });
+        announceFeedback(formatActionFeedback(message.actionType), "info");
         return;
       }
 
       if (message.type === "setState") {
         send({ state: message.state, type: "setState" });
+        announceFeedback("Game state updated", "good");
         return;
       }
 
       if (message.type === "setConfig") {
         const config = await persistConfig(message.config);
         send({ config, type: "setConfig" });
+        announceFeedback("Game settings saved", "good");
       }
     }
 
@@ -162,6 +222,15 @@ export default function TVPage({ params }: { params: PageParams }) {
 
   function send(payload: Record<string, unknown>) {
     socketRef.current?.send(JSON.stringify(payload));
+  }
+
+  function announceFeedback(label: string, tone: ActionFeedback["tone"] = "info") {
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current);
+    }
+
+    setFeedback({ id: Date.now(), label, tone });
+    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 1800);
   }
 
   async function persistConfig(configPatch: unknown) {
@@ -203,11 +272,13 @@ export default function TVPage({ params }: { params: PageParams }) {
   function openJoinModal() {
     setIsMenuOpen(false);
     setIsJoinModalOpen(true);
+    announceFeedback("Join QR ready", "info");
   }
 
   function openPlayersModal() {
     setIsMenuOpen(false);
     setIsPlayersModalOpen(true);
+    announceFeedback("Player list opened", "info");
   }
 
   async function openInstructionsModal() {
@@ -233,6 +304,7 @@ export default function TVPage({ params }: { params: PageParams }) {
 
   function disconnectPlayer(playerId: string) {
     send({ playerId, type: "disconnectPlayer" });
+    announceFeedback("Disconnect sent", "warning");
   }
 
   const editorHref = `/dashboard?project=${encodeURIComponent(projectId)}`;
@@ -298,6 +370,8 @@ export default function TVPage({ params }: { params: PageParams }) {
           />
         </section>
       </section>
+
+      {feedback ? <FeedbackToast feedback={feedback} /> : null}
 
       {isJoinModalOpen ? (
         <div className={styles.modalOverlay} role="presentation">
@@ -369,6 +443,33 @@ export default function TVPage({ params }: { params: PageParams }) {
       ) : null}
     </main>
   );
+}
+
+function FeedbackToast({ feedback }: { feedback: ActionFeedback }) {
+  return (
+    <div
+      className={`${styles.feedbackToast} ${styles[feedback.tone]}`}
+      key={feedback.id}
+      role="status"
+      aria-live="polite"
+    >
+      <span aria-hidden="true" />
+      <strong>{feedback.label}</strong>
+    </div>
+  );
+}
+
+function formatActionFeedback(actionType: string) {
+  const label = actionType
+    .replace(/[-_]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim();
+
+  return label ? `${capitalize(label)} sent` : "Action sent";
+}
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function isPromise(value: PageParams): value is Promise<{ projectId: string }> {

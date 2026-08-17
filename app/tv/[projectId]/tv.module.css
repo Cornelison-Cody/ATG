@@ -206,6 +206,54 @@
   width: 100%;
 }
 
+.feedbackToast {
+  align-items: center;
+  background: rgba(16, 21, 31, 0.94);
+  border: 1px solid rgba(163, 183, 210, 0.32);
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
+  display: inline-flex;
+  gap: 10px;
+  left: 50%;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 12px 14px;
+  pointer-events: none;
+  position: fixed;
+  top: 20px;
+  transform: translateX(-50%);
+  z-index: 30;
+  animation: feedbackIn 180ms ease-out, feedbackPulse 900ms ease-out;
+}
+
+.feedbackToast span {
+  background: var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 0 0 6px rgba(77, 214, 201, 0.12);
+  flex: 0 0 auto;
+  height: 10px;
+  width: 10px;
+}
+
+.feedbackToast strong {
+  font-size: 0.92rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.feedbackToast.good span {
+  background: #95f985;
+  box-shadow: 0 0 0 6px rgba(149, 249, 133, 0.12);
+}
+
+.feedbackToast.warning span {
+  background: #ffd166;
+  box-shadow: 0 0 0 6px rgba(255, 209, 102, 0.12);
+}
+
+.feedbackToast.info span {
+  background: var(--accent);
+}
+
 .modalOverlay {
   align-items: center;
   background: rgba(3, 6, 10, 0.72);
@@ -311,5 +359,33 @@
 
   .gameFramePanel iframe {
     min-height: 520px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedbackToast {
+    animation: none;
+  }
+}
+
+@keyframes feedbackIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes feedbackPulse {
+  0% {
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.38), 0 0 0 0 rgba(77, 214, 201, 0.2);
+  }
+
+  100% {
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.38), 0 0 0 18px rgba(77, 214, 201, 0);
   }
 }
