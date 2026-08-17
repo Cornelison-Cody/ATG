@@ -7,7 +7,7 @@ import { createCodexJob, getCodexJob, completeCodexJob } from "@/lib/codex-job-s
 import { startAzureCodexJob } from "@/lib/codex-job-launcher";
 import { runCodexSdkPrototype } from "@/lib/codex-sdk-prototype.mjs";
 import { canUseCodexSdkPrototype, getCodexSdkTimeoutMs, getCodexSdkWorkspaceRoot, isProduction } from "@/lib/env";
-import { exportGameTextFiles, updateGameTextFiles } from "@/lib/project-game";
+import { exportGameTextFiles, readGameConfig, updateGameTextFiles } from "@/lib/project-game";
 import { buildPlanningRequest, normalizeChatMode } from "@/lib/chat-mode.mjs";
 import { buildProjectPrompt } from "@/lib/project-prompt.mjs";
 import { reconcileManagedAiReservation, recordCodexUsage, releaseManagedAiReservation } from "@/lib/usage-budget.mjs";
@@ -97,11 +97,13 @@ export async function POST(request: Request) {
   }
   runningProjects.add(projectId);
 
+  let config;
   let files;
   let billing;
   try {
     billing = await prepareAiBillingForRun({ projectId, userId });
     files = await exportGameTextFiles(projectForAccess);
+    config = await readGameConfig(projectForAccess);
     await appendProjectMessages(projectId, [{
       content: message,
       createdAt: new Date().toISOString(),
@@ -127,6 +129,7 @@ export async function POST(request: Request) {
   if (isProduction()) {
     return streamAzureJob({
       chatMode,
+      config,
       editingTarget,
       files,
       message,
@@ -185,7 +188,8 @@ export async function POST(request: Request) {
             chatMode === "plan" ? buildPlanningRequest(message, editingTarget === "both" ? "tv" : editingTarget, {
               recentContext: planningContext
             }) : message,
-            editingTarget
+            editingTarget,
+            config.engine
           ),
           model: process.env.ATG_CODEX_SDK_MODEL,
           onEvent: (event) => forwardEvent(event, send),
@@ -275,10 +279,11 @@ export async function POST(request: Request) {
 }
 
 async function streamAzureJob({
-  billing, chatMode, editingTarget, files, message, project, projectId, runningProjects, userId
+  billing, chatMode, config, editingTarget, files, message, project, projectId, runningProjects, userId
 }: {
   billing: { apiKey: string; billingMode: "managed" | "byok"; reservationId: string };
   chatMode: "build" | "plan";
+  config: Awaited<ReturnType<typeof readGameConfig>>;
   editingTarget: "tv" | "phone" | "both";
   files: { path: string; content: string }[];
   message: string;
@@ -303,7 +308,8 @@ async function streamAzureJob({
         chatMode === "plan" ? buildPlanningRequest(message, editingTarget === "both" ? "tv" : editingTarget, {
           recentContext
         }) : message,
-        editingTarget
+        editingTarget,
+        config.engine
       )}${chatMode === "build" && recentContext ? `\n\nRecent project conversation:\n${recentContext}` : ""}`,
       reservationId: billing.reservationId,
       userId

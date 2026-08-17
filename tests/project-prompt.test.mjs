@@ -46,3 +46,17 @@ test("full-plan build prompts allow coordinated TV and phone changes", () => {
   assert.match(prompt, /Keep game\/instructions\.md in sync with gameplay changes/);
   assert.match(prompt, /Implement the proposed plan/);
 });
+
+test("build prompts expose the normalized game engine metadata", () => {
+  const prompt = buildProjectPrompt("Improve the round timer.", "tv", {
+    formatVersion: 1,
+    migrationStatus: "upgraded",
+    runtimeVersion: "8.19.0",
+    type: "pixi"
+  });
+
+  assert.match(prompt, /Game engine metadata from game\/config\.json/);
+  assert.match(prompt, /"type":"pixi"/);
+  assert.match(prompt, /"runtimeVersion":"8\.19\.0"/);
+  assert.match(prompt, /Preserve it unless the creator explicitly asks/);
+});

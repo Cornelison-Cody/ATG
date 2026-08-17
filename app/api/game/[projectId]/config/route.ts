@@ -8,6 +8,7 @@ import {
   requireProjectRuntimeAccess
 } from "@/lib/project-access";
 import { readGameConfig, updateGameConfig } from "@/lib/project-game";
+import { GameEngineMetadataError } from "@/lib/game-engine-metadata.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +28,11 @@ export async function GET(request: Request, context: RouteContext) {
     return authResponse;
   }
 
-  return Response.json({ config: await readGameConfig(project) });
+  try {
+    return Response.json({ config: await readGameConfig(project) });
+  } catch (error) {
+    return gameConfigErrorResponse(error);
+  }
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -62,7 +67,18 @@ export async function PATCH(request: Request, context: RouteContext) {
       ? (body as { config?: unknown }).config
       : body;
 
-  return Response.json({ config: await updateGameConfig(projectForAccess, configPatch) });
+  try {
+    return Response.json({ config: await updateGameConfig(projectForAccess, configPatch) });
+  } catch (error) {
+    return gameConfigErrorResponse(error);
+  }
+}
+
+function gameConfigErrorResponse(error: unknown) {
+  if (error instanceof GameEngineMetadataError) {
+    return Response.json({ error: error.message }, { status: error.status });
+  }
+  throw error;
 }
 
 async function getActiveProject(context: RouteContext) {
