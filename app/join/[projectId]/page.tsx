@@ -23,6 +23,11 @@ type PlayerAccentStyle = CSSProperties & {
   "--accent-strong": string;
   "--join-text-color": string;
 };
+type ActionFeedback = {
+  id: number;
+  label: string;
+  tone: "good" | "info" | "warning";
+};
 
 export default function JoinPage({ params }: { params: PageParams }) {
   const [projectId, setProjectId] = useState("");
@@ -40,8 +45,10 @@ export default function JoinPage({ params }: { params: PageParams }) {
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const [isLoadingInstructions, setIsLoadingInstructions] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [feedback, setFeedback] = useState<ActionFeedback | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     void Promise.resolve(params).then(({ projectId: nextProjectId }) => setProjectId(nextProjectId));
@@ -90,6 +97,7 @@ export default function JoinPage({ params }: { params: PageParams }) {
     writeStoredValue("atg-player-name", trimmedName);
     writeStoredValue("atg-player-color", color);
     setHasJoined(true);
+    announceFeedback("Joining game", "info");
     connect(getWebSocketCandidates(joinInfo.wsUrl), trimmedName, color, playerId);
   }
 
@@ -99,6 +107,7 @@ export default function JoinPage({ params }: { params: PageParams }) {
     setConnectionState("Not joined");
     setHasJoined(false);
     setIsMenuOpen(false);
+    announceFeedback("Player changed", "info");
   }
 
   function selectPresetColor(nextColor: string) {
@@ -168,6 +177,7 @@ export default function JoinPage({ params }: { params: PageParams }) {
     socket.addEventListener("open", () => {
       opened = true;
       setConnectionState("Live");
+      announceFeedback("Connected", "good");
       socket.send(
         JSON.stringify({
           color: playerColor,
@@ -196,8 +206,17 @@ export default function JoinPage({ params }: { params: PageParams }) {
         return;
       }
       setConnectionState(opened ? "Disconnected" : "Unable to connect");
+      announceFeedback(opened ? "Disconnected" : "Unable to connect", "warning");
     });
   }
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     postStateToGameFrame();
@@ -226,18 +245,18 @@ export default function JoinPage({ params }: { params: PageParams }) {
       }
 
       if (message.type === "gameAction" && typeof message.actionType === "string") {
-        socketRef.current?.send(
-          JSON.stringify({
-            actionType: message.actionType,
-            payload: message.payload ?? {},
-            type: "gameAction"
-          })
-        );
+        sendGamePayload({
+          actionType: message.actionType,
+          payload: message.payload ?? {},
+          type: "gameAction"
+        });
+        announceFeedback(formatActionFeedback(message.actionType), "good");
         return;
       }
 
       if (message.type === "setState") {
-        socketRef.current?.send(JSON.stringify({ state: message.state, type: "setState" }));
+        sendGamePayload({ state: message.state, type: "setState" });
+        announceFeedback("Controller updated", "good");
       }
     }
 
@@ -269,6 +288,28 @@ export default function JoinPage({ params }: { params: PageParams }) {
       },
       "*"
     );
+  }
+
+  function sendGamePayload(payload: Record<string, unknown>) {
+    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+      announceFeedback("Reconnecting", "warning");
+      return;
+    }
+
+    socketRef.current.send(JSON.stringify(payload));
+  }
+
+  function announceFeedback(label: string, tone: ActionFeedback["tone"] = "info") {
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current);
+    }
+
+    setFeedback({ id: Date.now(), label, tone });
+    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 1600);
+
+    if (tone === "good" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(18);
+    }
   }
 
   if (error) {
@@ -319,6 +360,8 @@ export default function JoinPage({ params }: { params: PageParams }) {
             title="Project phone game interface"
           />
         </section>
+
+        {feedback ? <FeedbackToast feedback={feedback} /> : null}
 
         {isInstructionsOpen ? (
           <div className={styles.modalOverlay} role="presentation">
@@ -428,6 +471,33 @@ export default function JoinPage({ params }: { params: PageParams }) {
       </section>
     </main>
   );
+}
+
+function FeedbackToast({ feedback }: { feedback: ActionFeedback }) {
+  return (
+    <div
+      className={`${styles.feedbackToast} ${styles[feedback.tone]}`}
+      key={feedback.id}
+      role="status"
+      aria-live="polite"
+    >
+      <span aria-hidden="true" />
+      <strong>{feedback.label}</strong>
+    </div>
+  );
+}
+
+function formatActionFeedback(actionType: string) {
+  const label = actionType
+    .replace(/[-_]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim();
+
+  return label ? `${capitalize(label)} sent` : "Action sent";
+}
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function getWebSocketCandidates(apiWsUrl: string) {
