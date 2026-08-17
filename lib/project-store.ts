@@ -3,7 +3,7 @@ import { BlobServiceClient, type ContainerClient } from "@azure/storage-blob";
 import { randomUUID } from "crypto";
 import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
-import { ATG_ROOT, PROJECTS_ROOT, TRASH_ROOT, useAzureStorageBackend } from "./env";
+import { ATG_ROOT, isEngineBackedNewGamesEnabled, PROJECTS_ROOT, TRASH_ROOT, useAzureStorageBackend } from "./env";
 import { normalizeGameConfig, parseGameConfig } from "./game-config.mjs";
 import { GameEngineMetadataError } from "./game-engine-metadata.mjs";
 import { isAllowedGameTextPath, normalizeGameTextFiles, validateGameTextPath } from "./game-file-rules.mjs";
@@ -15,6 +15,7 @@ import type { ChatMessage, ProjectCollaborator, ProjectDatabase, ProjectRecord, 
 export const GAME_DIR = "game";
 export const GAME_CONFIG_FILE = "config.json";
 export const GAME_INSTRUCTIONS_FILE = "instructions.md";
+export const DEFAULT_NEW_GAME_RUNTIME_VERSION = "atg-2d-1.3.0";
 
 const DB_PATH = path.join(ATG_ROOT, "projects.json");
 const PROJECTS_CONTAINER = process.env.AZURE_COSMOS_PROJECTS_CONTAINER || "projects";
@@ -122,7 +123,7 @@ class LocalProjectStore implements ProjectStore {
 
     await mkdir(project.path, { recursive: true });
     await writeFile(path.join(project.path, "README.md"), renderReadme(project), "utf8");
-    await this.ensureGameFiles(project);
+    await this.ensureGameFiles(project, isEngineBackedNewGamesEnabled() ? ENGINE_TEMPLATE_FILES : TEMPLATE_FILES);
 
     db.projects.push(project);
     await this.writeDatabase(db);
@@ -327,11 +328,11 @@ class LocalProjectStore implements ProjectStore {
     return normalizedFiles;
   }
 
-  private async ensureGameFiles(project: ProjectRecord) {
+  private async ensureGameFiles(project: ProjectRecord, templates = TEMPLATE_FILES) {
     const gamePath = getGamePath(project);
     await mkdir(gamePath, { recursive: true });
 
-    for (const [fileName, render] of Object.entries(TEMPLATE_FILES)) {
+    for (const [fileName, render] of Object.entries(templates)) {
       const filePath = path.join(gamePath, fileName);
       if (!(await exists(filePath))) {
         await writeFile(filePath, render(project), "utf8");
@@ -410,7 +411,7 @@ class AzureProjectStore implements ProjectStore {
     const project = buildNewProject(trimmedName, owner, slug, () => `azure://projects/${slug}`);
 
     await this.writeBlob(blobName(project, "README.md"), renderReadme(project), "text/markdown; charset=utf-8");
-    await this.ensureGameFiles(project);
+    await this.ensureGameFiles(project, isEngineBackedNewGamesEnabled() ? ENGINE_TEMPLATE_FILES : TEMPLATE_FILES);
     await this.getCosmosContainer().items.create(project);
     return project;
   }
@@ -620,8 +621,8 @@ class AzureProjectStore implements ProjectStore {
     return normalizedFiles;
   }
 
-  private async ensureGameFiles(project: ProjectRecord) {
-    for (const [fileName, render] of Object.entries(TEMPLATE_FILES)) {
+  private async ensureGameFiles(project: ProjectRecord, templates = TEMPLATE_FILES) {
+    for (const [fileName, render] of Object.entries(templates)) {
       const name = blobName(project, `${GAME_DIR}/${fileName}`);
       const blob = this.getBlobContainer().getBlockBlobClient(name);
       if (!(await blob.exists())) {
@@ -907,6 +908,93 @@ window.ATG.onState((state) => {
   </head>
   <body>
     <main class="panel"></main>
+  </body>
+</html>
+`
+};
+
+const ENGINE_TEMPLATE_FILES: Record<string, (project: ProjectRecord) => string> = {
+  ...TEMPLATE_FILES,
+  "config.json": (project) =>
+    `${JSON.stringify({
+      ...DEFAULT_GAME_CONFIG,
+      engine: {
+        formatVersion: 1,
+        migrationStatus: "upgraded",
+        runtimeVersion: DEFAULT_NEW_GAME_RUNTIME_VERSION,
+        type: "pixi"
+      },
+      title: project.name
+    }, null, 2)}\n`,
+  "game.js": () => `function applyAccent(config) {
+  document.documentElement.style.setProperty("--game-accent", config.accentColor || "#4dd6c9");
+}
+
+function renderPhoneStarter() {
+  const root = document.querySelector(".phone-panel");
+  if (!root) return;
+  root.replaceChildren();
+  const title = document.createElement("h1");
+  title.textContent = "Ready to play";
+  const message = document.createElement("p");
+  message.className = "muted";
+  message.textContent = "Join the TV game, then use this button to send your first action.";
+  const button = document.createElement("button");
+  button.className = "button";
+  button.type = "button";
+  button.textContent = "I’m ready";
+  button.addEventListener("click", () => window.ATG.sendAction("starter:ready"));
+  root.append(title, message, button);
+}
+
+function startTvStarter(engine) {
+  if (window.__atgStarterMounted) return;
+  window.__atgStarterMounted = true;
+  engine.ready.then(() => {
+    const scene = engine.gameplay.createScene({ id: "starter" });
+    const title = new engine.PIXI.Text({ text: "Ready to play", style: { fill: "#eef5ff", fontSize: 72, fontWeight: "700" } });
+    const status = new engine.PIXI.Text({ text: "Waiting for players", style: { fill: "#a8b6cb", fontSize: 32 } });
+    title.anchor.set(0.5);
+    status.anchor.set(0.5);
+    title.position.set(960, 470);
+    status.position.set(960, 570);
+    scene.root.addChild(title, status);
+    engine.bridge.onState((state) => {
+      applyAccent(state.config || {});
+      const players = Array.isArray(state.players) ? state.players.length : 0;
+      status.text = players ? players + " player" + (players === 1 ? "" : "s") + " connected" : "Waiting for players";
+    });
+  }).catch(() => undefined);
+}
+
+window.ATG.onState((state) => applyAccent(state.config || {}));
+window.addEventListener("atg-engine-ready", (event) => startTvStarter(event.detail), { once: true });
+if (window.ATGEngine) startTvStarter(window.ATGEngine);
+if (!window.ATGEngine) renderPhoneStarter();
+`,
+  "phone.html": () => `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./game.js" defer></script>
+  </head>
+  <body class="phone-ui">
+    <main class="panel phone-panel" aria-live="polite"></main>
+  </body>
+</html>
+`,
+  "tv.html": () => `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./game.js" defer></script>
+  </head>
+  <body>
+    <main class="panel" aria-live="polite"></main>
   </body>
 </html>
 `

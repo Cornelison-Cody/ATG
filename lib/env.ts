@@ -16,6 +16,13 @@ export function canUseCodexSdkPrototype() {
   return process.env.ENABLE_CODEX_SDK_PROTOTYPE === "true" || process.env.NODE_ENV !== "production";
 }
 
+// Keep the fallback internal: operators can disable engine-backed creation
+// during rollout without exposing a format choice to creators.
+export function isEngineBackedNewGamesEnabled() {
+  const value = process.env.ATG_ENGINE_NEW_GAMES_ENABLED;
+  return value !== "false" && value !== "0";
+}
+
 export function getCodexSdkWorkspaceRoot() {
   return process.env.ATG_CODEX_SDK_WORKSPACE_ROOT || "";
 }
