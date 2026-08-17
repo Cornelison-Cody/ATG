@@ -1,5 +1,9 @@
 # Repository Instructions
 
+## Engine Runtime Releases
+
+Engine runtime versions are immutable and append-only. Before changing PixiJS, an engine bundle, the engine registry, or a game `runtimeVersion`, follow [docs/engine-release-playbook.md](docs/engine-release-playbook.md). Do not silently replace, delete, or repoint an existing pinned engine version.
+
 ## GitHub Issue Defaults
 
 When asked to create an issue or ticket for this repository, create it in `Cornelison-Cody/ATG` unless the user specifies another repository.
