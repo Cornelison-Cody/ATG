@@ -15,6 +15,7 @@ import {
   toPublicProject,
   updateProjectDetails
 } from "@/lib/projects";
+import { getProjectStore } from "@/lib/project-store";
 import { validateProjectDetailsPatch } from "@/lib/project-name-rules.mjs";
 
 export const runtime = "nodejs";
@@ -50,7 +51,8 @@ export async function GET(request: Request, context: RouteContext) {
     return projectAccessResponse();
   }
 
-  return Response.json({ project: { ...project, accessRole: getProjectAccessRole(project, principal) } });
+  const config = await getProjectStore().readGameConfig(project);
+  return Response.json({ project: { ...project, engine: config.engine, accessRole: getProjectAccessRole(project, principal) } });
 }
 
 export async function DELETE(request: Request, context: RouteContext) {

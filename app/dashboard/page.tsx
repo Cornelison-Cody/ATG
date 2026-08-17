@@ -31,6 +31,8 @@ import {
 import { InstructionsViewer } from "@/components/instructions-viewer";
 import { EngineDiagnostics } from "@/components/engine-diagnostics";
 import { buildGameAssetUrl } from "@/lib/game-asset-url.mjs";
+import { getUpgradeGameAvailability, UPGRADE_GAME_PROMPT } from "@/lib/upgrade-game.mjs";
+import type { GameEngineMetadata } from "@/lib/game-engine-metadata.mjs";
 import { PROJECT_NAME_MAX_LENGTH } from "@/lib/project-name-rules.mjs";
 import styles from "./page.module.css";
 
@@ -58,6 +60,7 @@ type ProjectSummary = {
   updatedAt: string;
   deletedAt?: string;
   messageCount: number;
+  engine?: GameEngineMetadata;
 };
 
 type ProjectDetail = Omit<ProjectSummary, "messageCount"> & {
@@ -218,6 +221,7 @@ export default function Home() {
   const [isSavingProjectSettings, setIsSavingProjectSettings] = useState(false);
   const [isUpdatingCollaborators, setIsUpdatingCollaborators] = useState(false);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
+  const [isUpgradeGameOpen, setIsUpgradeGameOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [projectPendingDelete, setProjectPendingDelete] = useState<ProjectSummary | null>(null);
   const [runFeedback, setRunFeedback] = useState<ChatRunFeedback>(idleRunFeedback);
@@ -225,6 +229,11 @@ export default function Home() {
   const [projectSettingsMessage, setProjectSettingsMessage] = useState("");
   const decoderRef = useRef(new TextDecoder());
   const canManageActiveProject = activeProject?.accessRole === "owner";
+  const upgradeGameAvailability = getUpgradeGameAvailability({
+    engine: activeProject?.engine,
+    accessRole: activeProject?.accessRole,
+    isRunning
+  });
 
   const canCreate = useMemo(
     () => newProjectName.trim().length > 0 && !isCreating,
@@ -358,11 +367,26 @@ export default function Home() {
     setIsProjectSettingsOpen(false);
     setIsInstructionsOpen(false);
     setIsAssetsOpen(false);
+    setIsUpgradeGameOpen(false);
     setActiveProject(null);
     setMessages([]);
     setInput("");
     setRunFeedback(idleRunFeedback);
     window.history.pushState(null, "", "/dashboard");
+  }
+
+  function openUpgradeGame() {
+    if (!activeProject || !upgradeGameAvailability.available) return;
+    setIsProjectMenuOpen(false);
+    setIsUpgradeGameOpen(true);
+  }
+
+  function startUpgradeGame() {
+    if (!activeProject || !upgradeGameAvailability.available) return;
+    setIsUpgradeGameOpen(false);
+    setChatMode("plan");
+    setEditingTarget("tv");
+    setInput(UPGRADE_GAME_PROMPT);
   }
 
   function openProjectSettings() {
@@ -1108,6 +1132,7 @@ export default function Home() {
           onOpenAssets={openAssets}
           onOpenInstructions={openInstructions}
           onOpenProjectSettings={openProjectSettings}
+          onOpenUpgradeGame={openUpgradeGame}
           onModeChange={setChatMode}
           onQuickAnswer={(answer, options) => {
             if (options?.chatMode) {
@@ -1126,6 +1151,7 @@ export default function Home() {
           isProjectMenuOpen={isProjectMenuOpen}
           projectName={activeProject.name}
           projectRevision={activeProject.updatedAt}
+          canUpgradeGame={upgradeGameAvailability.available}
           onSubmit={handleSubmit}
           runFeedback={runFeedback}
         />
@@ -1213,6 +1239,15 @@ export default function Home() {
           onSave={saveProjectSettings}
           onVisibilityChange={setProjectSettingsVisibility}
           visibility={projectSettingsVisibility}
+        />
+      ) : null}
+
+      {isUpgradeGameOpen && activeProject ? (
+        <UpgradeGameModal
+          isRunning={isRunning}
+          onCancel={() => setIsUpgradeGameOpen(false)}
+          onStart={startUpgradeGame}
+          reason={upgradeGameAvailability.reason}
         />
       ) : null}
 
@@ -1416,6 +1451,45 @@ function ProjectSettingsModal({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function UpgradeGameModal({
+  isRunning,
+  onCancel,
+  onStart,
+  reason
+}: {
+  isRunning: boolean;
+  onCancel: () => void;
+  onStart: () => void;
+  reason: string;
+}) {
+  return (
+    <div className={styles.modalBackdrop} role="presentation">
+      <section aria-labelledby="upgrade-game-title" aria-modal="true" className={styles.modal} role="dialog">
+        <div className={styles.modalHeader}>
+          <h2 id="upgrade-game-title">Upgrade Game</h2>
+          <button aria-label="Close upgrade game dialog" onClick={onCancel} type="button">
+            <X aria-hidden="true" />
+          </button>
+        </div>
+        <div className={styles.modalBody}>
+          <p>
+            ATG will prepare a best-effort engine conversion without asking a questionnaire. Phone controls
+            stay DOM-based, and your current published legacy game remains unchanged until you explicitly accept
+            a conversion candidate.
+          </p>
+          {reason ? <p className={styles.errorText}>{reason}</p> : null}
+        </div>
+        <div className={styles.modalActions}>
+          <button onClick={onCancel} type="button">Cancel</button>
+          <button disabled={isRunning || Boolean(reason)} onClick={onStart} type="button">
+            Start Upgrade
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -2169,6 +2243,7 @@ function AssetsModal({
 }
 
 function ProjectChat({
+  canUpgradeGame,
   canSubmit,
   chatMode,
   editingTarget,
@@ -2183,6 +2258,7 @@ function ProjectChat({
   onOpenAssets,
   onOpenInstructions,
   onOpenProjectSettings,
+  onOpenUpgradeGame,
   onQuickAnswer,
   onReturnToProjects,
   onTargetChange,
@@ -2194,6 +2270,7 @@ function ProjectChat({
   projectRevision,
   runFeedback
 }: {
+  canUpgradeGame: boolean;
   canSubmit: boolean;
   chatMode: ChatMode;
   editingTarget: EditingTarget;
@@ -2208,6 +2285,7 @@ function ProjectChat({
   onOpenAssets: () => void;
   onOpenInstructions: () => void;
   onOpenProjectSettings: () => void;
+  onOpenUpgradeGame: () => void;
   onQuickAnswer: (answer: string, options?: ChatSubmitOptions) => void;
   onReturnToProjects: () => void;
   onTargetChange: (target: EditingTarget) => void;
@@ -2551,6 +2629,8 @@ function ProjectChat({
             onOpenAssets={onOpenAssets}
             onOpenInstructions={onOpenInstructions}
             onOpenProjectSettings={onOpenProjectSettings}
+            onOpenUpgradeGame={onOpenUpgradeGame}
+            canUpgradeGame={canUpgradeGame}
             onReturnToProjects={onReturnToProjects}
             onToggle={onToggleProjectMenu}
             projectId={projectId}
@@ -2582,6 +2662,8 @@ function ProjectChat({
                 onOpenAssets={onOpenAssets}
                 onOpenInstructions={onOpenInstructions}
                 onOpenProjectSettings={onOpenProjectSettings}
+                onOpenUpgradeGame={onOpenUpgradeGame}
+                canUpgradeGame={canUpgradeGame}
                 onReturnToProjects={onReturnToProjects}
                 onToggle={onToggleProjectMenu}
                 projectId={projectId}
@@ -2600,22 +2682,26 @@ function ProjectChat({
 }
 
 function ProjectMenu({
+  canUpgradeGame,
   className,
   isOpen,
   onOpenAccountSettings,
   onOpenAssets,
   onOpenInstructions,
   onOpenProjectSettings,
+  onOpenUpgradeGame,
   onReturnToProjects,
   onToggle,
   projectId
 }: {
+  canUpgradeGame: boolean;
   className?: string;
   isOpen: boolean;
   onOpenAccountSettings: () => void;
   onOpenAssets: () => void;
   onOpenInstructions: () => void;
   onOpenProjectSettings: () => void;
+  onOpenUpgradeGame: () => void;
   onReturnToProjects: () => void;
   onToggle: () => void;
   projectId: string;
@@ -2647,6 +2733,15 @@ function ProjectMenu({
           </button>
           <button onClick={onOpenProjectSettings} role="menuitem" type="button">
             Project Settings
+          </button>
+          <button
+            disabled={!canUpgradeGame}
+            onClick={onOpenUpgradeGame}
+            role="menuitem"
+            title={canUpgradeGame ? undefined : "Upgrade Game is available for editable legacy projects only."}
+            type="button"
+          >
+            Upgrade Game
           </button>
           <button onClick={onOpenAccountSettings} role="menuitem" type="button">
             Account Settings
