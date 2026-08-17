@@ -12,6 +12,7 @@
     "docker:build": "docker build -t azure-tides-gaming .",
     "engine:bundle": "node scripts/prepare-engine-bundle.mjs",
     "engine:benchmark": "node scripts/engine-performance-benchmark.mjs",
+    "engine:prompt-eval": "node scripts/evaluate-engine-prompts.mjs",
     "import:local-data": "node scripts/import-local-data.mjs"
   },
   "dependencies": {
