@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ENGINE_PROTECTED_GAME_PATHS,
   isAllowedGameTextPath,
   normalizeGameTextFiles,
+  validateEngineGameFiles,
   validateGameTextPath
 } from "../lib/game-file-rules.mjs";
 
@@ -11,6 +13,9 @@ test("validateGameTextPath accepts editable game text paths", () => {
   assert.equal(validateGameTextPath("nested/widget.svg"), "nested/widget.svg");
   assert.equal(validateGameTextPath("config.json"), "config.json");
   assert.equal(validateGameTextPath("instructions.md"), "instructions.md");
+  assert.equal(validateGameTextPath("scenes/round.mjs"), "scenes/round.mjs");
+  assert.equal(validateGameTextPath("assets/characters.atlas"), "assets/characters.atlas");
+  assert.equal(validateGameTextPath("assets/ui.fnt"), "assets/ui.fnt");
 });
 
 test("validateGameTextPath rejects unsafe paths", () => {
@@ -38,5 +43,17 @@ test("normalizeGameTextFiles rejects oversized and duplicate files", () => {
       { content: "two", path: "tv.html" }
     ]),
     /more than once/
+  );
+});
+
+test("engine workspaces require the protected project layout", () => {
+  const files = ENGINE_PROTECTED_GAME_PATHS.map((path) => ({
+    content: path === "config.json" ? JSON.stringify({ engine: { type: "pixi" } }) : "ok",
+    path
+  }));
+  assert.deepEqual(validateEngineGameFiles(files), files);
+  assert.throws(
+    () => validateEngineGameFiles(files.filter((file) => file.path !== "tv.html")),
+    /missing protected game files: tv\.html/
   );
 });

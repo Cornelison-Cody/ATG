@@ -103,6 +103,19 @@ test("workspace validation rejects symlinks in the game directory", async (t) =>
   );
 });
 
+test("workspace validation rejects binary files created in the text workspace", async (t) => {
+  const root = await makeTestRoot(t);
+  const workspace = await createWorkspace(fixtureFiles, root);
+  await writeFile(path.join(workspace.path, "game", "sprite.png"), Buffer.from([0, 1, 2]));
+
+  await assert.rejects(
+    readWorkspaceChanges(workspace.path, fixtureFiles),
+    /unsupported or binary game file: game\/sprite\.png/
+  );
+  const { rm } = await import("node:fs/promises");
+  await rm(workspace.path, { force: true, recursive: true });
+});
+
 test("missing rollout resumes once with a fresh Codex thread", async (t) => {
   const root = await makeTestRoot(t);
   let staleRecoveries = 0;
