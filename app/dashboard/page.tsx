@@ -2579,7 +2579,7 @@ function ProjectChat({
               value={input}
             />
             <input
-              accept="image/gif,image/jpeg,image/png,image/svg+xml,image/webp,audio/mpeg,audio/ogg,audio/wav,.mp3,.ogg,.wav"
+              accept="image/gif,image/jpeg,image/png,image/svg+xml,image/webp,audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/flac,video/mp4,video/webm,font/woff,font/woff2,.atlas,.fnt,.json,.m4a,.flac,.mp4,.webm,.m4v,.woff,.woff2,.ttf,.otf,.mp3,.ogg,.wav"
               className={styles.assetUploadInput}
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0];
