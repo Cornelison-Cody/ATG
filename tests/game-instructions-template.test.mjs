@@ -15,5 +15,7 @@ test("new game instructions include player-facing sections", () => {
   assert.match(instructions, /## Assets and Screenshots/);
   assert.match(instructions, /Open the TV view on the shared screen/);
   assert.match(instructions, /players can take from their phones/);
+  assert.match(instructions, /what feedback players see or feel after using it/);
+  assert.match(instructions, /how the TV responds when players take actions/);
   assert.match(instructions, /!\[Example game screen\]\(example\.png\)/);
 });

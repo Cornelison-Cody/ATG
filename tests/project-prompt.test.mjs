@@ -12,6 +12,10 @@ test("TV build prompts prioritize the TV display target", () => {
   assert.match(prompt, /game\/styles\.css, game\/game\.js, game\/config\.json, and game\/instructions\.md/);
   assert.match(prompt, /Keep game\/instructions\.md in sync with gameplay changes/);
   assert.match(prompt, /rules, setup, player actions, scoring, win conditions, controls, or assets/);
+  assert.match(prompt, /Always design player and host actions with immediate feedback/);
+  assert.match(prompt, /button states, visual confirmation, animation, sound when appropriate, status text/);
+  assert.match(prompt, /Phone actions should confirm on the phone and update the TV/);
+  assert.match(prompt, /honor prefers-reduced-motion/);
   assert.match(prompt, /Make the scoreboard easier to read/);
 });
 
@@ -25,5 +29,9 @@ test("phone build prompts prioritize the phone controller target", () => {
   assert.match(prompt, /game\/styles\.css, game\/game\.js, game\/config\.json, and game\/instructions\.md/);
   assert.match(prompt, /Keep game\/instructions\.md in sync with gameplay changes/);
   assert.match(prompt, /rules, setup, player actions, scoring, win conditions, controls, or assets/);
+  assert.match(prompt, /Always design player and host actions with immediate feedback/);
+  assert.match(prompt, /button states, visual confirmation, animation, sound when appropriate, status text/);
+  assert.match(prompt, /Phone actions should confirm on the phone and update the TV/);
+  assert.match(prompt, /honor prefers-reduced-motion/);
   assert.match(prompt, /Add a buzz button/);
 });
