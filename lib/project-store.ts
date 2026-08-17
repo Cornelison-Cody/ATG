@@ -10,6 +10,7 @@ import { isAllowedGameTextPath, normalizeGameTextFiles, validateGameTextPath } f
 import { renderGameInstructionsTemplate } from "./game-instructions-template.mjs";
 import { DEFAULT_GAME_CONFIG, GameConfig } from "./game-types";
 import { validateProjectName } from "./project-name-rules.mjs";
+import { getEngineAssetRule } from "./engine-asset-rules.mjs";
 import type { ChatMessage, ProjectCollaborator, ProjectDatabase, ProjectRecord, PublicProject } from "./project-types";
 
 export const GAME_DIR = "game";
@@ -1024,7 +1025,7 @@ function normalizeGameInstructions(value: unknown) {
 function normalizeUploadedGameAsset(asset: GameAssetUpload) {
   const cleanName = sanitizeAssetFileName(asset.filename);
   const extension = path.extname(cleanName).toLowerCase();
-  if (!UPLOADED_ASSET_EXTENSIONS.has(extension)) {
+  if (!UPLOADED_ASSET_EXTENSIONS.has(extension) && !getEngineAssetRule(cleanName)) {
     throw new ProjectStoreError("Asset file type is not supported.", 400);
   }
 
@@ -1032,8 +1033,9 @@ function normalizeUploadedGameAsset(asset: GameAssetUpload) {
     throw new ProjectStoreError("Asset file cannot be empty.", 400);
   }
 
-  if (asset.content.byteLength > MAX_UPLOADED_ASSET_BYTES) {
-    throw new ProjectStoreError("Asset files must be 10 MB or smaller.", 413);
+  const maxBytes = getEngineAssetRule(cleanName)?.maxBytes || MAX_UPLOADED_ASSET_BYTES;
+  if (asset.content.byteLength > maxBytes) {
+    throw new ProjectStoreError(`Asset files must be ${Math.round(maxBytes / (1024 * 1024))} MB or smaller.`, 413);
   }
 
   return {
@@ -1066,7 +1068,7 @@ function normalizeUploadedAssetPath(assetPath: string) {
   }
 
   const extension = path.extname(segments[1]).toLowerCase();
-  if (!UPLOADED_ASSET_EXTENSIONS.has(extension)) {
+  if (!UPLOADED_ASSET_EXTENSIONS.has(extension) && !getEngineAssetRule(segments[1])) {
     throw new ProjectStoreError("Asset file type is not supported.", 400);
   }
 
@@ -1182,7 +1184,18 @@ function contentTypeForPath(filePath: string) {
     ".png": "image/png",
     ".svg": "image/svg+xml",
     ".wav": "audio/wav",
-    ".webp": "image/webp"
+    ".webp": "image/webp",
+    ".atlas": "application/json",
+    ".fnt": "application/xml",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".ttf": "font/ttf",
+    ".otf": "font/otf",
+    ".m4a": "audio/mp4",
+    ".flac": "audio/flac",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".m4v": "video/x-m4v"
   };
 
   return contentTypes[extension] ?? "application/octet-stream";
