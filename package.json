@@ -29,6 +29,7 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "@tweenjs/tween.js": "25.0.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

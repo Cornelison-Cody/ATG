@@ -11,7 +11,7 @@ import {
 
 test("pinned ATG engine runtimes coexist at distinct same-origin URLs", () => {
   const runtimes = listAtgEngineRuntimes();
-  assert.deepEqual(runtimes, ["atg-2d-1.0.0", "atg-2d-1.0.1", "atg-2d-1.1.0"]);
+  assert.deepEqual(runtimes, ["atg-2d-1.0.0", "atg-2d-1.0.1", "atg-2d-1.1.0", "atg-2d-1.2.0"]);
   assert.equal(getAtgEngineBundleUrl(runtimes[0]), "/api/engine/atg-2d-1.0.0/pixi.min.mjs");
   assert.equal(getAtgEngineBundleUrl(runtimes[1]), "/api/engine/atg-2d-1.0.1/pixi.min.mjs");
 
@@ -21,6 +21,8 @@ test("pinned ATG engine runtimes coexist at distinct same-origin URLs", () => {
   assert.equal(second.packageVersion, "8.19.0");
   assert.notEqual(first.runtimeVersion, second.runtimeVersion);
   assert.equal(getAtgEngineBundle("atg-2d-1.1.0", "atg-engine-bridge.mjs").packageVersion, "1.1.0");
+  assert.equal(getAtgEngineBundle("atg-2d-1.2.0", "atg-gameplay.mjs").packageVersion, "1.2.0");
+  assert.equal(getAtgEngineBundle("atg-2d-1.2.0", "tween.esm.mjs").packageVersion, "25.0.0");
 });
 
 test("engine bundle manifest records provenance, integrity, and license", () => {
@@ -63,6 +65,24 @@ test("ATG TV runtime uses a capped WebGL-first logical stage", async () => {
   assert.match(text, /app\.destroy\(\{ children: true, removeView: true, texture: true, textureSource: true \}\)/);
   assert.match(text, /createAtgEngineBridge/);
   assert.match(text, /target\.bridge\?\.destroy\(\)/);
+});
+
+test("ATG gameplay runtime keeps its Tween.js dependency and lifecycle helpers immutable", async () => {
+  const runtime = getAtgEngineBundle("atg-2d-1.2.0", "atg-tv-runtime.mjs");
+  const gameplay = getAtgEngineBundle("atg-2d-1.2.0", "atg-gameplay.mjs");
+  const tween = getAtgEngineBundle("atg-2d-1.2.0", "tween.esm.mjs");
+  const [runtimeSource, gameplaySource, tweenSource] = await Promise.all([
+    readFile(new URL("../engine-bundles/atg-tv-runtime-1.2.0/atg-tv-runtime.mjs", import.meta.url)),
+    readFile(new URL("../engine-bundles/atg-tv-runtime-1.2.0/atg-gameplay.mjs", import.meta.url)),
+    readFile(new URL("../engine-bundles/atg-tv-runtime-1.2.0/tween.esm.mjs", import.meta.url))
+  ]);
+
+  assert.equal(`sha384-${createHash("sha384").update(runtimeSource).digest("base64")}`, runtime.integrity);
+  assert.equal(`sha384-${createHash("sha384").update(gameplaySource).digest("base64")}`, gameplay.integrity);
+  assert.equal(`sha384-${createHash("sha384").update(tweenSource).digest("base64")}`, tween.integrity);
+  assert.match(runtimeSource.toString("utf8"), /createAtgGameplay/);
+  assert.match(gameplaySource.toString("utf8"), /transitionTo/);
+  assert.match(gameplaySource.toString("utf8"), /createParticlePool/);
 });
 
 test("optional Pixi transcoders stay on the same origin", () => {
