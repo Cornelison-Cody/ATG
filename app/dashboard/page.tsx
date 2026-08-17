@@ -2542,10 +2542,23 @@ function ProjectChat({
       ) : null}
 
       {activeHiddenPanel === "preview" ? (
-        <button className={styles.panelRestoreRail} onClick={() => setHiddenEditorPanel(null)} type="button">
-          <PanelRightOpen aria-hidden="true" />
-          Show preview
-        </button>
+        <div className={styles.collapsedPreviewRail}>
+          <button className={styles.panelRestoreRail} onClick={() => setHiddenEditorPanel(null)} type="button">
+            <PanelRightOpen aria-hidden="true" />
+            Show preview
+          </button>
+          <ProjectMenu
+            className={styles.collapsedPreviewMenuActions}
+            isOpen={isProjectMenuOpen}
+            onOpenAccountSettings={onOpenAccountSettings}
+            onOpenAssets={onOpenAssets}
+            onOpenInstructions={onOpenInstructions}
+            onOpenProjectSettings={onOpenProjectSettings}
+            onReturnToProjects={onReturnToProjects}
+            onToggle={onToggleProjectMenu}
+            projectId={projectId}
+          />
+        </div>
       ) : (
         <aside className={styles.previewPanel} aria-label={`${editingTarget} UI preview`}>
           <div className={styles.previewHeader}>
@@ -2562,40 +2575,16 @@ function ProjectChat({
               >
                 <PanelRightClose aria-hidden="true" />
               </button>
-              <button
-                aria-expanded={isProjectMenuOpen}
-                aria-label="Open game menu"
-                className={styles.menuButton}
-                onClick={onToggleProjectMenu}
-                type="button"
-              >
-                <Menu aria-hidden="true" />
-              </button>
-              {isProjectMenuOpen ? (
-                <div className={styles.menu} role="menu">
-                  <a href={`/tv/${projectId}`} role="menuitem">
-                    Open TV
-                  </a>
-                  <a href={`/join/${projectId}`} role="menuitem">
-                    Open Phone
-                  </a>
-                  <button onClick={onOpenInstructions} role="menuitem" type="button">
-                    Game Instructions
-                  </button>
-                  <button onClick={onOpenAssets} role="menuitem" type="button">
-                    Game Assets
-                  </button>
-                  <button onClick={onOpenProjectSettings} role="menuitem" type="button">
-                    Project Settings
-                  </button>
-                  <button onClick={onOpenAccountSettings} role="menuitem" type="button">
-                    Account Settings
-                  </button>
-                  <button onClick={onReturnToProjects} role="menuitem" type="button">
-                    Dashboard
-                  </button>
-                </div>
-              ) : null}
+              <ProjectMenu
+                isOpen={isProjectMenuOpen}
+                onOpenAccountSettings={onOpenAccountSettings}
+                onOpenAssets={onOpenAssets}
+                onOpenInstructions={onOpenInstructions}
+                onOpenProjectSettings={onOpenProjectSettings}
+                onReturnToProjects={onReturnToProjects}
+                onToggle={onToggleProjectMenu}
+                projectId={projectId}
+              />
             </div>
           </div>
           <ScaledPreviewFrame
@@ -2606,6 +2595,67 @@ function ProjectChat({
         </aside>
       )}
     </section>
+  );
+}
+
+function ProjectMenu({
+  className,
+  isOpen,
+  onOpenAccountSettings,
+  onOpenAssets,
+  onOpenInstructions,
+  onOpenProjectSettings,
+  onReturnToProjects,
+  onToggle,
+  projectId
+}: {
+  className?: string;
+  isOpen: boolean;
+  onOpenAccountSettings: () => void;
+  onOpenAssets: () => void;
+  onOpenInstructions: () => void;
+  onOpenProjectSettings: () => void;
+  onReturnToProjects: () => void;
+  onToggle: () => void;
+  projectId: string;
+}) {
+  return (
+    <div className={className}>
+      <button
+        aria-expanded={isOpen}
+        aria-label="Open game menu"
+        className={styles.menuButton}
+        onClick={onToggle}
+        type="button"
+      >
+        <Menu aria-hidden="true" />
+      </button>
+      {isOpen ? (
+        <div className={styles.menu} role="menu">
+          <a href={`/tv/${projectId}`} role="menuitem">
+            Open TV
+          </a>
+          <a href={`/join/${projectId}`} role="menuitem">
+            Open Phone
+          </a>
+          <button onClick={onOpenInstructions} role="menuitem" type="button">
+            Game Instructions
+          </button>
+          <button onClick={onOpenAssets} role="menuitem" type="button">
+            Game Assets
+          </button>
+          <button onClick={onOpenProjectSettings} role="menuitem" type="button">
+            Project Settings
+          </button>
+          <button onClick={onOpenAccountSettings} role="menuitem" type="button">
+            Account Settings
+          </button>
+          <button onClick={onReturnToProjects} role="menuitem" type="button">
+            Dashboard
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

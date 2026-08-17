@@ -644,6 +644,26 @@
   position: relative;
 }
 
+.collapsedPreviewRail {
+  display: grid;
+  gap: 8px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  position: relative;
+}
+
+.collapsedPreviewMenuActions {
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.collapsedPreviewMenuActions .menu {
+  bottom: 0;
+  right: calc(100% + 8px);
+  top: auto;
+}
+
 .scaledPreviewFrame {
   background: #05070a;
   min-height: 0;
