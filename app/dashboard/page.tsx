@@ -2729,6 +2729,9 @@ function ProjectMenu({
           <button onClick={onOpenInstructions} role="menuitem" type="button">
             Game Instructions
           </button>
+          <a href="/engine-guide" role="menuitem">
+            Engine Creator Guide
+          </a>
           <button onClick={onOpenAssets} role="menuitem" type="button">
             Game Assets
           </button>
