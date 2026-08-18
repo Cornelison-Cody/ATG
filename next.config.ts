@@ -9,7 +9,9 @@ function getAllowedDevOrigins() {
 }
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: getAllowedDevOrigins()
+  allowedDevOrigins: getAllowedDevOrigins(),
+  // Test servers must not contend with a developer's active .next directory.
+  distDir: process.env.ATG_NEXT_DIST_DIR || ".next"
 };
 
 export default nextConfig;

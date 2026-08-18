@@ -8,12 +8,16 @@ import test from "node:test";
 const repoRoot = path.resolve(new URL("..", import.meta.url).pathname);
 const stateRoot = await mkdtemp(path.join(os.tmpdir(), "atg-conversion-http-"));
 const port = 38000 + Math.floor(Math.random() * 1000);
+const nextDistDir = `.next-integration-${port}`;
 const baseUrl = `http://127.0.0.1:${port}`;
+const generatedProjectFiles = ["next-env.d.ts", "tsconfig.json"];
+const originalGeneratedProjectFiles = await Promise.all(generatedProjectFiles.map(async (file) => [file, await readFile(path.join(repoRoot, file), "utf8")]));
 const server = spawn(process.execPath, ["server.mjs"], {
   cwd: repoRoot,
   env: {
     ...process.env,
     ATG_DATA_ROOT: stateRoot,
+    ATG_NEXT_DIST_DIR: nextDistDir,
     ATG_PROJECTS_ROOT: path.join(stateRoot, "projects"),
     ATG_STATE_ROOT: path.join(stateRoot, ".atg"),
     NODE_ENV: "development",
@@ -32,6 +36,8 @@ const conversionStore = await import("../lib/conversion-store.mjs");
 
 test.after(async () => {
   server.kill("SIGTERM");
+  await rm(path.join(repoRoot, nextDistDir), { recursive: true, force: true });
+  await Promise.all(originalGeneratedProjectFiles.map(([file, content]) => writeFile(path.join(repoRoot, file), content, "utf8")));
   await rm(stateRoot, { recursive: true, force: true });
 });
 
