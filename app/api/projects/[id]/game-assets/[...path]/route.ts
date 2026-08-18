@@ -183,10 +183,6 @@ function engineDiagnosticsScript(nonce: string) {
   let lastError = "";
   let reportTimer = 0;
 
-  const percentile = (values, rank) => {
-    const sorted = [...values].sort((left, right) => left - right);
-    return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * rank) - 1)] || 0;
-  };
   const post = (status, engine) => {
     const now = performance.now();
     const elapsed = Math.max(1, now - windowStarted);
@@ -195,7 +191,7 @@ function engineDiagnosticsScript(nonce: string) {
     const averageFrameTime = frameTimes.length
       ? frameTimes.reduce((sum, value) => sum + value, 0) / frameTimes.length
       : 0;
-    const p95FrameTime = percentile(frameTimes, 0.95);
+    const p95FrameTime = percentile(0.95);
     const warnings = [];
     if (p95FrameTime > FRAME_BUDGET_MS) warnings.push("Pixi ticker p95 frame time is above the 30 FPS budget; reduce particles, filters, or changing text.");
     if (droppedFrames > 0) warnings.push("Pixi dropped frames during this sample; reduce work in the heaviest scene or preload assets.");
