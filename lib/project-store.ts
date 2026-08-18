@@ -242,6 +242,9 @@ class LocalProjectStore implements ProjectStore {
       `${JSON.stringify(next, null, 2)}\n`,
       "utf8"
     );
+    await this.updateProject(project.id, (item) => {
+      item.updatedAt = new Date().toISOString();
+    });
     return next;
   }
 
@@ -510,6 +513,9 @@ class AzureProjectStore implements ProjectStore {
       `${JSON.stringify(next, null, 2)}\n`,
       "application/json; charset=utf-8"
     );
+    await this.updateProject(project.id, (item) => {
+      item.updatedAt = new Date().toISOString();
+    });
     return next;
   }
 

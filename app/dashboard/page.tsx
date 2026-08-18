@@ -109,6 +109,8 @@ type ConversionValidation = {
   warnings: { code: string; message: string }[];
   checks: { code: string; passed: boolean; message: string }[];
 };
+type RuntimeUpgradeOption = { runtimeVersion: string; compatible: boolean; warnings?: string[]; blockingErrors?: string[] };
+type RuntimeUpgradeRecord = { id: string; status: "preview" | "accepted" | "cancelled"; candidate: RuntimeUpgradeOption; previewRevision: string };
 
 const EDITOR_SPLIT_STORAGE_KEY = "atg.dashboard.editorSplitRatio";
 const EDITOR_HIDDEN_PANEL_STORAGE_KEY = "atg.dashboard.hiddenEditorPanel";
@@ -229,6 +231,10 @@ export default function Home() {
   const [isUpdatingCollaborators, setIsUpdatingCollaborators] = useState(false);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const [isUpgradeGameOpen, setIsUpgradeGameOpen] = useState(false);
+  const [isRuntimeUpgradeOpen, setIsRuntimeUpgradeOpen] = useState(false);
+  const [runtimeUpgradeOptions, setRuntimeUpgradeOptions] = useState<RuntimeUpgradeOption[]>([]);
+  const [runtimeUpgrade, setRuntimeUpgrade] = useState<RuntimeUpgradeRecord | null>(null);
+  const [runtimeUpgradeWarningsAcknowledged, setRuntimeUpgradeWarningsAcknowledged] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [activeConversionId, setActiveConversionId] = useState<string | null>(null);
   const [conversionStatus, setConversionStatus] = useState<ConversionStatus | null>(null);
@@ -391,6 +397,34 @@ export default function Home() {
     if (!activeProject || !upgradeGameAvailability.available) return;
     setIsProjectMenuOpen(false);
     setIsUpgradeGameOpen(true);
+  }
+
+  async function openRuntimeUpgrade() {
+    if (!activeProject || activeProject.engine?.type !== "pixi" || isRunning) return;
+    setIsProjectMenuOpen(false);
+    const response = await fetch(`/api/projects/${activeProject.id}/runtime-upgrades`, { cache: "no-store" });
+    const data = await response.json() as { options?: RuntimeUpgradeOption[]; upgrades?: RuntimeUpgradeRecord[]; error?: string };
+    if (!response.ok) { setError(data.error || "Unable to load runtime upgrades."); return; }
+    setRuntimeUpgradeOptions(data.options || []);
+    setRuntimeUpgrade(data.upgrades?.find((item) => item.status === "preview") || null);
+    setRuntimeUpgradeWarningsAcknowledged(false);
+    setIsRuntimeUpgradeOpen(true);
+  }
+
+  async function startRuntimeUpgrade(runtimeVersion: string) {
+    if (!activeProject) return;
+    const response = await fetch(`/api/projects/${activeProject.id}/runtime-upgrades`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ runtimeVersion }) });
+    const data = await response.json() as { upgrade?: RuntimeUpgradeRecord; error?: string };
+    if (!response.ok || !data.upgrade) { setError(data.error || "Unable to start runtime upgrade."); return; }
+    setRuntimeUpgrade(data.upgrade); setRuntimeUpgradeWarningsAcknowledged(false);
+  }
+
+  async function updateRuntimeUpgrade(action: "accept" | "cancel") {
+    if (!activeProject || !runtimeUpgrade) return;
+    const response = await fetch(`/api/projects/${activeProject.id}/runtime-upgrades/${runtimeUpgrade.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, acknowledgeWarnings: runtimeUpgradeWarningsAcknowledged }) });
+    const data = await response.json() as { upgrade?: RuntimeUpgradeRecord; error?: string };
+    if (!response.ok || !data.upgrade) { setError(data.error || "Unable to update runtime upgrade."); return; }
+    setRuntimeUpgrade(data.upgrade); if (action === "accept") { setIsRuntimeUpgradeOpen(false); await refreshOpenProject(activeProject.id); }
   }
 
   async function startUpgradeGame() {
@@ -1195,6 +1229,7 @@ export default function Home() {
           onOpenInstructions={openInstructions}
           onOpenProjectSettings={openProjectSettings}
           onOpenUpgradeGame={openUpgradeGame}
+          onOpenRuntimeUpgrade={openRuntimeUpgrade}
           onModeChange={setChatMode}
           onQuickAnswer={(answer, options) => {
             if (options?.chatMode) {
@@ -1214,6 +1249,9 @@ export default function Home() {
           projectName={activeProject.name}
           projectRevision={activeProject.updatedAt}
           canUpgradeGame={upgradeGameAvailability.available}
+          canUpgradeRuntime={activeProject.engine?.type === "pixi" && !isRunning}
+          activeRuntimeUpgrade={runtimeUpgrade}
+          onUpdateRuntimeUpgrade={updateRuntimeUpgrade}
           onSubmit={handleSubmit}
           runFeedback={runFeedback}
           activeConversionId={activeConversionId}
@@ -1319,6 +1357,7 @@ export default function Home() {
           reason={upgradeGameAvailability.reason}
         />
       ) : null}
+      {isRuntimeUpgradeOpen && activeProject ? <RuntimeUpgradeModal options={runtimeUpgradeOptions} upgrade={runtimeUpgrade} acknowledged={runtimeUpgradeWarningsAcknowledged} onAcknowledge={setRuntimeUpgradeWarningsAcknowledged} onCancel={() => setIsRuntimeUpgradeOpen(false)} onStart={startRuntimeUpgrade} onUpdate={updateRuntimeUpgrade} /> : null}
 
       {projectPendingDelete ? (
         <DeleteProjectModal
@@ -1561,6 +1600,12 @@ function UpgradeGameModal({
       </section>
     </div>
   );
+}
+
+function RuntimeUpgradeModal({ options, upgrade, acknowledged, onAcknowledge, onCancel, onStart, onUpdate }: { options: RuntimeUpgradeOption[]; upgrade: RuntimeUpgradeRecord | null; acknowledged: boolean; onAcknowledge: (value: boolean) => void; onCancel: () => void; onStart: (version: string) => void; onUpdate: (action: "accept" | "cancel") => void }) {
+  const [selected, setSelected] = useState(options[0]?.runtimeVersion || "");
+  const candidate = upgrade?.candidate;
+  return <div className={styles.modalBackdrop} role="presentation"><section aria-modal="true" className={styles.modal} role="dialog"><div className={styles.modalHeader}><h2>Runtime Upgrade</h2><button aria-label="Close runtime upgrade dialog" onClick={onCancel} type="button"><X aria-hidden="true" /></button></div><div className={styles.modalBody}><p>Preview a newer registered runtime in isolation. The pinned project runtime changes only when you accept.</p>{upgrade ? <><p><strong>Previewing {candidate?.runtimeVersion}</strong></p>{candidate?.warnings?.map((warning) => <p key={warning}>{warning}</p>)}{candidate?.warnings?.length ? <label><input checked={acknowledged} onChange={(event) => onAcknowledge(event.target.checked)} type="checkbox" /> I acknowledge the warnings</label> : null}</> : <select aria-label="Runtime version" onChange={(event) => setSelected(event.target.value)} value={selected}>{options.map((option) => <option disabled={!option.compatible} key={option.runtimeVersion} value={option.runtimeVersion}>{option.runtimeVersion}{option.compatible ? "" : " (incompatible)"}</option>)}</select>}</div><div className={styles.modalActions}><button onClick={onCancel} type="button">Close</button>{upgrade ? <><button onClick={() => onUpdate("cancel")} type="button">Cancel Preview</button><button disabled={Boolean(candidate?.warnings?.length) && !acknowledged} onClick={() => onUpdate("accept")} type="button">Accept Runtime</button></> : <button disabled={!selected} onClick={() => onStart(selected)} type="button">Start Preview</button>}</div></section></div>;
 }
 
 function AccountSettingsModal({
@@ -2312,6 +2357,8 @@ function AssetsModal({
 }
 
 function ProjectChat({
+  activeRuntimeUpgrade,
+  canUpgradeRuntime,
   canUpgradeGame,
   canSubmit,
   chatMode,
@@ -2328,6 +2375,7 @@ function ProjectChat({
   onOpenInstructions,
   onOpenProjectSettings,
   onOpenUpgradeGame,
+  onOpenRuntimeUpgrade,
   onQuickAnswer,
   onReturnToProjects,
   onTargetChange,
@@ -2344,8 +2392,11 @@ function ProjectChat({
   conversionValidation,
   conversionWarningsAcknowledged,
   onConversionWarningsAcknowledged,
-  onUpdateConversion
+  onUpdateConversion,
+  onUpdateRuntimeUpgrade
 }: {
+  activeRuntimeUpgrade: RuntimeUpgradeRecord | null;
+  canUpgradeRuntime: boolean;
   canUpgradeGame: boolean;
   canSubmit: boolean;
   chatMode: ChatMode;
@@ -2362,6 +2413,7 @@ function ProjectChat({
   onOpenInstructions: () => void;
   onOpenProjectSettings: () => void;
   onOpenUpgradeGame: () => void;
+  onOpenRuntimeUpgrade: () => void;
   onQuickAnswer: (answer: string, options?: ChatSubmitOptions) => void;
   onReturnToProjects: () => void;
   onTargetChange: (target: EditingTarget) => void;
@@ -2379,6 +2431,7 @@ function ProjectChat({
   conversionWarningsAcknowledged: boolean;
   onConversionWarningsAcknowledged: (acknowledged: boolean) => void;
   onUpdateConversion: (action: "accept" | "cancel" | "retry" | "validate") => void;
+  onUpdateRuntimeUpgrade: (action: "accept" | "cancel") => void;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLElement | null>(null);
@@ -2389,7 +2442,9 @@ function ProjectChat({
   const [isResizingEditor, setIsResizingEditor] = useState(false);
   const showFeedback = runFeedback.state !== "idle";
   const publishedPreviewPath = `${buildGameAssetUrl(projectId, editingTarget, projectRevision)}&atgEditorPreview=1`;
-  const previewPath = activeConversionId && conversionStatus === "review" && conversionRevision
+  const previewPath = activeRuntimeUpgrade?.status === "preview"
+    ? `${publishedPreviewPath}&runtimeUpgrade=${encodeURIComponent(activeRuntimeUpgrade.id)}&revision=${encodeURIComponent(activeRuntimeUpgrade.previewRevision)}`
+    : activeConversionId && conversionStatus === "review" && conversionRevision
     ? `${publishedPreviewPath}&conversion=${encodeURIComponent(activeConversionId)}&revision=${encodeURIComponent(conversionRevision)}`
     : publishedPreviewPath;
   const latestAssistantMessage = [...messages]
@@ -2740,8 +2795,11 @@ function ProjectChat({
             onOpenAssets={onOpenAssets}
             onOpenInstructions={onOpenInstructions}
             onOpenProjectSettings={onOpenProjectSettings}
-            onOpenUpgradeGame={onOpenUpgradeGame}
-            canUpgradeGame={canUpgradeGame}
+                onOpenUpgradeGame={onOpenUpgradeGame}
+                onOpenRuntimeUpgrade={onOpenRuntimeUpgrade}
+                canUpgradeGame={canUpgradeGame}
+                canUpgradeRuntime={canUpgradeRuntime}
+                onUpdateRuntimeUpgrade={onUpdateRuntimeUpgrade}
             onReturnToProjects={onReturnToProjects}
             onToggle={onToggleProjectMenu}
             projectId={projectId}
@@ -2774,7 +2832,10 @@ function ProjectChat({
                 onOpenInstructions={onOpenInstructions}
                 onOpenProjectSettings={onOpenProjectSettings}
                 onOpenUpgradeGame={onOpenUpgradeGame}
+                onOpenRuntimeUpgrade={onOpenRuntimeUpgrade}
                 canUpgradeGame={canUpgradeGame}
+                canUpgradeRuntime={canUpgradeRuntime}
+                onUpdateRuntimeUpgrade={onUpdateRuntimeUpgrade}
                 onReturnToProjects={onReturnToProjects}
                 onToggle={onToggleProjectMenu}
                 projectId={projectId}
@@ -2793,6 +2854,7 @@ function ProjectChat({
 }
 
 function ProjectMenu({
+  canUpgradeRuntime,
   canUpgradeGame,
   className,
   isOpen,
@@ -2801,11 +2863,14 @@ function ProjectMenu({
   onOpenInstructions,
   onOpenProjectSettings,
   onOpenUpgradeGame,
+  onOpenRuntimeUpgrade,
+  onUpdateRuntimeUpgrade,
   onReturnToProjects,
   onToggle,
   projectId
 }: {
   canUpgradeGame: boolean;
+  canUpgradeRuntime: boolean;
   className?: string;
   isOpen: boolean;
   onOpenAccountSettings: () => void;
@@ -2813,6 +2878,8 @@ function ProjectMenu({
   onOpenInstructions: () => void;
   onOpenProjectSettings: () => void;
   onOpenUpgradeGame: () => void;
+  onOpenRuntimeUpgrade: () => void;
+  onUpdateRuntimeUpgrade: (action: "accept" | "cancel") => void;
   onReturnToProjects: () => void;
   onToggle: () => void;
   projectId: string;
@@ -2856,6 +2923,12 @@ function ProjectMenu({
             type="button"
           >
             Upgrade Game
+          </button>
+          <button disabled={!canUpgradeRuntime} onClick={onOpenRuntimeUpgrade} role="menuitem" type="button">
+            Runtime Upgrade
+          </button>
+          <button disabled={!canUpgradeRuntime} onClick={() => onUpdateRuntimeUpgrade("cancel")} role="menuitem" type="button">
+            Cancel Runtime Preview
           </button>
           <button onClick={onOpenAccountSettings} role="menuitem" type="button">
             Account Settings

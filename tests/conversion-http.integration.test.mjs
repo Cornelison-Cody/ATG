@@ -113,6 +113,28 @@ test("HTTP conversion cancellation, retry, blocking validation, and revision con
   assert.equal(conflictResponse.status, 409);
 });
 
+test("HTTP runtime upgrade previews are isolated and acceptance pins the selected runtime", async () => {
+  const project = await createProject("HTTP Runtime Upgrade");
+  await patchConfig(project.id, { formatVersion: 1, migrationStatus: "upgraded", runtimeVersion: "atg-2d-1.2.0", type: "pixi" });
+  const listed = await getJson(`${baseUrl}/api/projects/${project.id}/runtime-upgrades`);
+  assert.ok(listed.options.some((option) => option.runtimeVersion === "atg-2d-1.3.0"));
+  const started = await postRaw(`${baseUrl}/api/projects/${project.id}/runtime-upgrades`, { runtimeVersion: "atg-2d-1.3.0" });
+  assert.equal(started.status, 201);
+  const upgrade = (await started.json()).upgrade;
+  const preview = await fetch(`${baseUrl}/api/projects/${project.id}/game-assets/tv.html?runtimeUpgrade=${upgrade.id}&revision=${encodeURIComponent(upgrade.previewRevision)}`);
+  assert.equal(preview.status, 200);
+  assert.match(await preview.text(), /atg-2d-1\.3\.0/);
+  const cancelled = await postJson(`${baseUrl}/api/projects/${project.id}/runtime-upgrades/${upgrade.id}`, { action: "cancel" });
+  assert.equal(cancelled.upgrade.status, "cancelled");
+  assert.equal((await getJson(`${baseUrl}/api/game/${project.id}/config`)).config.engine.runtimeVersion, "atg-2d-1.2.0");
+
+  const acceptedStart = await postRaw(`${baseUrl}/api/projects/${project.id}/runtime-upgrades`, { runtimeVersion: "atg-2d-1.3.0" });
+  const acceptedUpgrade = (await acceptedStart.json()).upgrade;
+  const accepted = await postJson(`${baseUrl}/api/projects/${project.id}/runtime-upgrades/${acceptedUpgrade.id}`, { action: "accept" });
+  assert.equal(accepted.upgrade.status, "accepted");
+  assert.equal((await getJson(`${baseUrl}/api/game/${project.id}/config`)).config.engine.runtimeVersion, "atg-2d-1.3.0");
+});
+
 async function getJson(url) {
   const response = await fetch(url);
   assert.equal(response.status, 200);

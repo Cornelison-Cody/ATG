@@ -3,6 +3,7 @@ import { getAtgEngineBundle, getAtgEngineCompatibilityError, getAtgEngineBundleU
 import { getProject } from "@/lib/projects";
 import { readGameAsset, readGameConfig } from "@/lib/project-game";
 import { readConversionPreviewAsset } from "@/lib/conversion-manager.mjs";
+import { getRuntimeUpgradeForProject } from "@/lib/runtime-upgrade-manager.mjs";
 import { canEditProject, getProjectPrincipal, principalRequiredResponse } from "@/lib/project-access";
 import { requireEditorAuth } from "@/lib/api-auth";
 
@@ -25,9 +26,10 @@ export async function GET(request: Request, context: RouteContext) {
     const params = new URL(request.url).searchParams;
     const conversionId = params.get("conversion");
     const conversionRevision = params.get("revision");
+    const runtimeUpgradeId = params.get("runtimeUpgrade");
     let asset;
     let previewEngine = null;
-    if (conversionId || conversionRevision) {
+    if (conversionId || conversionRevision || runtimeUpgradeId) {
       const authResponse = await requireEditorAuth(request);
       if (authResponse) return authResponse;
       const principal = getProjectPrincipal(request);
@@ -35,12 +37,19 @@ export async function GET(request: Request, context: RouteContext) {
       if (!canEditProject(project, principal)) {
         return Response.json({ error: "You do not have permission to preview this conversion." }, { status: 403 });
       }
-      if (!conversionId || !conversionRevision) {
+      if (runtimeUpgradeId) {
+        if (!conversionRevision) return Response.json({ error: "A runtime upgrade preview requires a revision." }, { status: 400 });
+        const upgrade = await getRuntimeUpgradeForProject(project.id, runtimeUpgradeId);
+        if (upgrade.status !== "preview" || upgrade.previewRevision !== conversionRevision) return Response.json({ error: "Runtime upgrade preview is no longer available." }, { status: 404 });
+        asset = await readGameAsset(project, assetSegments);
+        previewEngine = upgrade.currentMetadata && { ...upgrade.currentMetadata, runtimeVersion: upgrade.candidate.runtimeVersion };
+      } else if (!conversionId || !conversionRevision) {
         return Response.json({ error: "A conversion preview requires both conversion and revision." }, { status: 400 });
+      } else {
+        const preview = await readConversionPreviewAsset(project.id, conversionId, conversionRevision, assetSegments.join("/"));
+        asset = preview;
+        previewEngine = preview.engine;
       }
-      const preview = await readConversionPreviewAsset(project.id, conversionId, conversionRevision, assetSegments.join("/"));
-      asset = preview;
-      previewEngine = preview.engine;
     } else {
       asset = await readGameAsset(project, assetSegments);
     }
