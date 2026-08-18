@@ -12,6 +12,7 @@ Record the following with each browser run:
 - display resolution, device pixel ratio, power mode, and hardware acceleration state;
 - renderer and resolution reported by PixiJS;
 - frame-time average, p95, worst frame, dropped frames, and load time.
+- Pixi ticker FPS and diagnostics sampler overhead; do not substitute a window-level `requestAnimationFrame` counter.
 
 ## Workload budgets
 
@@ -27,9 +28,11 @@ The suite covers the representative workloads that most affect generated games. 
 | Video textures | 2 textures | 22 ms | frame upload/update proxy |
 | Asset loading | 48 assets | 500 ms | manifest load and decode proxy |
 
-These are regression budgets, not claims that every browser or GPU will meet them. A result over budget is reported as `REVIEW` with its p95 and budget so a maintainer can identify which workload needs attention. The Node harness measures deterministic CPU-side proxies and runs in CI without requiring a GPU; browser measurements must be recorded using the profile above before changing a budget.
+These are regression budgets, not claims that every browser or GPU will meet them. A result over budget is reported as `REVIEW` with its p95 and budget so a maintainer can identify which workload needs attention. The Node harness measures deterministic CPU-side proxies and runs in CI without requiring a GPU; browser measurements must be recorded using the profile above before changing a budget. Store browser results as JSON artifacts with the machine profile, pinned runtime version, workload, renderer, p50/p95/worst frame, dropped frames, load/decode time, sampler overhead, and pass/review status.
 
 ## Running the suite
+
+For a real browser/renderer sample, run the standalone benchmark at `/engine-benchmark.html` while the app is running. It loads the pinned `atg-2d-1.3.0` runtime, drives the 1920 × 1080 logical stage, samples the Pixi ticker, records the browser profile, and downloads a JSON artifact. Use the page on the documented 4K display profile; the CI Node suite below remains the deterministic smoke test.
 
 Run the fast contract tests with:
 

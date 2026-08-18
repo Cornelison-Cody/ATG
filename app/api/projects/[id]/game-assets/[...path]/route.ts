@@ -172,9 +172,11 @@ function engineDiagnosticsScript(nonce: string) {
   const FRAME_BUDGET_MS = 1000 / 30;
   const frameTimes = [];
   let frameCount = 0;
-  let lastFrame = 0;
+  let droppedFrames = 0;
   let windowStarted = performance.now();
-  let animationFrame = 0;
+  let ticker = null;
+  let tickerCallback = null;
+  let samplerOverheadMs = 0;
   let assetFailures = 0;
   let audioFailures = 0;
   let engineErrors = 0;
@@ -188,12 +190,16 @@ function engineDiagnosticsScript(nonce: string) {
   const post = (status, engine) => {
     const now = performance.now();
     const elapsed = Math.max(1, now - windowStarted);
+    const sorted = [...frameTimes].sort((left, right) => left - right);
+    const percentile = (rank) => sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * rank) - 1)] || 0;
     const averageFrameTime = frameTimes.length
       ? frameTimes.reduce((sum, value) => sum + value, 0) / frameTimes.length
       : 0;
     const p95FrameTime = percentile(frameTimes, 0.95);
     const warnings = [];
-    if (p95FrameTime > FRAME_BUDGET_MS) warnings.push("Frame time is above the 30 FPS target; reduce particles, filters, or changing text.");
+    if (p95FrameTime > FRAME_BUDGET_MS) warnings.push("Pixi ticker p95 frame time is above the 30 FPS budget; reduce particles, filters, or changing text.");
+    if (droppedFrames > 0) warnings.push("Pixi dropped frames during this sample; reduce work in the heaviest scene or preload assets.");
+    if (samplerOverheadMs / elapsed > 0.01) warnings.push("Diagnostics overhead exceeded 1% of the sample window; shorten the sample buffer or disable optional diagnostics.");
     if (assetFailures > 0) warnings.push("One or more assets failed to load; check the asset path, format, and project asset library.");
     if (audioFailures > 0) warnings.push("Audio failed in the preview; check the sound asset and browser audio unlock state.");
     if (engineErrors > 0) warnings.push("The engine reported an error; inspect the game code and runtime compatibility.");
@@ -204,7 +210,12 @@ function engineDiagnosticsScript(nonce: string) {
         status,
         fps: frameCount * 1000 / elapsed,
         frameTimeMs: averageFrameTime,
+        p50FrameTimeMs: percentile(0.5),
         p95FrameTimeMs: p95FrameTime,
+        worstFrameTimeMs: sorted[sorted.length - 1] || 0,
+        droppedFrames,
+        tickerFps: frameCount * 1000 / elapsed,
+        samplerOverheadMs,
         renderer: engine?.app?.renderer?.type || engine?.app?.renderer?.constructor?.name || "WebGL",
         resolution: engine?.app?.renderer?.resolution || 1,
         logicalSize: engine?.logicalSize || null,
@@ -217,16 +228,20 @@ function engineDiagnosticsScript(nonce: string) {
     }, "*");
     frameCount = 0;
     frameTimes.length = 0;
+    droppedFrames = 0;
+    samplerOverheadMs = 0;
     windowStarted = now;
   };
-  const onFrame = (now) => {
-    if (lastFrame > 0) {
-      frameTimes.push(Math.min(1000, now - lastFrame));
+  const onTicker = (tickerState) => {
+    const started = performance.now();
+    const frameTime = Number(tickerState?.deltaMS || tickerState?.elapsedMS || 0);
+    if (frameTime > 0) {
+      frameTimes.push(Math.min(1000, frameTime));
       if (frameTimes.length > 120) frameTimes.shift();
+      if (frameTime > FRAME_BUDGET_MS) droppedFrames += Math.max(1, Math.round(frameTime / FRAME_BUDGET_MS) - 1);
     }
-    lastFrame = now;
     frameCount += 1;
-    animationFrame = requestAnimationFrame(onFrame);
+    samplerOverheadMs += performance.now() - started;
   };
   const classifyError = (message) => {
     const text = String(message || "");
@@ -245,13 +260,15 @@ function engineDiagnosticsScript(nonce: string) {
     lastError = String(event.detail?.message || "Engine error").slice(0, 180);
   });
   window.addEventListener("pagehide", () => {
-    cancelAnimationFrame(animationFrame);
+    if (ticker && tickerCallback) ticker.remove(tickerCallback);
     window.clearInterval(reportTimer);
   }, { once: true });
   window.addEventListener("atg-engine-ready", (event) => {
     const engine = event.detail || window.ATGEngine;
+    ticker = engine?.app?.ticker || null;
+    tickerCallback = onTicker;
+    ticker?.add(tickerCallback);
     post("ready", engine);
-    animationFrame = requestAnimationFrame(onFrame);
     reportTimer = window.setInterval(() => post("sample", engine), 1000);
   }, { once: true });
 })();
