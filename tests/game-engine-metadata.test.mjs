@@ -27,12 +27,12 @@ test("engine-backed games require explicit runtime and format versions", () => {
   assert.deepEqual(normalizeGameEngineMetadata({
     formatVersion: 1,
     migrationStatus: "upgraded",
-    runtimeVersion: "8.19.0",
+    runtimeVersion: "atg-2d-1.3.0",
     type: "pixi"
   }), {
     formatVersion: 1,
     migrationStatus: "upgraded",
-    runtimeVersion: "8.19.0",
+    runtimeVersion: "atg-2d-1.3.0",
     type: "pixi"
   });
 });
@@ -40,9 +40,10 @@ test("engine-backed games require explicit runtime and format versions", () => {
 test("malformed or unsupported engine metadata fails safely", () => {
   for (const metadata of [
     null,
-    { formatVersion: 1, migrationStatus: "upgraded", runtimeVersion: "8.19.0", type: "three" },
-    { formatVersion: 2, migrationStatus: "upgraded", runtimeVersion: "8.19.0", type: "pixi" },
-    { formatVersion: 1, migrationStatus: "legacy", runtimeVersion: "8.19.0", type: "pixi" }
+    { formatVersion: 1, migrationStatus: "upgraded", runtimeVersion: "atg-2d-1.3.0", type: "three" },
+    { formatVersion: 2, migrationStatus: "upgraded", runtimeVersion: "atg-2d-1.3.0", type: "pixi" },
+    { formatVersion: 1, migrationStatus: "legacy", runtimeVersion: "atg-2d-1.3.0", type: "pixi" },
+    { formatVersion: 1, migrationStatus: "upgraded", runtimeVersion: "8.19.0", type: "pixi" }
   ]) {
     assert.throws(() => normalizeGameEngineMetadata(metadata), GameEngineMetadataError);
   }
