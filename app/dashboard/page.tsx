@@ -111,7 +111,8 @@ type ConversionValidation = {
   checks: { code: string; passed: boolean; message: string }[];
 };
 type RuntimeUpgradeOption = { runtimeVersion: string; compatible: boolean; warnings?: string[]; blockingErrors?: string[] };
-type RuntimeUpgradeRecord = { id: string; status: "preview" | "accepted" | "cancelled"; candidate: RuntimeUpgradeOption; previewRevision: string };
+type RuntimeUpgradeValidation = { blockingErrors: string[]; checks: { code: string; passed: boolean; message: string }[]; warnings: string[] };
+type RuntimeUpgradeRecord = { id: string; status: "preview" | "accepted" | "cancelled"; candidate: RuntimeUpgradeOption; previewRevision: string; validation?: RuntimeUpgradeValidation | null };
 
 const EDITOR_SPLIT_STORAGE_KEY = "atg.dashboard.editorSplitRatio";
 const EDITOR_HIDDEN_PANEL_STORAGE_KEY = "atg.dashboard.hiddenEditorPanel";
@@ -424,7 +425,7 @@ export default function Home() {
     setRuntimeUpgrade(data.upgrade); setRuntimeUpgradeWarningsAcknowledged(false);
   }
 
-  async function updateRuntimeUpgrade(action: "accept" | "cancel") {
+  async function updateRuntimeUpgrade(action: "accept" | "cancel" | "validate") {
     if (!activeProject || !runtimeUpgrade) return;
     const response = await fetch(`/api/projects/${activeProject.id}/runtime-upgrades/${runtimeUpgrade.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, acknowledgeWarnings: runtimeUpgradeWarningsAcknowledged }) });
     const data = await response.json() as { upgrade?: RuntimeUpgradeRecord; error?: string };
@@ -1633,10 +1634,13 @@ function UpgradeGameModal({
   );
 }
 
-function RuntimeUpgradeModal({ options, upgrade, acknowledged, onAcknowledge, onCancel, onStart, onUpdate }: { options: RuntimeUpgradeOption[]; upgrade: RuntimeUpgradeRecord | null; acknowledged: boolean; onAcknowledge: (value: boolean) => void; onCancel: () => void; onStart: (version: string) => void; onUpdate: (action: "accept" | "cancel") => void }) {
+function RuntimeUpgradeModal({ options, upgrade, acknowledged, onAcknowledge, onCancel, onStart, onUpdate }: { options: RuntimeUpgradeOption[]; upgrade: RuntimeUpgradeRecord | null; acknowledged: boolean; onAcknowledge: (value: boolean) => void; onCancel: () => void; onStart: (version: string) => void; onUpdate: (action: "accept" | "cancel" | "validate") => void }) {
   const [selected, setSelected] = useState(options[0]?.runtimeVersion || "");
   const candidate = upgrade?.candidate;
-  return <div className={styles.modalBackdrop} role="presentation"><section aria-modal="true" className={styles.modal} role="dialog"><div className={styles.modalHeader}><h2>Runtime Upgrade</h2><button aria-label="Close runtime upgrade dialog" onClick={onCancel} type="button"><X aria-hidden="true" /></button></div><div className={styles.modalBody}><p>Preview a newer registered runtime in isolation. The pinned project runtime changes only when you accept.</p>{upgrade ? <><p><strong>Previewing {candidate?.runtimeVersion}</strong></p>{candidate?.warnings?.map((warning) => <p key={warning}>{warning}</p>)}{candidate?.warnings?.length ? <label><input checked={acknowledged} onChange={(event) => onAcknowledge(event.target.checked)} type="checkbox" /> I acknowledge the warnings</label> : null}</> : <select aria-label="Runtime version" onChange={(event) => setSelected(event.target.value)} value={selected}>{options.map((option) => <option disabled={!option.compatible} key={option.runtimeVersion} value={option.runtimeVersion}>{option.runtimeVersion}{option.compatible ? "" : " (incompatible)"}</option>)}</select>}</div><div className={styles.modalActions}><button onClick={onCancel} type="button">Close</button>{upgrade ? <><button onClick={() => onUpdate("cancel")} type="button">Cancel Preview</button><button disabled={Boolean(candidate?.warnings?.length) && !acknowledged} onClick={() => onUpdate("accept")} type="button">Accept Runtime</button></> : <button disabled={!selected} onClick={() => onStart(selected)} type="button">Start Preview</button>}</div></section></div>;
+  const validation = upgrade?.validation;
+  const requiresAcknowledgment = Boolean(candidate?.warnings?.length || validation?.warnings?.length);
+  const canAccept = Boolean(validation && !validation.blockingErrors.length && (!requiresAcknowledgment || acknowledged));
+  return <div className={styles.modalBackdrop} role="presentation"><section aria-modal="true" className={styles.modal} role="dialog"><div className={styles.modalHeader}><h2>Runtime Upgrade</h2><button aria-label="Close runtime upgrade dialog" onClick={onCancel} type="button"><X aria-hidden="true" /></button></div><div className={styles.modalBody}><p>Preview a newer registered runtime in isolation. The pinned project runtime changes only when you accept.</p>{upgrade ? <><p><strong>Previewing {candidate?.runtimeVersion}</strong></p><button onClick={() => onUpdate("validate")} type="button">Validate candidate</button>{validation ? <div aria-live="polite"><p><strong>{validation.blockingErrors.length ? "Validation found blocking issues" : "Validation completed"}</strong></p>{validation.checks.map((check) => <p key={check.code}>{check.passed ? "✓" : "✕"} {check.message}</p>)}{validation.warnings.map((warning) => <p key={warning}>Warning: {warning}</p>)}</div> : <p>Run validation before accepting this runtime.</p>}{candidate?.warnings?.map((warning) => <p key={warning}>{warning}</p>)}{requiresAcknowledgment ? <label><input checked={acknowledged} onChange={(event) => onAcknowledge(event.target.checked)} type="checkbox" /> I acknowledge the warnings</label> : null}</> : <select aria-label="Runtime version" onChange={(event) => setSelected(event.target.value)} value={selected}>{options.map((option) => <option disabled={!option.compatible} key={option.runtimeVersion} value={option.runtimeVersion}>{option.runtimeVersion}{option.compatible ? "" : " (incompatible)"}</option>)}</select>}</div><div className={styles.modalActions}><button onClick={onCancel} type="button">Close</button>{upgrade ? <><button onClick={() => onUpdate("cancel")} type="button">Cancel Preview</button><button disabled={!canAccept} onClick={() => onUpdate("accept")} type="button">Accept Runtime</button></> : <button disabled={!selected} onClick={() => onStart(selected)} type="button">Start Preview</button>}</div></section></div>;
 }
 
 function AccountSettingsModal({
@@ -2473,7 +2477,7 @@ function ProjectChat({
   conversionWarningsAcknowledged: boolean;
   onConversionWarningsAcknowledged: (acknowledged: boolean) => void;
   onUpdateConversion: (action: "accept" | "cancel" | "retry" | "validate") => void;
-  onUpdateRuntimeUpgrade: (action: "accept" | "cancel") => void;
+  onUpdateRuntimeUpgrade: (action: "accept" | "cancel" | "validate") => void;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLElement | null>(null);
@@ -2921,7 +2925,7 @@ function ProjectMenu({
   onOpenProjectSettings: () => void;
   onOpenUpgradeGame: () => void;
   onOpenRuntimeUpgrade: () => void;
-  onUpdateRuntimeUpgrade: (action: "accept" | "cancel") => void;
+  onUpdateRuntimeUpgrade: (action: "accept" | "cancel" | "validate") => void;
   onReturnToProjects: () => void;
   onToggle: () => void;
   projectId: string;
