@@ -101,7 +101,9 @@ type HiddenEditorPanel = "editor" | "preview" | null;
 type ChatSubmitOptions = {
   chatMode?: ChatMode;
   editingTarget?: BuildTarget;
+  conversionId?: string;
 };
+type ConversionStatus = "queued" | "running" | "review" | "failed" | "cancelled" | "accepted";
 
 const EDITOR_SPLIT_STORAGE_KEY = "atg.dashboard.editorSplitRatio";
 const EDITOR_HIDDEN_PANEL_STORAGE_KEY = "atg.dashboard.hiddenEditorPanel";
@@ -223,6 +225,8 @@ export default function Home() {
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const [isUpgradeGameOpen, setIsUpgradeGameOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [activeConversionId, setActiveConversionId] = useState<string | null>(null);
+  const [conversionStatus, setConversionStatus] = useState<ConversionStatus | null>(null);
   const [projectPendingDelete, setProjectPendingDelete] = useState<ProjectSummary | null>(null);
   const [runFeedback, setRunFeedback] = useState<ChatRunFeedback>(idleRunFeedback);
   const [error, setError] = useState("");
@@ -381,13 +385,26 @@ export default function Home() {
     setIsUpgradeGameOpen(true);
   }
 
-  function startUpgradeGame() {
+  async function startUpgradeGame() {
     if (!activeProject || !upgradeGameAvailability.available) return;
     setIsUpgradeGameOpen(false);
-    setChatMode("build");
-    setEditingTarget("tv");
-    setInput("");
-    void submitChat(UPGRADE_GAME_PROMPT, { chatMode: "build", editingTarget: "both" });
+    try {
+      const response = await fetch(`/api/projects/${activeProject.id}/conversions`, {
+        body: JSON.stringify({}),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+      const data = (await response.json()) as { conversion?: { id: string }; error?: string };
+      if (!response.ok || !data.conversion) throw new Error(data.error || `Unable to start conversion (${response.status})`);
+      setActiveConversionId(data.conversion.id);
+      setConversionStatus("queued");
+      setChatMode("build");
+      setEditingTarget("tv");
+      setInput("");
+      void submitChat(UPGRADE_GAME_PROMPT, { chatMode: "build", editingTarget: "both", conversionId: data.conversion.id });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to start conversion.");
+    }
   }
 
   function openProjectSettings() {
@@ -964,7 +981,8 @@ export default function Home() {
           chatMode: effectiveChatMode,
           editingTarget: effectiveEditingTarget,
           projectId: activeProject.id,
-          message: prompt
+          message: prompt,
+          ...(options.conversionId ? { conversionId: options.conversionId } : {})
         })
       });
 
@@ -999,6 +1017,9 @@ export default function Home() {
 
       await refreshOpenProject(activeProject.id);
       await loadProjects();
+      if (options.conversionId) {
+        await refreshConversion(activeProject.id, options.conversionId);
+      }
     } catch (chatError) {
       const message = chatError instanceof Error ? chatError.message : "Unknown chat failure.";
       setMessages((current) =>
@@ -1017,6 +1038,29 @@ export default function Home() {
     } finally {
       setIsRunning(false);
     }
+  }
+
+  async function refreshConversion(projectId: string, conversionId: string) {
+    const response = await fetch(`/api/projects/${projectId}/conversions/${conversionId}`, { cache: "no-store" });
+    if (!response.ok) return;
+    const data = (await response.json()) as { conversion?: { status: ConversionStatus } };
+    if (data.conversion) setConversionStatus(data.conversion.status);
+  }
+
+  async function updateConversion(action: "accept" | "cancel" | "retry") {
+    if (!activeProject || !activeConversionId) return;
+    const response = await fetch(`/api/projects/${activeProject.id}/conversions/${activeConversionId}`, {
+      body: JSON.stringify({ action }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST"
+    });
+    const data = (await response.json()) as { conversion?: { status: ConversionStatus }; error?: string };
+    if (!response.ok || !data.conversion) {
+      setError(data.error || "Unable to update conversion.");
+      return;
+    }
+    setConversionStatus(data.conversion.status);
+    if (action === "accept") await refreshOpenProject(activeProject.id);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1155,6 +1199,9 @@ export default function Home() {
           canUpgradeGame={upgradeGameAvailability.available}
           onSubmit={handleSubmit}
           runFeedback={runFeedback}
+          activeConversionId={activeConversionId}
+          conversionStatus={conversionStatus}
+          onUpdateConversion={updateConversion}
         />
       ) : (
         <ProjectDashboard
@@ -2269,7 +2316,10 @@ function ProjectChat({
   projectId,
   projectName,
   projectRevision,
-  runFeedback
+  runFeedback,
+  activeConversionId,
+  conversionStatus,
+  onUpdateConversion
 }: {
   canUpgradeGame: boolean;
   canSubmit: boolean;
@@ -2297,6 +2347,9 @@ function ProjectChat({
   projectName: string;
   projectRevision: string;
   runFeedback: ChatRunFeedback;
+  activeConversionId: string | null;
+  conversionStatus: ConversionStatus | null;
+  onUpdateConversion: (action: "accept" | "cancel" | "retry") => void;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLElement | null>(null);
@@ -2526,6 +2579,19 @@ function ProjectChat({
           ) : null}
 
           {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
+
+          {activeConversionId && conversionStatus ? (
+            <div className={styles.settingsMessage} role="status">
+              <strong>Upgrade Game: </strong>{conversionStatus === "review" ? "Candidate ready for review." : conversionStatus}
+              {conversionStatus === "review" ? (
+                <>
+                  <button onClick={() => onUpdateConversion("cancel")} type="button">Cancel Upgrade</button>{" "}
+                  <button onClick={() => onUpdateConversion("accept")} type="button">Accept Upgrade</button>
+                </>
+              ) : null}
+              {conversionStatus === "failed" ? <button onClick={() => onUpdateConversion("retry")} type="button">Retry Upgrade</button> : null}
+            </div>
+          ) : null}
 
           {planningAnswers.length > 0 && !isRunning ? (
             <div className={styles.quickAnswers} aria-label="Planning answer choices">
