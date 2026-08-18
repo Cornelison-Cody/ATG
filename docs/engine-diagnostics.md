@@ -4,12 +4,13 @@ The dashboard preview receives a lightweight diagnostics stream for PixiJS TV ga
 
 The preview reports:
 
-- measured FPS and average/p95 frame time against the 30 FPS (33.33 ms) target;
+- measured Pixi ticker FPS plus average/p50/p95/worst ticker frame time against the 30 FPS (33.33 ms) target;
+- dropped-frame count and measured diagnostics sampler overhead;
 - renderer name, renderer resolution, and the 1920 × 1080 logical stage;
 - asset, audio, and engine error counts;
 - short warnings with corrective guidance.
 
-The dashboard keeps this data in React state for the active editor session only. It is not sent to the server, stored in project data, or retained after the preview is reloaded. The monitor samples once per second and caps its frame sample buffer, keeping its work negligible compared with the engine ticker.
+The dashboard keeps this data in React state for the active editor session only. It is not sent to the server, stored in project data, or retained after the preview is reloaded. The monitor samples once per second and caps its frame sample buffer. It subscribes to the actual Pixi `app.ticker`; it does not create a second `requestAnimationFrame` loop, so a runtime capped at 30 FPS is reported as approximately 30 FPS. The measured sampler overhead is surfaced when it exceeds 1% of the sample window.
 
 The iframe remains sandboxed. Diagnostics cross the iframe boundary through a namespaced `postMessage` event, and the parent accepts messages only when `event.source` is the active preview iframe. This prevents a game or another window from populating the diagnostics panel.
 

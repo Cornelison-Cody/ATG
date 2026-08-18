@@ -7,7 +7,12 @@ type DiagnosticsPayload = {
   status: "ready" | "sample";
   fps: number;
   frameTimeMs: number;
+  p50FrameTimeMs: number;
   p95FrameTimeMs: number;
+  worstFrameTimeMs: number;
+  droppedFrames: number;
+  tickerFps: number;
+  samplerOverheadMs: number;
   renderer: string;
   resolution: number;
   logicalSize: { width: number; height: number } | null;
@@ -47,6 +52,8 @@ export function EngineDiagnostics({ frameRef }: { frameRef: RefObject<HTMLIFrame
       <div className={styles.metrics}>
         <Metric label="FPS" value={diagnostics.fps.toFixed(0)} warning={diagnostics.fps > 0 && diagnostics.fps < 30} />
         <Metric label="Frame p95" value={`${diagnostics.p95FrameTimeMs.toFixed(1)} ms`} warning={frameWarning} />
+        <Metric label="Frame p50" value={`${diagnostics.p50FrameTimeMs.toFixed(1)} ms`} />
+        <Metric label="Dropped" value={String(diagnostics.droppedFrames)} warning={diagnostics.droppedFrames > 0} />
         <Metric label="Renderer" value={diagnostics.renderer} />
         <Metric label="Assets" value={diagnostics.assetFailures ? `${diagnostics.assetFailures} failed` : "OK"} warning={diagnostics.assetFailures > 0} />
         <Metric label="Audio" value={diagnostics.audioFailures ? `${diagnostics.audioFailures} failed` : "OK"} warning={diagnostics.audioFailures > 0} />
@@ -71,7 +78,12 @@ function isDiagnosticsPayload(value: unknown): value is DiagnosticsPayload {
     (payload.status === "ready" || payload.status === "sample") &&
     typeof payload.fps === "number" && Number.isFinite(payload.fps) &&
     typeof payload.frameTimeMs === "number" && Number.isFinite(payload.frameTimeMs) &&
+    typeof payload.p50FrameTimeMs === "number" && Number.isFinite(payload.p50FrameTimeMs) &&
     typeof payload.p95FrameTimeMs === "number" && Number.isFinite(payload.p95FrameTimeMs) &&
+    typeof payload.worstFrameTimeMs === "number" && Number.isFinite(payload.worstFrameTimeMs) &&
+    typeof payload.droppedFrames === "number" && Number.isFinite(payload.droppedFrames) &&
+    typeof payload.tickerFps === "number" && Number.isFinite(payload.tickerFps) &&
+    typeof payload.samplerOverheadMs === "number" && Number.isFinite(payload.samplerOverheadMs) &&
     typeof payload.renderer === "string" &&
     typeof payload.resolution === "number" && Number.isFinite(payload.resolution) &&
     typeof payload.assetFailures === "number" && Number.isFinite(payload.assetFailures) &&
