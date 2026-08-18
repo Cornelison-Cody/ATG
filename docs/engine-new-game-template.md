@@ -9,4 +9,4 @@ The starter demonstrates the required ownership boundary:
 - `config.json` records `type: "pixi"`, `runtimeVersion: "atg-2d-1.3.0"`, `formatVersion: 1`, and `migrationStatus: "upgraded"`.
 - The runtime owns WebGL setup, logical scaling, loading/error feedback, audio controls, and cleanup; the starter only owns its scene content.
 
-During rollout, operators can set `ATG_ENGINE_NEW_GAMES_ENABLED=false` (or `0`) to create the existing legacy template. This is an internal fallback and is not exposed as a creator-facing format choice. Existing projects are not rewritten when the flag changes.
+New projects always use this engine-backed template. Existing legacy projects retain their stored format and remain available for editing until the creator upgrades them.
