@@ -145,6 +145,21 @@ test("HTTP media jobs are authenticated, durable, and exclude unsupported media"
   assert.equal(missingConsent.status, 400);
 });
 
+test("HTTP asset uploads validate signatures and protect referenced assets", async () => {
+  const project = await createProject("HTTP Asset Validation");
+  const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const upload = new FormData(); upload.append("file", new File([png], "hero.png", { type: "image/png" }));
+  const uploaded = await fetch(`${baseUrl}/api/projects/${project.id}/assets`, { method: "POST", body: upload });
+  assert.equal(uploaded.status, 200);
+  const spoof = new FormData(); spoof.append("file", new File(["not an image"], "fake.png", { type: "image/png" }));
+  const rejected = await fetch(`${baseUrl}/api/projects/${project.id}/assets`, { method: "POST", body: spoof });
+  assert.equal(rejected.status, 400);
+  const atlas = new FormData(); atlas.append("file", new File([JSON.stringify({ frames: { hero: { path: "./assets/hero.png" } } })], "atlas.json", { type: "application/json" }));
+  assert.equal((await fetch(`${baseUrl}/api/projects/${project.id}/assets`, { method: "POST", body: atlas })).status, 200);
+  const blockedDelete = await fetch(`${baseUrl}/api/projects/${project.id}/assets?path=assets/hero.png`, { method: "DELETE" });
+  assert.equal(blockedDelete.status, 409);
+});
+
 async function getJson(url) {
   const response = await fetch(url);
   assert.equal(response.status, 200);
