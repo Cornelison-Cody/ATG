@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { AI_BILLING_MODES } from "@/lib/ai-billing.mjs";
 import { claimCodexJobCompletion, CodexJobError, completeCodexJob } from "@/lib/codex-job-store.mjs";
 import { updateGameTextFiles } from "@/lib/project-game";
+import { completeConversion, failConversionRun } from "@/lib/conversion-manager.mjs";
 import { appendProjectMessages, getProject } from "@/lib/projects";
 import { reconcileManagedAiReservation, recordCodexUsage, releaseManagedAiReservation } from "@/lib/usage-budget.mjs";
 
@@ -19,7 +20,13 @@ export async function POST(request: Request, context: { params: Promise<{ jobId:
       throw new CodexJobError("Project was not found.", 404);
     }
     if (body.ok === true) {
-      const files = await updateGameTextFiles(project, body.files as { path: string; content: string }[]);
+      const changedFiles = body.files as { path: string; content: string }[];
+      let files = changedFiles;
+      if (typeof record.conversionId === "string" && record.conversionId) {
+        await completeConversion(record.conversionId, changedFiles, typeof body.finalMessage === "string" ? body.finalMessage : "Conversion candidate is ready for review.");
+      } else {
+        files = await updateGameTextFiles(project, changedFiles);
+      }
       const finalMessage = typeof body.finalMessage === "string" ? body.finalMessage : "Codex completed.";
       await appendProjectMessages(project.id, [{
         id: randomUUID(), role: "assistant", content: finalMessage, status: "done", createdAt: new Date().toISOString()
@@ -51,6 +58,9 @@ export async function POST(request: Request, context: { params: Promise<{ jobId:
       await completeCodexJob(jobId, token, { ok: true, files, finalMessage, usage: body.usage });
     } else {
       const errorMessage = typeof body.errorMessage === "string" ? body.errorMessage : "Codex job failed.";
+      if (typeof record.conversionId === "string" && record.conversionId) {
+        await failConversionRun(record.conversionId, errorMessage);
+      }
       await appendProjectMessages(project.id, [{
         id: randomUUID(), role: "assistant", content: errorMessage, status: "error", createdAt: new Date().toISOString()
       }]);

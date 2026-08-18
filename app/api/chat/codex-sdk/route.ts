@@ -7,6 +7,7 @@ import { createCodexJob, getCodexJob, completeCodexJob } from "@/lib/codex-job-s
 import { startAzureCodexJob } from "@/lib/codex-job-launcher";
 import { runCodexSdkPrototype } from "@/lib/codex-sdk-prototype.mjs";
 import { canUseCodexSdkPrototype, getCodexSdkTimeoutMs, getCodexSdkWorkspaceRoot, isProduction } from "@/lib/env";
+import { completeConversion, failConversionRun, prepareConversion } from "@/lib/conversion-manager.mjs";
 import { exportGameTextFiles, readGameConfig, updateGameTextFiles } from "@/lib/project-game";
 import { buildPlanningRequest, normalizeChatMode } from "@/lib/chat-mode.mjs";
 import { buildProjectPrompt } from "@/lib/project-prompt.mjs";
@@ -32,6 +33,7 @@ export const dynamic = "force-dynamic";
 type ChatRequest = {
   editingTarget?: unknown;
   chatMode?: unknown;
+  conversionId?: unknown;
   message?: unknown;
   projectId?: unknown;
 };
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
 
   const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
   const message = typeof body.message === "string" ? body.message.trim() : "";
+  const conversionId = typeof body.conversionId === "string" ? body.conversionId.trim() : "";
   const editingTarget = body.editingTarget === "both" ? "both" : body.editingTarget === "phone" ? "phone" : "tv";
   const chatMode = normalizeChatMode(body.chatMode);
 
@@ -111,6 +114,9 @@ export async function POST(request: Request) {
       role: "user",
       status: "done"
     }]);
+    if (conversionId) {
+      await prepareConversion(conversionId);
+    }
   } catch (error) {
     runningProjects.delete(projectId);
     if (billing?.billingMode === AI_BILLING_MODES.MANAGED) {
@@ -135,6 +141,7 @@ export async function POST(request: Request) {
       message,
       project: projectForAccess,
       projectId,
+      conversionId,
       billing,
       runningProjects,
       userId
@@ -203,7 +210,10 @@ export async function POST(request: Request) {
           workspaceRoot: getCodexSdkWorkspaceRoot()
         });
 
-        if (result.changedFiles.length > 0) {
+        if (conversionId) {
+          send({ message: "Storing the conversion candidate without changing the published game...", type: "status" });
+          await completeConversion(conversionId, result.changedFiles, result.finalResponse);
+        } else if (result.changedFiles.length > 0) {
           send({
             message: `Validating and saving ${result.changedFiles.length} changed game file${result.changedFiles.length === 1 ? "" : "s"}...`,
             type: "status"
@@ -257,6 +267,9 @@ export async function POST(request: Request) {
             userId
           }).catch(() => undefined);
         }
+        if (conversionId) {
+          await failConversionRun(conversionId, message).catch(() => undefined);
+        }
         await persistAssistantMessage(projectId, message, "error").catch(() => undefined);
         send({ message, type: "error" });
       } finally {
@@ -280,11 +293,12 @@ export async function POST(request: Request) {
 }
 
 async function streamAzureJob({
-  billing, chatMode, config, editingTarget, files, message, project, projectId, runningProjects, userId
+  billing, chatMode, config, conversionId, editingTarget, files, message, project, projectId, runningProjects, userId
 }: {
   billing: { apiKey: string; billingMode: "managed" | "byok"; reservationId: string };
   chatMode: "build" | "plan";
   config: Awaited<ReturnType<typeof readGameConfig>>;
+  conversionId: string;
   editingTarget: "tv" | "phone" | "both";
   files: { path: string; content: string }[];
   message: string;
@@ -305,6 +319,7 @@ async function streamAzureJob({
       billingMode: billing.billingMode,
       model: process.env.ATG_CODEX_SDK_MODEL || "",
       projectId,
+      conversionId: conversionId || null,
       prompt: `${buildProjectPrompt(
         chatMode === "plan" ? buildPlanningRequest(message, editingTarget, {
           engineMetadata: config.engine,
@@ -331,6 +346,7 @@ async function streamAzureJob({
         userId
       }).catch(() => undefined);
     }
+    if (conversionId) await failConversionRun(conversionId, errorMessage).catch(() => undefined);
     runningProjects.delete(projectId);
     await persistAssistantMessage(projectId, errorMessage, "error");
     return Response.json({ error: errorMessage }, { status: 502 });
