@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@pixi/sound": "6.0.1",
+    "@playwright/test": "^1.55.1",
     "@tweenjs/tween.js": "25.0.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
