@@ -79,6 +79,7 @@ type GameAssetSummary = {
   size: number;
   updatedAt: string;
 };
+type MediaJob = { id: string; kind: string; prompt: string; status: string; progress?: { message: string }[]; result?: { asset?: { path?: string }; provenance?: Record<string, unknown> } | null; visualKind?: string };
 
 type StreamEvent =
   | { type: "status"; message: string }
@@ -221,6 +222,10 @@ export default function Home() {
   const [isSavingInstructions, setIsSavingInstructions] = useState(false);
   const [assets, setAssets] = useState<GameAssetSummary[]>([]);
   const [assetsMessage, setAssetsMessage] = useState("");
+  const [isMediaOpen, setIsMediaOpen] = useState(false);
+  const [mediaJobs, setMediaJobs] = useState<MediaJob[]>([]);
+  const [mediaPrompt, setMediaPrompt] = useState("");
+  const [mediaKind, setMediaKind] = useState("character");
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
   const [isUploadingAsset, setIsUploadingAsset] = useState(false);
   const [deletingAssetPath, setDeletingAssetPath] = useState("");
@@ -661,6 +666,30 @@ export default function Home() {
     setIsProjectMenuOpen(false);
     setIsAssetsOpen(true);
     await loadAssets(activeProject.id);
+  }
+
+  async function openMedia() {
+    if (!activeProject) return;
+    setIsAssetsOpen(false); setIsMediaOpen(true); setMediaPrompt("");
+    const response = await fetch(`/api/projects/${activeProject.id}/media-jobs`, { cache: "no-store" });
+    if (response.ok) setMediaJobs(((await response.json()) as { jobs: MediaJob[] }).jobs);
+  }
+
+  async function startMedia() {
+    if (!activeProject || !mediaPrompt.trim()) return;
+    const response = await fetch(`/api/projects/${activeProject.id}/media-jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: mediaKind, prompt: mediaPrompt }) });
+    const data = await response.json() as { job?: MediaJob; error?: string };
+    if (!response.ok || !data.job) { setError(data.error || "Unable to start media generation."); return; }
+    setMediaJobs((current) => [data.job!, ...current]); setMediaPrompt("");
+  }
+
+  async function updateMediaJob(jobId: string, action: "accept" | "discard" | "retry") {
+    if (!activeProject) return;
+    const response = await fetch(`/api/projects/${activeProject.id}/media-jobs/${jobId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+    const data = await response.json() as { job?: MediaJob; error?: string };
+    if (!response.ok || !data.job) { setError(data.error || "Unable to update media job."); return; }
+    setMediaJobs((current) => current.map((job) => job.id === jobId ? data.job! : job));
+    if (action === "accept") await loadAssets(activeProject.id);
   }
 
   async function uploadAsset(file: File) {
@@ -1392,9 +1421,11 @@ export default function Home() {
           message={assetsMessage}
           onClose={() => setIsAssetsOpen(false)}
           onDelete={deleteAsset}
+          onGenerate={openMedia}
           projectId={activeProject.id}
         />
       ) : null}
+      {isMediaOpen && activeProject ? <MediaGenerationModal jobs={mediaJobs} kind={mediaKind} onKindChange={setMediaKind} onPromptChange={setMediaPrompt} prompt={mediaPrompt} onStart={startMedia} onUpdate={updateMediaJob} onClose={() => setIsMediaOpen(false)} /> : null}
     </main>
   );
 }
@@ -2272,6 +2303,7 @@ function AssetsModal({
   message,
   onClose,
   onDelete,
+  onGenerate,
   projectId
 }: {
   assets: GameAssetSummary[];
@@ -2280,6 +2312,7 @@ function AssetsModal({
   message: string;
   onClose: () => void;
   onDelete: (assetPath: string) => void;
+  onGenerate: () => void;
   projectId: string;
 }) {
   return (
@@ -2290,6 +2323,7 @@ function AssetsModal({
             <h2>Game Assets</h2>
             <p>Uploaded images and audio available to this game.</p>
           </div>
+          <button onClick={onGenerate} type="button">Generate Media</button>
           <button
             aria-label="Close assets dialog"
             className={styles.closeButton}
@@ -2354,6 +2388,10 @@ function AssetsModal({
       </section>
     </div>
   );
+}
+
+function MediaGenerationModal({ jobs, kind, onKindChange, onPromptChange, prompt, onStart, onUpdate, onClose }: { jobs: MediaJob[]; kind: string; onKindChange: (value: string) => void; onPromptChange: (value: string) => void; prompt: string; onStart: () => void; onUpdate: (id: string, action: "accept" | "discard" | "retry") => void; onClose: () => void }) {
+  return <div className={styles.modalOverlay} role="presentation"><section aria-labelledby="media-generation-title" aria-modal="true" className={styles.modal} role="dialog"><div className={styles.modalHeader}><h2 id="media-generation-title">Generate Media</h2><button aria-label="Close media generation dialog" onClick={onClose} type="button"><X aria-hidden="true" /></button></div><div className={styles.modalBody}><label>Type<select aria-label="Media type" onChange={(event) => onKindChange(event.target.value)} value={kind}><option value="character">Character</option><option value="object">Object</option><option value="sprite-variation">Sprite variation</option><option value="animation-sheet">Animation sheet</option><option value="image">Image</option><option value="sound-effect">Sound effect</option></select></label><label>Prompt<textarea aria-label="Media prompt" onChange={(event) => onPromptChange(event.target.value)} value={prompt} /></label><button disabled={!prompt.trim()} onClick={onStart} type="button">Start Preview</button><div aria-live="polite">{jobs.map((job) => <article key={job.id}><strong>{job.visualKind || job.kind}</strong><span>{job.status}</span>{job.status === "completed" ? <><button onClick={() => onUpdate(job.id, "accept")} type="button">Accept</button><button onClick={() => onUpdate(job.id, "discard")} type="button">Discard</button></> : null}{["failed", "discarded"].includes(job.status) ? <button onClick={() => onUpdate(job.id, "retry")} type="button">Retry</button> : null}</article>)}</div></div></section></div>;
 }
 
 function ProjectChat({
