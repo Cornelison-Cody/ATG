@@ -3,7 +3,7 @@ import { BlobServiceClient, type ContainerClient } from "@azure/storage-blob";
 import { randomUUID } from "crypto";
 import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
-import { ATG_ROOT, isEngineBackedNewGamesEnabled, PROJECTS_ROOT, TRASH_ROOT, useAzureStorageBackend } from "./env";
+import { ATG_ROOT, PROJECTS_ROOT, TRASH_ROOT, useAzureStorageBackend } from "./env";
 import { normalizeGameConfig, parseGameConfig } from "./game-config.mjs";
 import { GameEngineMetadataError } from "./game-engine-metadata.mjs";
 import { isAllowedGameTextPath, normalizeGameTextFiles, validateGameTextPath } from "./game-file-rules.mjs";
@@ -124,7 +124,7 @@ class LocalProjectStore implements ProjectStore {
 
     await mkdir(project.path, { recursive: true });
     await writeFile(path.join(project.path, "README.md"), renderReadme(project), "utf8");
-    await this.ensureGameFiles(project, isEngineBackedNewGamesEnabled() ? ENGINE_TEMPLATE_FILES : TEMPLATE_FILES);
+    await this.ensureGameFiles(project, ENGINE_TEMPLATE_FILES);
 
     db.projects.push(project);
     await this.writeDatabase(db);
@@ -412,7 +412,7 @@ class AzureProjectStore implements ProjectStore {
     const project = buildNewProject(trimmedName, owner, slug, () => `azure://projects/${slug}`);
 
     await this.writeBlob(blobName(project, "README.md"), renderReadme(project), "text/markdown; charset=utf-8");
-    await this.ensureGameFiles(project, isEngineBackedNewGamesEnabled() ? ENGINE_TEMPLATE_FILES : TEMPLATE_FILES);
+    await this.ensureGameFiles(project, ENGINE_TEMPLATE_FILES);
     await this.getCosmosContainer().items.create(project);
     return project;
   }
