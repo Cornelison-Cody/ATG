@@ -1,11 +1,86 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ATG Engine Browser Benchmark</title><style>body{background:#07111f;color:#eef5ff;font:16px system-ui;margin:0;padding:24px}button{font:inherit;padding:10px 14px}pre{white-space:pre-wrap}</style></head>
-<body><h1>ATG Engine Browser Benchmark</h1><p>Run this page on the documented 4K/30 FPS laptop profile. Results stay in this browser until downloaded.</p><button id="run">Run benchmark</button> <button disabled id="download">Download JSON</button><pre id="output" aria-live="polite">Ready.</pre><div id="stage" style="height:540px;max-width:960px"></div>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ATG Engine Browser Benchmark</title>
+  <style>body{background:#07111f;color:#eef5ff;font:16px system-ui;margin:0;padding:24px}button{font:inherit;padding:10px 14px}pre{white-space:pre-wrap}</style>
+</head>
+<body>
+  <h1>ATG Engine Browser Benchmark</h1>
+  <p>Run fullscreen on the documented 4K/30 FPS laptop profile. Results stay in this browser until downloaded.</p>
+  <button id="run">Run benchmark</button> <button disabled id="download">Download JSON</button>
+  <pre aria-live="polite" id="output">Ready.</pre>
 <script>
 window.ATG={onState:()=>()=>{},sendAction:()=>{},setState:()=>{},setConfig:()=>{}};
-const scenarios=["sprites","animated-characters","particles","changing-text","filters","video-textures","asset-loading"];let latest=null;
-const $=(id)=>document.getElementById(id);const percentile=(values,rank)=>{const sorted=[...values].sort((a,b)=>a-b);return sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*rank)-1)]||0;};
-async function run(){ $("run").disabled=true;$("output").textContent="Loading pinned ATG runtime..."; const ready=new Promise((resolve)=>addEventListener("atg-engine-ready",()=>resolve(window.ATGEngine),{once:true})); const script=document.createElement("script");script.type="module";script.src="/api/engine/atg-2d-1.3.0/atg-tv-runtime.mjs";document.head.append(script);const engine=await ready;const PIXI=engine.PIXI,app=engine.app,stage=engine.stage;const samples=Object.fromEntries(scenarios.map((name)=>[name,[]]));const sprites=[];for(let i=0;i<1200;i++){const graphic=new PIXI.Graphics().rect(0,0,8,8).fill(0x4dd6c9);graphic.x=i%40*24;graphic.y=Math.floor(i/40)*18;stage.addChild(graphic);sprites.push(graphic);}const labels=Array.from({length:24},(_,i)=>{const text=new PIXI.Text({text:"SCORE 0",style:{fontSize:18,fill:0xffffff}});text.x=12+(i%6)*150;text.y=460+Math.floor(i/6)*24;stage.addChild(text);return text;});const started=performance.now();let frame=0;const ticker=app.ticker;const callback=(tick)=>{const t0=performance.now();frame++;for(const sprite of sprites)sprite.rotation+=0.001;for(const label of labels)label.text=`SCORE ${frame}`;samples.sprites.push(tick.deltaMS);samples["changing-text"].push(performance.now()-t0);if(frame>=180){ticker.remove(callback);const elapsed=performance.now()-started;latest={target:{display:"3840x2160 (4K UHD)",logicalSize:engine.logicalSize,runtime:"atg-2d-1.3.0",targetFps:30},profile:{userAgent:navigator.userAgent,devicePixelRatio:devicePixelRatio,hardwareConcurrency:navigator.hardwareConcurrency||null,renderer:app.renderer?.type||"unknown"},scenarios:Object.fromEntries(scenarios.map((name)=>{const values=samples[name].length?samples[name]:[0];return[name,{frames:values.length,fps:values.length*1000/elapsed,p50Ms:percentile(values,.5),p95Ms:percentile(values,.95),worstMs:Math.max(...values),droppedFrames:values.filter((value)=>value>1000/30).length}]})),elapsedMs:elapsed};$("output").textContent=JSON.stringify(latest,null,2);$("download").disabled=false;$("run").disabled=false;}};ticker.add(callback);}
+const RUNTIME_VERSION="atg-2d-1.3.0";
+const SCENARIOS=["sprites","animated-characters","particles","changing-text","filters","video-textures","asset-loading"];
+const BUDGETS={sprites:22,"animated-characters":24,particles:24,"changing-text":20,filters:26,"video-textures":22,"asset-loading":500};
+const FRAMES=90; let latest=null; const $=(id)=>document.getElementById(id);
+const percentile=(values,rank)=>{const sorted=[...values].sort((a,b)=>a-b);return sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*rank)-1)]||0;};
+async function loadRuntime(){
+  const ready=new Promise((resolve,reject)=>{addEventListener("atg-engine-ready",()=>resolve(window.ATGEngine),{once:true});addEventListener("atg-engine-error",(event)=>reject(event.detail?.error||new Error("Runtime failed to load.")),{once:true});});
+  const script=document.createElement("script");script.type="module";script.src=`/api/engine/${RUNTIME_VERSION}/atg-tv-runtime.mjs`;document.head.append(script);return ready;
+}
+async function run(){
+  $("run").disabled=true;$("download").disabled=true;$("output").textContent="Loading pinned ATG runtime...";
+  try{
+    const engine=await loadRuntime();const results={};
+    for(const name of SCENARIOS){$("output").textContent=`Measuring ${name}...`;results[name]=await measure(engine,name);}
+    const display={cssWidth:screen.width,cssHeight:screen.height,width:screen.width*devicePixelRatio,height:screen.height*devicePixelRatio};
+    latest={generatedAt:new Date().toISOString(),runtime:RUNTIME_VERSION,target:{display:"3840x2160 (4K UHD)",logicalSize:engine.logicalSize,targetFps:30},profile:{display,devicePixelRatio,hardwareConcurrency:navigator.hardwareConcurrency||null,renderer:engine.app.renderer?.type||"unknown",targetDisplayVerified:display.width>=3840&&display.height>=2160,userAgent:navigator.userAgent},scenarios:results};
+    $("output").textContent=JSON.stringify(latest,null,2);$("download").disabled=false;
+  }catch(error){$("output").textContent=`Benchmark failed: ${error instanceof Error?error.message:String(error)}`;}finally{$("run").disabled=false;}
+}
+async function measure(engine,name){
+  const {PIXI,app,stage}=engine;const root=new PIXI.Container();const frames=[];const costs=[];const started=performance.now();
+  let scenario=await createScenario(PIXI,name,root);stage.addChild(root);const loadDecodeMs=performance.now()-started;
+  try{await new Promise((resolve)=>{let frame=0;const tick=(ticker)=>{const began=performance.now();scenario.update(frame++);costs.push(performance.now()-began);frames.push(Number(ticker?.deltaMS||ticker?.elapsedMS||0));if(frame>=FRAMES){app.ticker.remove(tick);resolve();}};app.ticker.add(tick);});
+    const p95Ms=percentile(frames,.95);return {budgetMs:BUDGETS[name],droppedFrames:frames.filter((value)=>value>1000/30).length,frames:frames.length,loadDecodeMs,p50Ms:percentile(frames,.5),p95Ms,renderP95Ms:percentile(costs,.95),status:p95Ms<=BUDGETS[name]?"PASS":"REVIEW",worstMs:Math.max(...frames)};
+  }finally{root.removeFromParent();root.destroy({children:true});scenario.dispose?.();}
+}
+async function createScenario(PIXI,name,root){
+  if(name==="sprites")return sprites(PIXI,root,1200);
+  if(name==="animated-characters")return animated(PIXI,root);
+  if(name==="particles")return particles(PIXI,root);
+  if(name==="changing-text")return text(PIXI,root);
+  if(name==="filters")return filters(PIXI,root);
+  if(name==="video-textures")return video(PIXI,root);
+  return assets(PIXI,root);
+}
+function sprites(PIXI,root,count){
+  const items=Array.from({length:count},(_,i)=>{const sprite=new PIXI.Sprite(PIXI.Texture.WHITE);sprite.tint=0x4dd6c9;sprite.width=sprite.height=8;sprite.x=i%40*48;sprite.y=Math.floor(i/40)*34;root.addChild(sprite);return sprite;});
+  return {update:()=>items.forEach((item)=>item.rotation+=.001)};
+}
+function animated(PIXI,root){
+  const frames=[PIXI.Texture.WHITE,PIXI.Texture.WHITE,PIXI.Texture.WHITE,PIXI.Texture.WHITE];
+  const items=Array.from({length:96},(_,i)=>{const item=new PIXI.AnimatedSprite(frames);item.play();item.animationSpeed=.2+i%4*.05;item.width=38;item.height=52;item.x=32+i%12*148;item.y=48+Math.floor(i/12)*118;root.addChild(item);return item;});
+  return {update:(frame)=>items.forEach((item,i)=>{item.y+=Math.sin((frame+i)/12)*.4;item.tint=[0x4dd6c9,0x678cf6,0xf7c948,0xf47c7c][item.currentFrame%4];})};
+}
+function particles(PIXI,root){
+  const items=Array.from({length:900},(_,i)=>{const item=new PIXI.Sprite(PIXI.Texture.WHITE);item.tint=i%2?0x8ce99a:0x74c0fc;item.width=item.height=4+i%5;item.x=i*37%1920;item.y=i*71%1080;root.addChild(item);return item;});
+  return {update:(frame)=>items.forEach((item,i)=>{item.x=(item.x+1+i%3)%1920;item.y=(item.y+.5+i%2)%1080;item.alpha=.4+Math.abs(Math.sin((frame+i)/16))*.6;})};
+}
+function text(PIXI,root){
+  const items=Array.from({length:48},(_,i)=>{const item=new PIXI.Text({text:"SCORE 0",style:{fontSize:24,fill:0xffffff}});item.x=22+i%8*235;item.y=40+Math.floor(i/8)*150;root.addChild(item);return item;});
+  return {update:(frame)=>items.forEach((item,i)=>item.text=`SCORE ${frame+i}`)};
+}
+function filters(PIXI,root){
+  const items=Array.from({length:32},(_,i)=>{const item=new PIXI.Graphics().roundRect(0,0,180,110,18).fill(i%2?0x4263eb:0x0ca678);item.x=45+i%8*232;item.y=55+Math.floor(i/8)*230;item.filters=[new PIXI.BlurFilter({strength:2+i%3})];root.addChild(item);return item;});
+  return {update:(frame)=>items.forEach((item,i)=>item.rotation=Math.sin((frame+i)/18)*.06)};
+}
+async function video(PIXI,root){
+  const source=document.createElement("canvas");source.width=320;source.height=180;const context=source.getContext("2d");const stream=source.captureStream?.(30);if(!stream)throw new Error("This browser cannot create a benchmark video stream.");
+  const element=document.createElement("video");element.muted=true;element.playsInline=true;element.srcObject=stream;await element.play();const texture=PIXI.Texture.from(element);
+  for(let i=0;i<2;i++){const item=new PIXI.Sprite(texture);item.width=720;item.height=405;item.x=120+i*960;item.y=310;root.addChild(item);}
+  return {dispose:()=>{texture.destroy(true);stream.getTracks().forEach((track)=>track.stop());element.pause();},update:(frame)=>{context.fillStyle=`hsl(${frame%360} 75% 48%)`;context.fillRect(0,0,320,180);context.fillStyle="white";context.font="48px system-ui";context.fillText(`FRAME ${frame}`,24,96);}};
+}
+async function assets(PIXI,root){
+  const bitmaps=await Promise.all(Array.from({length:24},async()=>{const response=await fetch(`/images/hero-bg.png?benchmark=${crypto.randomUUID()}`,{cache:"no-store"});if(!response.ok)throw new Error("A benchmark asset failed to load.");return createImageBitmap(await response.blob());}));
+  const items=bitmaps.map((bitmap,i)=>{const item=new PIXI.Sprite(PIXI.Texture.from(bitmap));item.width=160;item.height=90;item.x=i%6*310;item.y=Math.floor(i/6)*230;root.addChild(item);return item;});
+  return {dispose:()=>bitmaps.forEach((item)=>item.close()),update:(frame)=>items.forEach((item,i)=>item.alpha=.6+Math.abs(Math.sin((frame+i)/20))*.4)};
+}
 $("run").onclick=run;$("download").onclick=()=>{const blob=new Blob([JSON.stringify(latest,null,2)],{type:"application/json"});const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download="atg-engine-browser-benchmark.json";link.click();URL.revokeObjectURL(link.href);};
-</script></body></html>
+</script>
+</body>
+</html>
