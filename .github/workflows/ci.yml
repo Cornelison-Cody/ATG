@@ -19,8 +19,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck and build
-        run: npm run check
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Integration tests
+        run: npm run test:integration
+
+      - name: Browser tests
+        run: npm run test:browser
+
+      - name: Production build
+        run: npm run build
+
+      - name: Optional live-provider tests
+        if: ${{ vars.ATG_RUN_LIVE_TESTS == 'true' }}
+        run: npm run test:live
 
       - name: Validate Bicep syntax
         uses: azure/cli@v2
