@@ -156,7 +156,7 @@ test("HTTP media jobs are authenticated, durable, and exclude unsupported media"
 
 test("HTTP asset uploads validate signatures and protect referenced assets", async () => {
   const project = await createProject("HTTP Asset Validation");
-  const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]), Buffer.from("IHDR"), Buffer.from([0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0, 0, 0, 0]), Buffer.from([0, 0, 0, 0]), Buffer.from("IEND"), Buffer.alloc(4)]);
   const upload = new FormData(); upload.append("file", new File([png], "hero.png", { type: "image/png" }));
   const uploaded = await fetch(`${baseUrl}/api/projects/${project.id}/assets`, { method: "POST", body: upload });
   assert.equal(uploaded.status, 200);
