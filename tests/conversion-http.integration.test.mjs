@@ -135,6 +135,16 @@ test("HTTP runtime upgrade previews are isolated and acceptance pins the selecte
   assert.equal((await getJson(`${baseUrl}/api/game/${project.id}/config`)).config.engine.runtimeVersion, "atg-2d-1.3.0");
 });
 
+test("HTTP media jobs are authenticated, durable, and exclude unsupported media", async () => {
+  const project = await createProject("HTTP Media Jobs");
+  const listed = await getJson(`${baseUrl}/api/projects/${project.id}/media-jobs`);
+  assert.deepEqual(listed.jobs, []);
+  const rejected = await postRaw(`${baseUrl}/api/projects/${project.id}/media-jobs`, { kind: "video", prompt: "a movie" });
+  assert.equal(rejected.status, 400);
+  const missingConsent = await postRaw(`${baseUrl}/api/projects/${project.id}/media-jobs`, { kind: "image", prompt: "a mascot", referenceAssetPaths: ["assets/missing.png"] });
+  assert.equal(missingConsent.status, 400);
+});
+
 async function getJson(url) {
   const response = await fetch(url);
   assert.equal(response.status, 200);

@@ -11,6 +11,7 @@ import { completeConversion, failConversionRun, prepareConversion } from "@/lib/
 import { exportGameTextFiles, readGameConfig, updateGameTextFiles } from "@/lib/project-game";
 import { buildPlanningRequest, normalizeChatMode } from "@/lib/chat-mode.mjs";
 import { buildProjectPrompt } from "@/lib/project-prompt.mjs";
+import { detectMediaIntent, startMediaJob, MediaJobStoreError } from "@/lib/media-job-manager.mjs";
 import { reconcileManagedAiReservation, recordCodexUsage, releaseManagedAiReservation } from "@/lib/usage-budget.mjs";
 import {
   canEditProject,
@@ -92,6 +93,17 @@ export async function POST(request: Request) {
   const projectForAccess = project.ownerUserId ? project : await claimProject(projectId, principal);
   if (!canEditProject(projectForAccess, principal)) {
     return projectAccessResponse();
+  }
+
+  const mediaIntent = detectMediaIntent(message);
+  if (mediaIntent) {
+    try {
+      const job = await startMediaJob(projectForAccess, principal, mediaIntent);
+      const event = JSON.stringify({ message: `Media job ${job.id} started. Track its progress in the media jobs API.`, type: "final" });
+      return new Response(`${event}\n`, { headers: { "Cache-Control": "no-cache", "Content-Type": "application/x-ndjson; charset=utf-8" } });
+    } catch (error) {
+      return projectStoreErrorResponse(error, "Unable to start media generation.");
+    }
   }
 
   const runningProjects = getRunningProjects();
@@ -463,6 +475,9 @@ function getRunningProjects() {
 
 function projectStoreErrorResponse(error: unknown, fallback: string) {
   if (error instanceof ProjectStoreError) {
+    return Response.json({ error: error.message }, { status: error.status });
+  }
+  if (error instanceof MediaJobStoreError) {
     return Response.json({ error: error.message }, { status: error.status });
   }
   return Response.json({ error: fallback }, { status: 500 });
