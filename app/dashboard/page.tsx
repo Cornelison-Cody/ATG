@@ -2350,6 +2350,10 @@ function AssetsModal({
                         <img alt="" src={url} />
                       ) : asset.contentType.startsWith("audio/") ? (
                         <audio controls src={url} />
+                      ) : asset.contentType.startsWith("video/") ? (
+                        <video controls preload="metadata" src={url} />
+                      ) : asset.contentType.startsWith("font/") ? (
+                        <span aria-label="Font asset preview">Aa</span>
                       ) : (
                         <File aria-hidden="true" />
                       )}

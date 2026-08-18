@@ -11,6 +11,7 @@ import { renderGameInstructionsTemplate } from "./game-instructions-template.mjs
 import { DEFAULT_GAME_CONFIG, GameConfig } from "./game-types";
 import { validateProjectName } from "./project-name-rules.mjs";
 import { getEngineAssetRule } from "./engine-asset-rules.mjs";
+import { validateAssetBytes } from "./asset-validation.mjs";
 import type { ChatMessage, ProjectCollaborator, ProjectDatabase, ProjectRecord, PublicProject } from "./project-types";
 
 export const GAME_DIR = "game";
@@ -290,6 +291,7 @@ class LocalProjectStore implements ProjectStore {
 
   async deleteGameAsset(project: ProjectRecord, assetPath: string) {
     const normalizedPath = normalizeUploadedAssetPath(assetPath);
+    await assertAssetNotReferenced(this, project, normalizedPath);
     try {
       await unlink(resolveLocalGameAsset(project, normalizedPath.split("/")));
     } catch (error) {
@@ -580,6 +582,7 @@ class AzureProjectStore implements ProjectStore {
 
   async deleteGameAsset(project: ProjectRecord, assetPath: string) {
     const normalizedPath = normalizeUploadedAssetPath(assetPath);
+    await assertAssetNotReferenced(this, project, normalizedPath);
     const blob = this.getBlobContainer().getBlockBlobClient(blobName(project, `${GAME_DIR}/${normalizedPath}`));
     const result = await blob.deleteIfExists();
     if (!result.succeeded) {
@@ -1044,6 +1047,12 @@ function normalizeUploadedGameAsset(asset: GameAssetUpload) {
     throw new ProjectStoreError(`Asset files must be ${Math.round(maxBytes / (1024 * 1024))} MB or smaller.`, 413);
   }
 
+  try {
+    validateAssetBytes({ filename: cleanName, content: asset.content, contentType: asset.contentType });
+  } catch (error) {
+    throw new ProjectStoreError(error instanceof Error ? error.message : "Asset bytes are invalid.", 400);
+  }
+
   return {
     content: asset.content,
     path: `${UPLOADED_ASSETS_DIR}/${cleanName}`
@@ -1069,7 +1078,7 @@ function sanitizeAssetFileName(filename: string) {
 
 function normalizeUploadedAssetPath(assetPath: string) {
   const segments = normalizeGameAssetPath(assetPath.split("/")).split("/");
-  if (segments.length !== 2 || segments[0] !== UPLOADED_ASSETS_DIR) {
+  if (segments.length < 2 || segments[0] !== UPLOADED_ASSETS_DIR) {
     throw new ProjectStoreError("Only uploaded game assets can be deleted.", 400);
   }
 
@@ -1089,6 +1098,25 @@ function assetSummary(assetPath: string, size: number, updatedAt: string): GameA
     size,
     updatedAt
   };
+}
+
+async function assertAssetNotReferenced(store: Pick<ProjectStore, "listUploadedGameAssets" | "readGameAsset" | "exportGameTextFiles">, project: ProjectRecord, assetPath: string) {
+  const references = [assetPath, `./${assetPath}`];
+  const files = await store.exportGameTextFiles(project);
+  for (const file of files) {
+    if (file.path !== assetPath && references.some((reference) => file.content.includes(reference))) {
+      throw new ProjectStoreError(`Asset ${assetPath} is referenced by ${file.path}; remove the reference before deleting it.`, 409);
+    }
+  }
+  for (const asset of await store.listUploadedGameAssets(project)) {
+    if (asset.path === assetPath || !/\.(json|atlas|fnt|svg)$/i.test(asset.path)) continue;
+    try {
+      const content = (await store.readGameAsset(project, asset.path.split("/"))).content.toString("utf8");
+      if (references.some((reference) => content.includes(reference))) throw new ProjectStoreError(`Asset ${assetPath} is referenced by ${asset.path}; remove the reference before deleting it.`, 409);
+    } catch (error) {
+      if (error instanceof ProjectStoreError) throw error;
+    }
+  }
 }
 
 function normalizeGameAssetPath(segments: string[]) {
@@ -1122,9 +1150,8 @@ async function listLocalGameTextFiles(rootPath: string, relativePath = ""): Prom
 
 async function listLocalUploadedAssets(gamePath: string) {
   const assetsPath = path.join(gamePath, UPLOADED_ASSETS_DIR);
-  let entries;
   try {
-    entries = await readdir(assetsPath, { withFileTypes: true });
+    await readdir(assetsPath);
   } catch (error) {
     if (isMissingFileError(error)) {
       return [];
@@ -1133,22 +1160,16 @@ async function listLocalUploadedAssets(gamePath: string) {
   }
 
   const assets: GameAssetSummary[] = [];
-  for (const entry of entries) {
-    if (!entry.isFile()) {
-      continue;
-    }
-
-    const assetPath = `${UPLOADED_ASSETS_DIR}/${entry.name}`;
-    try {
-      normalizeUploadedAssetPath(assetPath);
-      const info = await stat(path.join(assetsPath, entry.name));
-      assets.push(assetSummary(assetPath, info.size, info.mtime.toISOString()));
-    } catch (error) {
-      if (!(error instanceof ProjectStoreError)) {
-        throw error;
-      }
+  async function visit(directory: string, prefix: string) {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const filePath = path.join(directory, entry.name);
+      const assetPath = `${UPLOADED_ASSETS_DIR}/${prefix}${entry.name}`;
+      if (entry.isDirectory()) { await visit(filePath, `${prefix}${entry.name}/`); continue; }
+      if (!entry.isFile()) continue;
+      try { normalizeUploadedAssetPath(assetPath); const info = await stat(filePath); assets.push(assetSummary(assetPath, info.size, info.mtime.toISOString())); } catch (error) { if (!(error instanceof ProjectStoreError)) throw error; }
     }
   }
+  await visit(assetsPath, "");
 
   return assets.sort((left, right) => left.path.localeCompare(right.path));
 }
