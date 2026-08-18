@@ -130,7 +130,10 @@ test("HTTP runtime upgrade previews are isolated and acceptance pins the selecte
 
   const acceptedStart = await postRaw(`${baseUrl}/api/projects/${project.id}/runtime-upgrades`, { runtimeVersion: "atg-2d-1.3.0" });
   const acceptedUpgrade = (await acceptedStart.json()).upgrade;
-  const accepted = await postJson(`${baseUrl}/api/projects/${project.id}/runtime-upgrades/${acceptedUpgrade.id}`, { action: "accept" });
+  const validation = await postJson(`${baseUrl}/api/projects/${project.id}/runtime-upgrades/${acceptedUpgrade.id}`, { action: "validate" });
+  assert.equal(validation.upgrade.validation.runtimeVersion, "atg-2d-1.3.0");
+  assert.ok(validation.upgrade.validation.warnings.length > 0);
+  const accepted = await postJson(`${baseUrl}/api/projects/${project.id}/runtime-upgrades/${acceptedUpgrade.id}`, { action: "accept", acknowledgeWarnings: true });
   assert.equal(accepted.upgrade.status, "accepted");
   assert.equal((await getJson(`${baseUrl}/api/game/${project.id}/config`)).config.engine.runtimeVersion, "atg-2d-1.3.0");
 });
