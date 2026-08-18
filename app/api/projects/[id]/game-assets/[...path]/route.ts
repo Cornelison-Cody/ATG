@@ -2,6 +2,9 @@ import { randomBytes } from "crypto";
 import { getAtgEngineBundle, getAtgEngineCompatibilityError, getAtgEngineBundleUrl } from "@/lib/atg-engine-bundles.mjs";
 import { getProject } from "@/lib/projects";
 import { readGameAsset, readGameConfig } from "@/lib/project-game";
+import { readConversionPreviewAsset } from "@/lib/conversion-manager.mjs";
+import { canEditProject, getProjectPrincipal, principalRequiredResponse } from "@/lib/project-access";
+import { requireEditorAuth } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,9 +22,32 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   try {
-    const asset = await readGameAsset(project, assetSegments);
+    const params = new URL(request.url).searchParams;
+    const conversionId = params.get("conversion");
+    const conversionRevision = params.get("revision");
+    let asset;
+    let previewEngine = null;
+    if (conversionId || conversionRevision) {
+      const authResponse = await requireEditorAuth(request);
+      if (authResponse) return authResponse;
+      const principal = getProjectPrincipal(request);
+      if (!principal) return principalRequiredResponse();
+      if (!canEditProject(project, principal)) {
+        return Response.json({ error: "You do not have permission to preview this conversion." }, { status: 403 });
+      }
+      if (!conversionId || !conversionRevision) {
+        return Response.json({ error: "A conversion preview requires both conversion and revision." }, { status: 400 });
+      }
+      const preview = await readConversionPreviewAsset(project.id, conversionId, conversionRevision, assetSegments.join("/"));
+      asset = preview;
+      previewEngine = preview.engine;
+    } else {
+      asset = await readGameAsset(project, assetSegments);
+    }
     const isHtml = asset.contentType.startsWith("text/html");
-    const engine = isHtml && isTvGameAsset(assetSegments) ? (await readGameConfig(project)).engine : null;
+    const engine = isHtml && isTvGameAsset(assetSegments)
+      ? (previewEngine || (await readGameConfig(project)).engine)
+      : null;
     const nonce = engine?.type === "pixi" ? randomBytes(18).toString("base64") : "";
     const body = isHtml
       ? injectAtgSdk(asset.content.toString("utf8"), engine, nonce, request.url)

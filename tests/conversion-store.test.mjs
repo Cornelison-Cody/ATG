@@ -54,3 +54,21 @@ test("conversion route keeps successful Codex output out of published writes", a
   assert.match(route, /completeConversion\(record\.conversionId/);
   assert.match(route, /updateGameTextFiles\(project/);
 });
+
+test("conversion review persists validation findings and candidate previews use the revision", async () => {
+  const snapshot = { projectId: "project-3", fingerprint: "published-r3", textFiles: [], assets: [], identity: {} };
+  await store.createOrGetConversion({ conversionId: "conversion-3", projectId: "project-3", snapshot });
+  await store.markConversionRunning("conversion-3");
+  await store.saveConversionCandidate("conversion-3", { candidateRevision: "candidate-r3", textFiles: [] });
+  await store.saveConversionValidation("conversion-3", {
+    blockingErrors: [],
+    warnings: [{ code: "audio", message: "Audio needs review." }],
+    checks: [{ code: "engine", passed: true, message: "Engine is present." }]
+  });
+  const review = await store.getConversion("conversion-3");
+  assert.equal(review.validation.warnings[0].code, "audio");
+
+  const route = await readFile(new URL("../app/api/projects/[id]/game-assets/[...path]/route.ts", import.meta.url), "utf8");
+  assert.match(route, /readConversionPreviewAsset/);
+  assert.match(route, /conversionRevision/);
+});
