@@ -23,6 +23,11 @@ export function isEngineBackedNewGamesEnabled() {
   return value !== "false" && value !== "0";
 }
 
+export function isEngineBackedConversionsEnabled() {
+  const value = process.env.ATG_ENGINE_CONVERSIONS_ENABLED;
+  return value !== "false" && value !== "0";
+}
+
 export function getCodexSdkWorkspaceRoot() {
   return process.env.ATG_CODEX_SDK_WORKSPACE_ROOT || "";
 }
