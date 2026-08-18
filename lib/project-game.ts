@@ -49,3 +49,7 @@ export async function exportGameTextFiles(project: ProjectRecord) {
 export async function updateGameTextFiles(project: ProjectRecord, files: { content: string; path: string }[]) {
   return getProjectStore().updateGameTextFiles(project, files);
 }
+
+export async function replaceGameTextFilesAtomically(project: ProjectRecord, files: { content: string; path: string }[]) {
+  return getProjectStore().replaceGameTextFilesAtomically(project, files);
+}

@@ -25,6 +25,9 @@ export type ProjectRecord = {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
+  // Azure uses this immutable generation as the publish pointer for game files.
+  // Projects without one continue to read their original blob layout.
+  gameGeneration?: string;
   messages: ChatMessage[];
 };
 
