@@ -1,7 +1,7 @@
 import { requireEditorAuth } from "@/lib/api-auth";
 import { canEditProject, getProjectPrincipal, principalRequiredResponse, projectAccessResponse } from "@/lib/project-access";
 import { getProject } from "@/lib/projects";
-import { acceptConversionCandidate, cancelConversionRun, getConversionForProject, retryConversionRun } from "@/lib/conversion-manager.mjs";
+import { acceptConversionCandidate, cancelConversionRun, getConversionForProject, retryConversionRun, validateConversionCandidate } from "@/lib/conversion-manager.mjs";
 import { ConversionStoreError } from "@/lib/conversion-store.mjs";
 
 export const runtime = "nodejs";
@@ -25,7 +25,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const { conversionId } = await context.params;
     const body = await request.json().catch(() => ({}));
     if (body.action === "accept") {
-      return Response.json({ conversion: await acceptConversionCandidate(access.project, conversionId) });
+      return Response.json({ conversion: await acceptConversionCandidate(access.project, conversionId, body.acknowledgeWarnings === true) });
     }
     if (body.action === "cancel") {
       return Response.json({ conversion: await cancelConversionRun(conversionId) });
@@ -33,7 +33,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (body.action === "retry") {
       return Response.json({ conversion: await retryConversionRun(conversionId) });
     }
-    return Response.json({ error: "Conversion action must be accept, cancel, or retry." }, { status: 400 });
+    if (body.action === "validate") {
+      return Response.json({ conversion: await validateConversionCandidate(conversionId, body) });
+    }
+    return Response.json({ error: "Conversion action must be accept, cancel, retry, or validate." }, { status: 400 });
   } catch (error) {
     return conversionError(error, "Unable to update conversion.");
   }

@@ -104,6 +104,11 @@ type ChatSubmitOptions = {
   conversionId?: string;
 };
 type ConversionStatus = "queued" | "running" | "review" | "failed" | "cancelled" | "accepted";
+type ConversionValidation = {
+  blockingErrors: { code: string; message: string }[];
+  warnings: { code: string; message: string }[];
+  checks: { code: string; passed: boolean; message: string }[];
+};
 
 const EDITOR_SPLIT_STORAGE_KEY = "atg.dashboard.editorSplitRatio";
 const EDITOR_HIDDEN_PANEL_STORAGE_KEY = "atg.dashboard.hiddenEditorPanel";
@@ -227,6 +232,9 @@ export default function Home() {
   const [isRunning, setIsRunning] = useState(false);
   const [activeConversionId, setActiveConversionId] = useState<string | null>(null);
   const [conversionStatus, setConversionStatus] = useState<ConversionStatus | null>(null);
+  const [conversionRevision, setConversionRevision] = useState<string | null>(null);
+  const [conversionValidation, setConversionValidation] = useState<ConversionValidation | null>(null);
+  const [conversionWarningsAcknowledged, setConversionWarningsAcknowledged] = useState(false);
   const [projectPendingDelete, setProjectPendingDelete] = useState<ProjectSummary | null>(null);
   const [runFeedback, setRunFeedback] = useState<ChatRunFeedback>(idleRunFeedback);
   const [error, setError] = useState("");
@@ -398,6 +406,9 @@ export default function Home() {
       if (!response.ok || !data.conversion) throw new Error(data.error || `Unable to start conversion (${response.status})`);
       setActiveConversionId(data.conversion.id);
       setConversionStatus("queued");
+      setConversionRevision(null);
+      setConversionValidation(null);
+      setConversionWarningsAcknowledged(false);
       setChatMode("build");
       setEditingTarget("tv");
       setInput("");
@@ -1043,23 +1054,29 @@ export default function Home() {
   async function refreshConversion(projectId: string, conversionId: string) {
     const response = await fetch(`/api/projects/${projectId}/conversions/${conversionId}`, { cache: "no-store" });
     if (!response.ok) return;
-    const data = (await response.json()) as { conversion?: { status: ConversionStatus } };
-    if (data.conversion) setConversionStatus(data.conversion.status);
+    const data = (await response.json()) as { conversion?: { status: ConversionStatus; candidate?: { candidateRevision?: string }; validation?: ConversionValidation | null } };
+    if (data.conversion) {
+      setConversionStatus(data.conversion.status);
+      setConversionRevision(data.conversion.candidate?.candidateRevision || null);
+      setConversionValidation(data.conversion.validation || null);
+    }
   }
 
-  async function updateConversion(action: "accept" | "cancel" | "retry") {
+  async function updateConversion(action: "accept" | "cancel" | "retry" | "validate") {
     if (!activeProject || !activeConversionId) return;
     const response = await fetch(`/api/projects/${activeProject.id}/conversions/${activeConversionId}`, {
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, acknowledgeWarnings: conversionWarningsAcknowledged }),
       headers: { "Content-Type": "application/json" },
       method: "POST"
     });
-    const data = (await response.json()) as { conversion?: { status: ConversionStatus }; error?: string };
+    const data = (await response.json()) as { conversion?: { status: ConversionStatus; candidate?: { candidateRevision?: string }; validation?: ConversionValidation | null }; error?: string };
     if (!response.ok || !data.conversion) {
       setError(data.error || "Unable to update conversion.");
       return;
     }
     setConversionStatus(data.conversion.status);
+    setConversionRevision(data.conversion.candidate?.candidateRevision || null);
+    setConversionValidation(data.conversion.validation || null);
     if (action === "accept") await refreshOpenProject(activeProject.id);
   }
 
@@ -1201,6 +1218,10 @@ export default function Home() {
           runFeedback={runFeedback}
           activeConversionId={activeConversionId}
           conversionStatus={conversionStatus}
+          conversionRevision={conversionRevision}
+          conversionValidation={conversionValidation}
+          conversionWarningsAcknowledged={conversionWarningsAcknowledged}
+          onConversionWarningsAcknowledged={setConversionWarningsAcknowledged}
           onUpdateConversion={updateConversion}
         />
       ) : (
@@ -2319,6 +2340,10 @@ function ProjectChat({
   runFeedback,
   activeConversionId,
   conversionStatus,
+  conversionRevision,
+  conversionValidation,
+  conversionWarningsAcknowledged,
+  onConversionWarningsAcknowledged,
   onUpdateConversion
 }: {
   canUpgradeGame: boolean;
@@ -2349,7 +2374,11 @@ function ProjectChat({
   runFeedback: ChatRunFeedback;
   activeConversionId: string | null;
   conversionStatus: ConversionStatus | null;
-  onUpdateConversion: (action: "accept" | "cancel" | "retry") => void;
+  conversionRevision: string | null;
+  conversionValidation: ConversionValidation | null;
+  conversionWarningsAcknowledged: boolean;
+  onConversionWarningsAcknowledged: (acknowledged: boolean) => void;
+  onUpdateConversion: (action: "accept" | "cancel" | "retry" | "validate") => void;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLElement | null>(null);
@@ -2359,7 +2388,10 @@ function ProjectChat({
   const [isDesktopSplit, setIsDesktopSplit] = useState(false);
   const [isResizingEditor, setIsResizingEditor] = useState(false);
   const showFeedback = runFeedback.state !== "idle";
-  const previewPath = `${buildGameAssetUrl(projectId, editingTarget, projectRevision)}&atgEditorPreview=1`;
+  const publishedPreviewPath = `${buildGameAssetUrl(projectId, editingTarget, projectRevision)}&atgEditorPreview=1`;
+  const previewPath = activeConversionId && conversionStatus === "review" && conversionRevision
+    ? `${publishedPreviewPath}&conversion=${encodeURIComponent(activeConversionId)}&revision=${encodeURIComponent(conversionRevision)}`
+    : publishedPreviewPath;
   const latestAssistantMessage = [...messages]
     .reverse()
     .find((message) => message.role === "assistant" && message.status === "done");
@@ -2586,7 +2618,19 @@ function ProjectChat({
               {conversionStatus === "review" ? (
                 <>
                   <button onClick={() => onUpdateConversion("cancel")} type="button">Cancel Upgrade</button>{" "}
-                  <button onClick={() => onUpdateConversion("accept")} type="button">Accept Upgrade</button>
+                  <button onClick={() => onUpdateConversion("validate")} type="button">{conversionValidation ? "Revalidate" : "Validate Candidate"}</button>{" "}
+                  {conversionValidation?.warnings.length ? (
+                    <label>
+                      <input checked={conversionWarningsAcknowledged} onChange={(event) => onConversionWarningsAcknowledged(event.target.checked)} type="checkbox" /> Acknowledge warnings
+                    </label>
+                  ) : null}{" "}
+                  <button
+                    disabled={!conversionValidation || conversionValidation.blockingErrors.length > 0 || (Boolean(conversionValidation.warnings.length) && !conversionWarningsAcknowledged)}
+                    onClick={() => onUpdateConversion("accept")}
+                    type="button"
+                  >Accept Upgrade</button>
+                  {conversionValidation?.blockingErrors.map((finding) => <p className={styles.errorText} key={finding.code}>{finding.message}</p>)}
+                  {conversionValidation?.warnings.map((finding) => <p key={finding.code}>{finding.message}</p>)}
                 </>
               ) : null}
               {conversionStatus === "failed" ? <button onClick={() => onUpdateConversion("retry")} type="button">Retry Upgrade</button> : null}
