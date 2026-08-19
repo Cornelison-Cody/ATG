@@ -2,8 +2,6 @@ import { createServer } from "http";
 import next from "next";
 import { WebSocketServer } from "ws";
 import { normalizeGameStatePatch } from "./lib/game-state-rules.mjs";
-import { dispatchBackgroundJobs } from "./lib/background-worker.mjs";
-import "./lib/background-worker-handlers.mjs";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
@@ -23,10 +21,6 @@ const defaultConfig = {
 
 await app.prepare();
 
-// Development and single-instance deployments use the same dispatcher as the
-// queue-triggered Container Apps Job; it also recovers expired leases at boot.
-void dispatchBackgroundJobs({ once: true }).catch(() => undefined);
-setInterval(() => void dispatchBackgroundJobs({ once: true }).catch(() => undefined), 5_000).unref();
 
 const server = createServer((request, response) => {
   handle(request, response);

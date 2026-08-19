@@ -108,7 +108,7 @@ test("HTTP conversion cancellation, retry, blocking validation, and revision con
   assert.equal(blocked.status, 409);
 
   const conflict = await startConversion(project.id, "http-conflict");
-  await writeFile(path.join(project.path, "game", "game.js"), "published edit after snapshot");
+  await writeFile(path.join(project.path, "game-generations", project.gameGeneration, "game", "game.js"), "published edit after snapshot");
   const conflictFiles = await fetchGameFiles(project.id);
   const conflictConfig = JSON.parse(conflictFiles.get("config.json"));
   conflictConfig.engine = { formatVersion: 1, migrationStatus: "upgraded", runtimeVersion: "atg-2d-1.3.0", type: "pixi" };
@@ -136,7 +136,10 @@ test("HTTP runtime upgrade previews are isolated and acceptance pins the selecte
 
   const acceptedStart = await postRaw(`${baseUrl}/api/projects/${project.id}/runtime-upgrades`, { runtimeVersion: "atg-2d-1.3.0" });
   const acceptedUpgrade = (await acceptedStart.json()).upgrade;
-  const validation = await postJson(`${baseUrl}/api/projects/${project.id}/runtime-upgrades/${acceptedUpgrade.id}`, { action: "validate" });
+  const validationResponse = await postRaw(`${baseUrl}/api/projects/${project.id}/runtime-upgrades/${acceptedUpgrade.id}`, { action: "validate" });
+  assert.equal(validationResponse.status, 202);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const validation = await getJson(`${baseUrl}/api/projects/${project.id}/runtime-upgrades/${acceptedUpgrade.id}`);
   assert.equal(validation.upgrade.validation.runtimeVersion, "atg-2d-1.3.0");
   assert.ok(validation.upgrade.validation.warnings.length > 0);
   const accepted = await postJson(`${baseUrl}/api/projects/${project.id}/runtime-upgrades/${acceptedUpgrade.id}`, { action: "accept", acknowledgeWarnings: true });

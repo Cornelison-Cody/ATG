@@ -263,7 +263,9 @@ class LocalProjectStore implements ProjectStore {
   async readGameAsset(project: ProjectRecord, segments: string[]) {
     await this.ensureGameFiles(project);
     const assetPath = resolveLocalGameAsset(project, segments);
-    const content = await readFile(assetPath);
+    let content: Buffer;
+    try { content = await readFile(assetPath); }
+    catch (error) { if (isMissingFileError(error)) throw new ProjectStoreError("Game asset was not found.", 404); throw error; }
     return {
       content,
       contentType: contentTypeForPath(assetPath)
