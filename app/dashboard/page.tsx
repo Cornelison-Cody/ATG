@@ -225,6 +225,8 @@ export default function Home() {
   const [assetsMessage, setAssetsMessage] = useState("");
   const [isMediaOpen, setIsMediaOpen] = useState(false);
   const [mediaJobs, setMediaJobs] = useState<MediaJob[]>([]);
+  const [mediaReferencePaths, setMediaReferencePaths] = useState<string[]>([]);
+  const [mediaReferenceConsent, setMediaReferenceConsent] = useState(false);
   const [mediaPrompt, setMediaPrompt] = useState("");
   const [mediaKind, setMediaKind] = useState("character");
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
@@ -671,14 +673,14 @@ export default function Home() {
 
   async function openMedia() {
     if (!activeProject) return;
-    setIsAssetsOpen(false); setIsMediaOpen(true); setMediaPrompt("");
+    setIsAssetsOpen(false); setIsMediaOpen(true); setMediaPrompt(""); setMediaReferencePaths([]); setMediaReferenceConsent(false);
     const response = await fetch(`/api/projects/${activeProject.id}/media-jobs`, { cache: "no-store" });
     if (response.ok) setMediaJobs(((await response.json()) as { jobs: MediaJob[] }).jobs);
   }
 
   async function startMedia() {
     if (!activeProject || !mediaPrompt.trim()) return;
-    const response = await fetch(`/api/projects/${activeProject.id}/media-jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: mediaKind, prompt: mediaPrompt }) });
+    const response = await fetch(`/api/projects/${activeProject.id}/media-jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: mediaKind, prompt: mediaPrompt, referenceAssetPaths: mediaReferencePaths, referenceConsent: mediaReferenceConsent }) });
     const data = await response.json() as { job?: MediaJob; error?: string };
     if (!response.ok || !data.job) { setError(data.error || "Unable to start media generation."); return; }
     setMediaJobs((current) => [data.job!, ...current]); setMediaPrompt("");
@@ -1426,7 +1428,7 @@ export default function Home() {
           projectId={activeProject.id}
         />
       ) : null}
-      {isMediaOpen && activeProject ? <MediaGenerationModal jobs={mediaJobs} kind={mediaKind} onKindChange={setMediaKind} onPromptChange={setMediaPrompt} projectId={activeProject.id} prompt={mediaPrompt} onStart={startMedia} onUpdate={updateMediaJob} onClose={() => setIsMediaOpen(false)} /> : null}
+      {isMediaOpen && activeProject ? <MediaGenerationModal assets={assets} jobs={mediaJobs} kind={mediaKind} onKindChange={setMediaKind} onPromptChange={setMediaPrompt} onReferenceConsent={setMediaReferenceConsent} onReferencePaths={setMediaReferencePaths} projectId={activeProject.id} prompt={mediaPrompt} referenceConsent={mediaReferenceConsent} referencePaths={mediaReferencePaths} onStart={startMedia} onUpdate={updateMediaJob} onClose={() => setIsMediaOpen(false)} /> : null}
     </main>
   );
 }
@@ -2398,7 +2400,7 @@ function AssetsModal({
   );
 }
 
-function MediaGenerationModal({ jobs, kind, onKindChange, onPromptChange, projectId, prompt, onStart, onUpdate, onClose }: { jobs: MediaJob[]; kind: string; onKindChange: (value: string) => void; onPromptChange: (value: string) => void; projectId: string; prompt: string; onStart: () => void; onUpdate: (id: string, action: "accept" | "discard" | "retry", metadata?: unknown) => void; onClose: () => void }) {
+function MediaGenerationModal({ assets, jobs, kind, onKindChange, onPromptChange, onReferenceConsent, onReferencePaths, projectId, prompt, referenceConsent, referencePaths, onStart, onUpdate, onClose }: { assets: GameAssetSummary[]; jobs: MediaJob[]; kind: string; onKindChange: (value: string) => void; onPromptChange: (value: string) => void; onReferenceConsent: (value: boolean) => void; onReferencePaths: (value: string[]) => void; projectId: string; prompt: string; referenceConsent: boolean; referencePaths: string[]; onStart: () => void; onUpdate: (id: string, action: "accept" | "discard" | "retry", metadata?: unknown) => void; onClose: () => void }) {
   const [frameCount, setFrameCount] = useState("1"); const [frameWidth, setFrameWidth] = useState("64"); const [frameHeight, setFrameHeight] = useState("64"); const [columns, setColumns] = useState("1");
   const animationMetadata = () => {
     const count = Number(frameCount), width = Number(frameWidth), height = Number(frameHeight), cols = Number(columns);
@@ -2406,7 +2408,7 @@ function MediaGenerationModal({ jobs, kind, onKindChange, onPromptChange, projec
     const frames = Array.from({ length: count }, (_, index) => ({ filename: `frame-${index}.png`, frame: { x: (index % cols) * width, y: Math.floor(index / cols) * height, w: width, h: height } }));
     return { frames, meta: { frameCount: count, frameWidth: width, frameHeight: height, columns: cols } };
   };
-  return <div className={styles.modalOverlay} role="presentation"><section aria-labelledby="media-generation-title" aria-modal="true" className={styles.modal} role="dialog"><div className={styles.modalHeader}><h2 id="media-generation-title">Generate Media</h2><button aria-label="Close media generation dialog" onClick={onClose} type="button"><X aria-hidden="true" /></button></div><div className={styles.modalBody}><label>Type<select aria-label="Media type" onChange={(event) => onKindChange(event.target.value)} value={kind}><option value="character">Character</option><option value="object">Object</option><option value="sprite-variation">Sprite variation</option><option value="animation-sheet">Animation sheet</option><option value="image">Image</option><option value="sound-effect">Sound effect</option></select></label><label>Prompt<textarea aria-label="Media prompt" onChange={(event) => onPromptChange(event.target.value)} value={prompt} /></label>{kind === "animation-sheet" ? <div><label>Frames<input aria-label="Frame count" min="1" onChange={(event) => setFrameCount(event.target.value)} type="number" value={frameCount} /></label><label>Frame width<input aria-label="Frame width" min="1" onChange={(event) => setFrameWidth(event.target.value)} type="number" value={frameWidth} /></label><label>Frame height<input aria-label="Frame height" min="1" onChange={(event) => setFrameHeight(event.target.value)} type="number" value={frameHeight} /></label><label>Columns<input aria-label="Frame columns" min="1" onChange={(event) => setColumns(event.target.value)} type="number" value={columns} /></label></div> : null}<button disabled={!prompt.trim()} onClick={onStart} type="button">Start Preview</button><div aria-live="polite">{jobs.map((job) => <article key={job.id}><strong>{job.visualKind || job.kind}</strong><span>{job.status}</span>{job.status === "completed" && job.result?.asset?.preview ? (job.result.asset.preview.contentType?.startsWith("audio/") ? <audio controls src={`/api/projects/${projectId}/media-jobs/${job.id}/preview`} /> : <img alt={`Generated ${job.visualKind || job.kind} preview`} src={`/api/projects/${projectId}/media-jobs/${job.id}/preview`} />) : null}{job.status === "completed" ? <><button disabled={job.visualKind === "animation-sheet" && !animationMetadata()} onClick={() => onUpdate(job.id, "accept", job.visualKind === "animation-sheet" ? animationMetadata() : undefined)} type="button">Accept</button><button onClick={() => onUpdate(job.id, "discard")} type="button">Discard</button></> : null}{["failed", "discarded"].includes(job.status) ? <button onClick={() => onUpdate(job.id, "retry")} type="button">Retry</button> : null}</article>)}</div></div></section></div>;
+  return <div className={styles.modalOverlay} role="presentation"><section aria-labelledby="media-generation-title" aria-modal="true" className={styles.modal} role="dialog"><div className={styles.modalHeader}><h2 id="media-generation-title">Generate Media</h2><button aria-label="Close media generation dialog" onClick={onClose} type="button"><X aria-hidden="true" /></button></div><div className={styles.modalBody}><label>Type<select aria-label="Media type" onChange={(event) => onKindChange(event.target.value)} value={kind}><option value="character">Character</option><option value="object">Object</option><option value="sprite-variation">Sprite variation</option><option value="animation-sheet">Animation sheet</option><option value="image">Image</option><option value="sound-effect">Sound effect</option></select></label><label>Prompt<textarea aria-label="Media prompt" onChange={(event) => onPromptChange(event.target.value)} value={prompt} /></label><fieldset><legend>Reference art</legend>{assets.filter((asset) => asset.contentType.startsWith("image/")).map((asset) => <label key={asset.path}><input checked={referencePaths.includes(asset.path)} onChange={(event) => onReferencePaths(event.target.checked ? [...referencePaths, asset.path] : referencePaths.filter((path) => path !== asset.path))} type="checkbox" /> {asset.name}</label>)}{referencePaths.length ? <label><input checked={referenceConsent} onChange={(event) => onReferenceConsent(event.target.checked)} type="checkbox" /> I consent to send selected reference art to the generation provider.</label> : null}</fieldset>{kind === "animation-sheet" ? <div><label>Frames<input aria-label="Frame count" min="1" onChange={(event) => setFrameCount(event.target.value)} type="number" value={frameCount} /></label><label>Frame width<input aria-label="Frame width" min="1" onChange={(event) => setFrameWidth(event.target.value)} type="number" value={frameWidth} /></label><label>Frame height<input aria-label="Frame height" min="1" onChange={(event) => setFrameHeight(event.target.value)} type="number" value={frameHeight} /></label><label>Columns<input aria-label="Frame columns" min="1" onChange={(event) => setColumns(event.target.value)} type="number" value={columns} /></label></div> : null}<button disabled={!prompt.trim() || (referencePaths.length > 0 && !referenceConsent)} onClick={onStart} type="button">Start Preview</button><div aria-live="polite">{jobs.map((job) => <article key={job.id}><strong>{job.visualKind || job.kind}</strong><span>{job.status}</span>{job.status === "completed" ? <><button disabled={job.visualKind === "animation-sheet" && !animationMetadata()} onClick={() => onUpdate(job.id, "accept", job.visualKind === "animation-sheet" ? animationMetadata() : undefined)} type="button">Accept</button><button onClick={() => onUpdate(job.id, "discard")} type="button">Discard</button></> : null}</article>)}</div></div></section></div>;
 }
 
 function ProjectChat({
