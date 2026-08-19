@@ -1,6 +1,6 @@
 import { CosmosClient, type Container } from "@azure/cosmos";
 import { BlobServiceClient, type ContainerClient } from "@azure/storage-blob";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { cp, mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { ATG_ROOT, PROJECTS_ROOT, TRASH_ROOT, useAzureStorageBackend } from "./env";
@@ -277,11 +277,12 @@ class LocalProjectStore implements ProjectStore {
 
   async uploadGameAsset(project: ProjectRecord, asset: GameAssetUpload) {
     const normalized = normalizeUploadedGameAsset(asset);
+    const uploadPath = await immutableUploadPath(this, project, normalized.path, normalized.content);
     const result = await this.publishGameMutation(project, "asset:upload", async (stagePath) => {
-      const targetPath = resolveGameAssetPathUnderRoot(stagePath, normalized.path);
+      const targetPath = resolveGameAssetPathUnderRoot(stagePath, uploadPath);
       await mkdir(path.dirname(targetPath), { recursive: true });
       await writeFile(targetPath, normalized.content);
-    }, normalized.path);
+    }, uploadPath);
     return assetSummary(result, normalized.content.byteLength, new Date().toISOString());
   }
 
@@ -580,9 +581,10 @@ class AzureProjectStore implements ProjectStore {
 
   async uploadGameAsset(project: ProjectRecord, asset: GameAssetUpload) {
     const normalized = normalizeUploadedGameAsset(asset);
+    const uploadPath = await immutableUploadPath(this, project, normalized.path, normalized.content);
     const path = await this.publishGameMutation(project, "asset:upload", async (prefix) => {
-      await this.writeBinaryBlob(`${prefix}${normalized.path}`, normalized.content, contentTypeForPath(normalized.path));
-    }, normalized.path);
+      await this.writeBinaryBlob(`${prefix}${uploadPath}`, normalized.content, contentTypeForPath(uploadPath));
+    }, uploadPath);
     return assetSummary(path, normalized.content.byteLength, new Date().toISOString());
   }
 
@@ -1090,6 +1092,23 @@ function normalizeUploadedGameAsset(asset: GameAssetUpload) {
     content: asset.content,
     path: `${UPLOADED_ASSETS_DIR}/${cleanName}`
   };
+}
+
+async function immutableUploadPath(
+  store: Pick<ProjectStore, "readGameAsset">,
+  project: ProjectRecord,
+  requestedPath: string,
+  content: Buffer
+) {
+  try {
+    const existing = await store.readGameAsset(project, requestedPath.split("/"));
+    if (existing.content.equals(content)) return requestedPath;
+    const parsed = path.parse(requestedPath);
+    return `${parsed.dir}/${parsed.name}-${createHash("sha256").update(content).digest("hex").slice(0, 12)}${parsed.ext}`;
+  } catch (error) {
+    if (error instanceof ProjectStoreError && error.status === 404) return requestedPath;
+    throw error;
+  }
 }
 
 function sanitizeAssetFileName(filename: string) {
