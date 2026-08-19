@@ -4,12 +4,11 @@ Issue [#145](https://github.com/Cornelison-Cody/ATG/issues/145) establishes repe
 
 ## Baseline profile
 
-The target display is a 3840 × 2160 (4K UHD) TV driven by a representative laptop on a current evergreen browser with hardware-accelerated WebGL. The engine keeps a 1920 × 1080 logical stage and scales it to the display; it does not allocate a native 4K backing buffer. The ticker target is 30 FPS, giving each frame a 33.33 ms wall-clock budget.
+The required regression baseline is a reproducible 3840 × 2160 Playwright run using the lockfile-pinned Chromium and SwiftShader renderer. It is explicitly classified as `synthetic-ci`: it detects regressions, but is not evidence of real-TV or real-hardware performance. The engine keeps a 1920 × 1080 logical stage and scales it to the display; it does not allocate a native 4K backing buffer. The ticker target is 30 FPS, giving each frame a 33.33 ms wall-clock budget.
 
 Record the following with each browser run:
 
-- laptop CPU/GPU, operating system, browser and browser version;
-- display resolution, device pixel ratio, power mode, and hardware acceleration state;
+- baseline class, Chromium revision, viewport, and SwiftShader renderer;
 - renderer and resolution reported by PixiJS;
 - frame-time average, p95, worst frame, dropped frames, and load time.
 - Pixi ticker FPS and diagnostics sampler overhead; do not substitute a window-level `requestAnimationFrame` counter.
@@ -32,7 +31,7 @@ These are regression budgets, not claims that every browser or GPU will meet the
 
 ## Running the suite
 
-For a real browser/renderer sample, run the standalone benchmark at `/engine-benchmark.html` while the app is running. It loads the pinned `atg-2d-1.3.0` runtime, drives the 1920 × 1080 logical stage, samples the Pixi ticker, records the browser profile, and downloads a JSON artifact. Use the page on the documented 4K display profile; the CI Node suite below remains the deterministic smoke test.
+Run the standalone benchmark at `/engine-benchmark.html` with a fixed 3840 × 2160 viewport. It loads the pinned `atg-2d-1.3.0` runtime, drives the 1920 × 1080 logical stage, samples the Pixi ticker, records the browser profile, and downloads a JSON artifact. CI checks in a `synthetic-ci` JSON baseline; it must never be described as representative hardware evidence.
 
 Run the fast contract tests with:
 

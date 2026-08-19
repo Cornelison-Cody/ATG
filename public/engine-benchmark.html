@@ -8,14 +8,14 @@
 </head>
 <body>
   <h1>ATG Engine Browser Benchmark</h1>
-  <p>Run fullscreen on the documented 4K/30 FPS laptop profile. Results stay in this browser until downloaded.</p>
+  <p>This fixed 4K run is a synthetic CI regression baseline, not real-hardware evidence. Results stay in this browser until downloaded.</p>
   <button id="run">Run benchmark</button> <button disabled id="download">Download JSON</button>
   <pre aria-live="polite" id="output">Ready.</pre>
 <script>
 window.ATG={onState:()=>()=>{},sendAction:()=>{},setState:()=>{},setConfig:()=>{}};
 const RUNTIME_VERSION="atg-2d-1.3.0";
 const SCENARIOS=["sprites","animated-characters","particles","changing-text","filters","video-textures","asset-loading"];
-const BUDGETS={sprites:22,"animated-characters":24,particles:24,"changing-text":20,filters:26,"video-textures":22,"asset-loading":500};
+const BUDGETS={sprites:10,"animated-characters":12,particles:14,"changing-text":16,filters:20,"video-textures":22,"asset-loading":500};
 const FRAMES=90; let latest=null; const $=(id)=>document.getElementById(id);
 const percentile=(values,rank)=>{const sorted=[...values].sort((a,b)=>a-b);return sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*rank)-1)]||0;};
 async function loadRuntime(){
@@ -28,15 +28,15 @@ async function run(){
     const engine=await loadRuntime();const results={};
     for(const name of SCENARIOS){$("output").textContent=`Measuring ${name}...`;results[name]=await measure(engine,name);}
     const display={cssWidth:screen.width,cssHeight:screen.height,width:screen.width*devicePixelRatio,height:screen.height*devicePixelRatio};
-    latest={generatedAt:new Date().toISOString(),runtime:RUNTIME_VERSION,target:{display:"3840x2160 (4K UHD)",logicalSize:engine.logicalSize,targetFps:30},profile:{display,devicePixelRatio,hardwareConcurrency:navigator.hardwareConcurrency||null,renderer:engine.app.renderer?.type||"unknown",targetDisplayVerified:display.width>=3840&&display.height>=2160,userAgent:navigator.userAgent},scenarios:results};
+    latest={baselineClass:"synthetic-ci",generatedAt:new Date().toISOString(),runtime:RUNTIME_VERSION,target:{display:"3840x2160 (4K UHD)",logicalSize:engine.logicalSize,targetFps:30,frameBudgetMs:1000/30},profile:{display,devicePixelRatio,hardwareConcurrency:navigator.hardwareConcurrency||null,renderer:engine.app.renderer?.type||"unknown",targetDisplayVerified:display.width>=3840&&display.height>=2160,userAgent:navigator.userAgent},scenarios:results};
     $("output").textContent=JSON.stringify(latest,null,2);$("download").disabled=false;
   }catch(error){$("output").textContent=`Benchmark failed: ${error instanceof Error?error.message:String(error)}`;}finally{$("run").disabled=false;}
 }
 async function measure(engine,name){
   const {PIXI,app,stage}=engine;const root=new PIXI.Container();const frames=[];const costs=[];const started=performance.now();
   let scenario=await createScenario(PIXI,name,root);stage.addChild(root);const loadDecodeMs=performance.now()-started;
-  try{await new Promise((resolve)=>{let frame=0;const tick=(ticker)=>{const began=performance.now();scenario.update(frame++);costs.push(performance.now()-began);frames.push(Number(ticker?.deltaMS||ticker?.elapsedMS||0));if(frame>=FRAMES){app.ticker.remove(tick);resolve();}};app.ticker.add(tick);});
-    const p95Ms=percentile(frames,.95);return {budgetMs:BUDGETS[name],droppedFrames:frames.filter((value)=>value>1000/30).length,frames:frames.length,loadDecodeMs,p50Ms:percentile(frames,.5),p95Ms,renderP95Ms:percentile(costs,.95),status:p95Ms<=BUDGETS[name]?"PASS":"REVIEW",worstMs:Math.max(...frames)};
+  try{let samplerOverheadMs=0;await new Promise((resolve)=>{let frame=0;const tick=(ticker)=>{const began=performance.now();scenario.update(frame++);costs.push(performance.now()-began);frames.push(Number(ticker?.deltaMS||ticker?.elapsedMS||0));samplerOverheadMs+=performance.now()-began;if(frame>=FRAMES){app.ticker.remove(tick);resolve();}};app.ticker.add(tick);});
+    const p95Ms=percentile(frames,.95),overBudget=p95Ms>BUDGETS[name];return {budgetMs:BUDGETS[name],droppedFrames:frames.filter((value)=>value>1000/30).length,frames:frames.length,loadDecodeMs,p50Ms:percentile(frames,.5),p95Ms,renderP95Ms:percentile(costs,.95),samplerOverheadMs,overheadPercentOfFrameBudget:samplerOverheadMs/Math.max(1,frames.length)/(1000/30)*100,status:overBudget?"REVIEW":"PASS",overBudget:overBudget?{workload:name,value:p95Ms,budget:BUDGETS[name]}:null,worstMs:Math.max(...frames)};
   }finally{root.removeFromParent();root.destroy({children:true});scenario.dispose?.();}
 }
 async function createScenario(PIXI,name,root){
@@ -54,19 +54,19 @@ function sprites(PIXI,root,count){
 }
 function animated(PIXI,root){
   const frames=[PIXI.Texture.WHITE,PIXI.Texture.WHITE,PIXI.Texture.WHITE,PIXI.Texture.WHITE];
-  const items=Array.from({length:96},(_,i)=>{const item=new PIXI.AnimatedSprite(frames);item.play();item.animationSpeed=.2+i%4*.05;item.width=38;item.height=52;item.x=32+i%12*148;item.y=48+Math.floor(i/12)*118;root.addChild(item);return item;});
+  const items=Array.from({length:120},(_,i)=>{const item=new PIXI.AnimatedSprite(frames);item.play();item.animationSpeed=.2+i%4*.05;item.width=38;item.height=52;item.x=32+i%15*124;item.y=48+Math.floor(i/15)*118;root.addChild(item);return item;});
   return {update:(frame)=>items.forEach((item,i)=>{item.y+=Math.sin((frame+i)/12)*.4;item.tint=[0x4dd6c9,0x678cf6,0xf7c948,0xf47c7c][item.currentFrame%4];})};
 }
 function particles(PIXI,root){
-  const items=Array.from({length:900},(_,i)=>{const item=new PIXI.Sprite(PIXI.Texture.WHITE);item.tint=i%2?0x8ce99a:0x74c0fc;item.width=item.height=4+i%5;item.x=i*37%1920;item.y=i*71%1080;root.addChild(item);return item;});
+  const items=Array.from({length:5000},(_,i)=>{const item=new PIXI.Sprite(PIXI.Texture.WHITE);item.tint=i%2?0x8ce99a:0x74c0fc;item.width=item.height=4+i%5;item.x=i*37%1920;item.y=i*71%1080;root.addChild(item);return item;});
   return {update:(frame)=>items.forEach((item,i)=>{item.x=(item.x+1+i%3)%1920;item.y=(item.y+.5+i%2)%1080;item.alpha=.4+Math.abs(Math.sin((frame+i)/16))*.6;})};
 }
 function text(PIXI,root){
-  const items=Array.from({length:48},(_,i)=>{const item=new PIXI.Text({text:"SCORE 0",style:{fontSize:24,fill:0xffffff}});item.x=22+i%8*235;item.y=40+Math.floor(i/8)*150;root.addChild(item);return item;});
+  const items=Array.from({length:24},(_,i)=>{const item=new PIXI.Text({text:"SCORE 0",style:{fontSize:24,fill:0xffffff}});item.x=22+i%8*235;item.y=40+Math.floor(i/8)*150;root.addChild(item);return item;});
   return {update:(frame)=>items.forEach((item,i)=>item.text=`SCORE ${frame+i}`)};
 }
 function filters(PIXI,root){
-  const items=Array.from({length:32},(_,i)=>{const item=new PIXI.Graphics().roundRect(0,0,180,110,18).fill(i%2?0x4263eb:0x0ca678);item.x=45+i%8*232;item.y=55+Math.floor(i/8)*230;item.filters=[new PIXI.BlurFilter({strength:2+i%3})];root.addChild(item);return item;});
+  const items=Array.from({length:8},(_,i)=>{const item=new PIXI.Graphics().roundRect(0,0,180,110,18).fill(i%2?0x4263eb:0x0ca678);item.x=45+i%8*232;item.y=55;item.filters=[new PIXI.BlurFilter({strength:2+i%3})];root.addChild(item);return item;});
   return {update:(frame)=>items.forEach((item,i)=>item.rotation=Math.sin((frame+i)/18)*.06)};
 }
 async function video(PIXI,root){
@@ -76,7 +76,7 @@ async function video(PIXI,root){
   return {dispose:()=>{texture.destroy(true);stream.getTracks().forEach((track)=>track.stop());element.pause();},update:(frame)=>{context.fillStyle=`hsl(${frame%360} 75% 48%)`;context.fillRect(0,0,320,180);context.fillStyle="white";context.font="48px system-ui";context.fillText(`FRAME ${frame}`,24,96);}};
 }
 async function assets(PIXI,root){
-  const bitmaps=await Promise.all(Array.from({length:24},async()=>{const response=await fetch(`/images/hero-bg.png?benchmark=${crypto.randomUUID()}`,{cache:"no-store"});if(!response.ok)throw new Error("A benchmark asset failed to load.");return createImageBitmap(await response.blob());}));
+  const bitmaps=await Promise.all(Array.from({length:48},async()=>{const response=await fetch(`/images/hero-bg.png?benchmark=${crypto.randomUUID()}`,{cache:"no-store"});if(!response.ok)throw new Error("A benchmark asset failed to load.");return createImageBitmap(await response.blob());}));
   const items=bitmaps.map((bitmap,i)=>{const item=new PIXI.Sprite(PIXI.Texture.from(bitmap));item.width=160;item.height=90;item.x=i%6*310;item.y=Math.floor(i/6)*230;root.addChild(item);return item;});
   return {dispose:()=>bitmaps.forEach((item)=>item.close()),update:(frame)=>items.forEach((item,i)=>item.alpha=.6+Math.abs(Math.sin((frame+i)/20))*.4)};
 }
