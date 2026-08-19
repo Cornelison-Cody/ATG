@@ -4,15 +4,18 @@ import { generateMediaWithProvider, moderateMediaWithProvider } from "../lib/med
 
 test("image provider adapter decodes provider bytes and moderation blocks flagged prompts", async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url) => {
+  let requestBody;
+  globalThis.fetch = async (url, options = {}) => {
     if (url.includes("moderations")) return new Response(JSON.stringify({ results: [{ flagged: true }] }), { status: 200 });
+    requestBody = JSON.parse(options.body);
     return new Response(JSON.stringify({ data: [{ b64_json: Buffer.from("png").toString("base64") }] }), { status: 200 });
   };
   try {
     const job = { id: "job", kind: "image", provider: "openai-image", model: "gpt-image-1", prompt: "a safe image" };
-    const generated = await generateMediaWithProvider({ job, apiKey: "test-key" });
+    const generated = await generateMediaWithProvider({ job, apiKey: "test-key", references: [{ path: "assets/reference.png", contentType: "image/png", data: "cmVm" }] });
     assert.equal(generated.contentType, "image/png");
     assert.equal(generated.bytes.toString(), "png");
+    assert.deepEqual(requestBody.reference_images, [{ data: "cmVm", content_type: "image/png" }]);
     assert.equal((await moderateMediaWithProvider({ job, generated, apiKey: "test-key" })).allowed, false);
   } finally { globalThis.fetch = originalFetch; }
 });
