@@ -35,3 +35,10 @@ test("failed optimization does not mutate source assets and retries deterministi
   const retry = await runAssetOptimization(plan, async (output) => output.path);
   assert.equal(retry.outputs.length, plan.outputs.length);
 });
+
+test("duplicate sources and derived manifest entries are deduplicated", async () => {
+  const plan = createAssetOptimizationPlan([assets[0], assets[0]]);
+  assert.equal(plan.sourceAssets.length, 1);
+  assert.equal(new Set(plan.manifest.entries.map((entry) => entry.path)).size, plan.manifest.total);
+  await assert.rejects(() => runAssetOptimization(plan, async (output) => ({ ...output, sourcePath: "assets/other.png" })), /source does not match/);
+});
