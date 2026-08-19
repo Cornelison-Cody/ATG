@@ -79,7 +79,7 @@ type GameAssetSummary = {
   size: number;
   updatedAt: string;
 };
-type MediaJob = { id: string; kind: string; prompt: string; status: string; progress?: { message: string }[]; result?: { asset?: { path?: string }; provenance?: Record<string, unknown> } | null; visualKind?: string };
+type MediaJob = { id: string; kind: string; prompt: string; status: string; progress?: { message: string }[]; result?: { asset?: { path?: string; preview?: { contentType?: string } }; provenance?: Record<string, unknown> } | null; visualKind?: string };
 
 type StreamEvent =
   | { type: "status"; message: string }
@@ -1426,7 +1426,7 @@ export default function Home() {
           projectId={activeProject.id}
         />
       ) : null}
-      {isMediaOpen && activeProject ? <MediaGenerationModal jobs={mediaJobs} kind={mediaKind} onKindChange={setMediaKind} onPromptChange={setMediaPrompt} prompt={mediaPrompt} onStart={startMedia} onUpdate={updateMediaJob} onClose={() => setIsMediaOpen(false)} /> : null}
+      {isMediaOpen && activeProject ? <MediaGenerationModal jobs={mediaJobs} kind={mediaKind} onKindChange={setMediaKind} onPromptChange={setMediaPrompt} projectId={activeProject.id} prompt={mediaPrompt} onStart={startMedia} onUpdate={updateMediaJob} onClose={() => setIsMediaOpen(false)} /> : null}
     </main>
   );
 }
@@ -2398,8 +2398,8 @@ function AssetsModal({
   );
 }
 
-function MediaGenerationModal({ jobs, kind, onKindChange, onPromptChange, prompt, onStart, onUpdate, onClose }: { jobs: MediaJob[]; kind: string; onKindChange: (value: string) => void; onPromptChange: (value: string) => void; prompt: string; onStart: () => void; onUpdate: (id: string, action: "accept" | "discard" | "retry") => void; onClose: () => void }) {
-  return <div className={styles.modalOverlay} role="presentation"><section aria-labelledby="media-generation-title" aria-modal="true" className={styles.modal} role="dialog"><div className={styles.modalHeader}><h2 id="media-generation-title">Generate Media</h2><button aria-label="Close media generation dialog" onClick={onClose} type="button"><X aria-hidden="true" /></button></div><div className={styles.modalBody}><label>Type<select aria-label="Media type" onChange={(event) => onKindChange(event.target.value)} value={kind}><option value="character">Character</option><option value="object">Object</option><option value="sprite-variation">Sprite variation</option><option value="animation-sheet">Animation sheet</option><option value="image">Image</option><option value="sound-effect">Sound effect</option></select></label><label>Prompt<textarea aria-label="Media prompt" onChange={(event) => onPromptChange(event.target.value)} value={prompt} /></label><button disabled={!prompt.trim()} onClick={onStart} type="button">Start Preview</button><div aria-live="polite">{jobs.map((job) => <article key={job.id}><strong>{job.visualKind || job.kind}</strong><span>{job.status}</span>{job.status === "completed" ? <><button onClick={() => onUpdate(job.id, "accept")} type="button">Accept</button><button onClick={() => onUpdate(job.id, "discard")} type="button">Discard</button></> : null}{["failed", "discarded"].includes(job.status) ? <button onClick={() => onUpdate(job.id, "retry")} type="button">Retry</button> : null}</article>)}</div></div></section></div>;
+function MediaGenerationModal({ jobs, kind, onKindChange, onPromptChange, projectId, prompt, onStart, onUpdate, onClose }: { jobs: MediaJob[]; kind: string; onKindChange: (value: string) => void; onPromptChange: (value: string) => void; projectId: string; prompt: string; onStart: () => void; onUpdate: (id: string, action: "accept" | "discard" | "retry") => void; onClose: () => void }) {
+  return <div className={styles.modalOverlay} role="presentation"><section aria-labelledby="media-generation-title" aria-modal="true" className={styles.modal} role="dialog"><div className={styles.modalHeader}><h2 id="media-generation-title">Generate Media</h2><button aria-label="Close media generation dialog" onClick={onClose} type="button"><X aria-hidden="true" /></button></div><div className={styles.modalBody}><label>Type<select aria-label="Media type" onChange={(event) => onKindChange(event.target.value)} value={kind}><option value="character">Character</option><option value="object">Object</option><option value="sprite-variation">Sprite variation</option><option value="animation-sheet">Animation sheet</option><option value="image">Image</option><option value="sound-effect">Sound effect</option></select></label><label>Prompt<textarea aria-label="Media prompt" onChange={(event) => onPromptChange(event.target.value)} value={prompt} /></label><button disabled={!prompt.trim()} onClick={onStart} type="button">Start Preview</button><div aria-live="polite">{jobs.map((job) => <article key={job.id}><strong>{job.visualKind || job.kind}</strong><span>{job.status}</span>{job.status === "completed" && job.result?.asset?.preview ? (job.result.asset.preview.contentType?.startsWith("audio/") ? <audio controls src={`/api/projects/${projectId}/media-jobs/${job.id}/preview`} /> : <img alt={`Generated ${job.visualKind || job.kind} preview`} src={`/api/projects/${projectId}/media-jobs/${job.id}/preview`} />) : null}{job.status === "completed" ? <><button onClick={() => onUpdate(job.id, "accept")} type="button">Accept</button><button onClick={() => onUpdate(job.id, "discard")} type="button">Discard</button></> : null}{["failed", "discarded"].includes(job.status) ? <button onClick={() => onUpdate(job.id, "retry")} type="button">Retry</button> : null}</article>)}</div></div></section></div>;
 }
 
 function ProjectChat({
