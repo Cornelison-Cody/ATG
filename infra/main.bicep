@@ -91,9 +91,16 @@ var cosmosProjectsContainerName = 'projects'
 var cosmosUserSettingsContainerName = 'user-settings'
 var cosmosCodexJobsContainerName = 'codex-jobs'
 var cosmosAiUsageContainerName = 'ai-usage-budget'
+var cosmosConversionsContainerName = 'conversions'
+var cosmosRuntimeUpgradesContainerName = 'runtime-upgrades'
+var cosmosMediaJobsContainerName = 'media-jobs'
+var cosmosBackgroundJobsContainerName = 'background-jobs'
 var codexJobName = '${prefix}-codex-job'
 var storageAccountName = 'atg${take(normalizedEnvironment, 6)}${nameSeed}st'
 var gameAssetsContainerName = 'game-assets'
+var jobArtifactsContainerName = 'job-artifacts'
+var backgroundJobsQueueName = 'background-jobs'
+var backgroundWorkerJobName = '${prefix}-background-worker'
 var customDomains = empty(customDomainName) || empty(customDomainCertificateId) ? [] : [
   {
     name: customDomainName
@@ -186,6 +193,22 @@ var containerAppEnv = concat(
       value: cosmosAiUsageContainerName
     }
     {
+      name: 'AZURE_COSMOS_CONVERSIONS_CONTAINER'
+      value: cosmosConversionsContainerName
+    }
+    {
+      name: 'AZURE_COSMOS_RUNTIME_UPGRADES_CONTAINER'
+      value: cosmosRuntimeUpgradesContainerName
+    }
+    {
+      name: 'AZURE_COSMOS_MEDIA_JOBS_CONTAINER'
+      value: cosmosMediaJobsContainerName
+    }
+    {
+      name: 'AZURE_COSMOS_BACKGROUND_JOBS_CONTAINER'
+      value: cosmosBackgroundJobsContainerName
+    }
+    {
       name: 'AZURE_SUBSCRIPTION_ID'
       value: subscription().subscriptionId
     }
@@ -208,6 +231,14 @@ var containerAppEnv = concat(
     {
       name: 'AZURE_STORAGE_GAME_ASSETS_CONTAINER'
       value: gameAssetsContainerName
+    }
+    {
+      name: 'AZURE_STORAGE_JOB_ARTIFACTS_CONTAINER'
+      value: jobArtifactsContainerName
+    }
+    {
+      name: 'AZURE_STORAGE_BACKGROUND_JOBS_QUEUE'
+      value: backgroundJobsQueueName
     }
     {
       name: 'AZURE_STORAGE_CONNECTION_STRING'
@@ -437,6 +468,28 @@ resource aiUsageContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/co
   }
 }
 
+resource domainContainers 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = [for name in [
+  cosmosConversionsContainerName
+  cosmosRuntimeUpgradesContainerName
+  cosmosMediaJobsContainerName
+  cosmosBackgroundJobsContainerName
+]: {
+  name: name
+  parent: cosmosDatabase
+  properties: {
+    resource: {
+      id: name
+      defaultTtl: name == cosmosBackgroundJobsContainerName ? 604800 : -1
+      partitionKey: {
+        paths: [
+          '/id'
+        ]
+        kind: 'Hash'
+      }
+    }
+  }
+}]
+
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
@@ -463,6 +516,24 @@ resource gameAssetsContainer 'Microsoft.Storage/storageAccounts/blobServices/con
   properties: {
     publicAccess: 'None'
   }
+}
+
+resource jobArtifactsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  name: jobArtifactsContainerName
+  parent: blobService
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
+resource queueService 'Microsoft.Storage/storageAccounts/queueServices@2023-05-01' = {
+  name: 'default'
+  parent: storageAccount
+}
+
+resource backgroundJobsQueue 'Microsoft.Storage/storageAccounts/queueServices/queues@2023-05-01' = {
+  name: backgroundJobsQueueName
+  parent: queueService
 }
 
 var storageConnectionString = 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
@@ -516,7 +587,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     userSettingsContainer
     codexJobsContainer
     aiUsageContainer
+    domainContainers
     gameAssetsContainer
+    jobArtifactsContainer
+    backgroundJobsQueue
   ]
 }
 
@@ -580,6 +654,75 @@ resource codexJob 'Microsoft.App/jobs@2024-03-01' = {
   }
 }
 
+// At-least-once queue delivery is paired with Cosmos ETag claims in the worker.
+// The image is shared with the web app so local and Azure dispatch use identical code.
+resource backgroundWorkerJob 'Microsoft.App/jobs@2024-03-01' = {
+  name: backgroundWorkerJobName
+  location: location
+  properties: {
+    environmentId: managedEnvironment.id
+    configuration: {
+      triggerType: 'Event'
+      replicaTimeout: 900
+      replicaRetryLimit: 0
+      eventTriggerConfig: {
+        parallelism: 1
+        replicaCompletionCount: 1
+        scale: {
+          minExecutions: 0
+          maxExecutions: 10
+          rules: [
+            {
+              name: 'background-jobs-queue'
+              type: 'azure-queue'
+              metadata: {
+                queueName: backgroundJobsQueueName
+                queueLength: '1'
+              }
+              auth: [
+                {
+                  secretRef: 'storage-connection-string'
+                  triggerParameter: 'connection'
+                }
+              ]
+            }
+          ]
+        }
+      }
+      registries: empty(ghcrToken) ? [] : [
+        {
+          server: 'ghcr.io'
+          username: ghcrUsername
+          passwordSecretRef: 'ghcr-token'
+        }
+      ]
+      secrets: concat([
+        { name: 'cosmos-key', value: cosmosAccount.listKeys().primaryMasterKey }
+        { name: 'storage-connection-string', value: storageConnectionString }
+      ], empty(ghcrToken) ? [] : [ { name: 'ghcr-token', value: ghcrToken } ])
+    }
+    template: {
+      containers: [
+        {
+          name: 'background-worker'
+          image: containerImage
+          command: [ 'node', 'lib/background-worker.mjs' ]
+          env: containerAppEnv
+          resources: {
+            cpu: json('1')
+            memory: '2Gi'
+          }
+        }
+      ]
+    }
+  }
+  dependsOn: [
+    domainContainers
+    jobArtifactsContainer
+    backgroundJobsQueue
+  ]
+}
+
 resource containerAppAuth 'Microsoft.App/containerApps/authConfigs@2024-03-01' = if (!empty(entraClientSecret)) {
   name: 'current'
   parent: containerApp
@@ -614,5 +757,6 @@ output containerAppFqdn string = containerApp.properties.configuration.ingress.f
 output appUrl string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
 output codexJobId string = codexJob.id
 output codexJobName string = codexJob.name
+output backgroundWorkerJobName string = backgroundWorkerJob.name
 output cosmosAccountName string = cosmosAccount.name
 output storageAccountName string = storageAccount.name

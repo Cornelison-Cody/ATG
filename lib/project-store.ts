@@ -1,6 +1,6 @@
 import { CosmosClient, type Container } from "@azure/cosmos";
 import { BlobServiceClient, type ContainerClient } from "@azure/storage-blob";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { cp, mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { ATG_ROOT, PROJECTS_ROOT, TRASH_ROOT, useAzureStorageBackend } from "./env";
@@ -124,6 +124,8 @@ class LocalProjectStore implements ProjectStore {
       path.join(PROJECTS_ROOT, slug)
     );
 
+    project.gameGeneration = randomUUID();
+
     await mkdir(project.path, { recursive: true });
     await writeFile(path.join(project.path, "README.md"), renderReadme(project), "utf8");
     await this.ensureGameFiles(project, ENGINE_TEMPLATE_FILES);
@@ -239,13 +241,8 @@ class LocalProjectStore implements ProjectStore {
   async updateGameConfig(project: ProjectRecord, patch: unknown) {
     const current = await this.readGameConfig(project);
     const next = normalizeGameConfig({ ...current, ...asConfigPatch(patch) });
-    await writeFile(
-      path.join(getGamePath(project), GAME_CONFIG_FILE),
-      `${JSON.stringify(next, null, 2)}\n`,
-      "utf8"
-    );
-    await this.updateProject(project.id, (item) => {
-      item.updatedAt = new Date().toISOString();
+    await this.publishGameMutation(project, "config:update", async (stagePath) => {
+      await writeFile(path.join(stagePath, GAME_CONFIG_FILE), `${JSON.stringify(next, null, 2)}\n`, "utf8");
     });
     return next;
   }
@@ -257,15 +254,18 @@ class LocalProjectStore implements ProjectStore {
 
   async updateGameInstructions(project: ProjectRecord, instructions: string) {
     const next = normalizeGameInstructions(instructions);
-    await this.ensureGameFiles(project);
-    await writeFile(path.join(getGamePath(project), GAME_INSTRUCTIONS_FILE), next, "utf8");
+    await this.publishGameMutation(project, "instructions:update", async (stagePath) => {
+      await writeFile(path.join(stagePath, GAME_INSTRUCTIONS_FILE), next, "utf8");
+    });
     return next;
   }
 
   async readGameAsset(project: ProjectRecord, segments: string[]) {
     await this.ensureGameFiles(project);
     const assetPath = resolveLocalGameAsset(project, segments);
-    const content = await readFile(assetPath);
+    let content: Buffer;
+    try { content = await readFile(assetPath); }
+    catch (error) { if (isMissingFileError(error)) throw new ProjectStoreError("Game asset was not found.", 404); throw error; }
     return {
       content,
       contentType: contentTypeForPath(assetPath)
@@ -279,30 +279,21 @@ class LocalProjectStore implements ProjectStore {
 
   async uploadGameAsset(project: ProjectRecord, asset: GameAssetUpload) {
     const normalized = normalizeUploadedGameAsset(asset);
-    await this.ensureGameFiles(project);
-    const targetPath = resolveLocalGameAsset(project, normalized.path.split("/"));
-    await mkdir(path.dirname(targetPath), { recursive: true });
-    await writeFile(targetPath, normalized.content);
-    const info = await stat(targetPath);
-    await this.updateProject(project.id, (item) => {
-      item.updatedAt = new Date().toISOString();
-    });
-    return assetSummary(normalized.path, info.size, info.mtime.toISOString());
+    const uploadPath = await immutableUploadPath(this, project, normalized.path, normalized.content);
+    const result = await this.publishGameMutation(project, "asset:upload", async (stagePath) => {
+      const targetPath = resolveGameAssetPathUnderRoot(stagePath, uploadPath);
+      await mkdir(path.dirname(targetPath), { recursive: true });
+      await writeFile(targetPath, normalized.content);
+    }, uploadPath);
+    return assetSummary(result, normalized.content.byteLength, new Date().toISOString());
   }
 
   async deleteGameAsset(project: ProjectRecord, assetPath: string) {
     const normalizedPath = normalizeUploadedAssetPath(assetPath);
     await assertAssetNotReferenced(this, project, normalizedPath);
-    try {
-      await unlink(resolveLocalGameAsset(project, normalizedPath.split("/")));
-    } catch (error) {
-      if (isMissingFileError(error)) {
-        throw new ProjectStoreError("Game asset was not found.", 404);
-      }
-      throw error;
-    }
-    await this.updateProject(project.id, (item) => {
-      item.updatedAt = new Date().toISOString();
+    await this.publishGameMutation(project, "asset:delete", async (stagePath) => {
+      try { await unlink(resolveGameAssetPathUnderRoot(stagePath, normalizedPath)); }
+      catch (error) { if (isMissingFileError(error)) throw new ProjectStoreError("Game asset was not found.", 404); throw error; }
     });
   }
 
@@ -320,54 +311,49 @@ class LocalProjectStore implements ProjectStore {
 
   async updateGameTextFiles(project: ProjectRecord, files: GameTextFile[]) {
     const normalizedFiles = normalizeGameTextFiles(files);
-    await this.ensureGameFiles(project);
-    const gamePath = getGamePath(project);
-
-    for (const file of normalizedFiles) {
-      const targetPath = resolveLocalGameAsset(project, file.path.split("/"));
-      await mkdir(path.dirname(targetPath), { recursive: true });
-      await writeFile(targetPath, file.content, "utf8");
-    }
-
-    await this.updateProject(project.id, (item) => {
-      item.updatedAt = new Date().toISOString();
+    await this.publishGameMutation(project, "text:update", async (stagePath) => {
+      for (const file of normalizedFiles) {
+        const targetPath = resolveGameTextPathUnderRoot(stagePath, file.path);
+        await mkdir(path.dirname(targetPath), { recursive: true });
+        await writeFile(targetPath, file.content, "utf8");
+      }
     });
     return normalizedFiles;
   }
 
   async replaceGameTextFilesAtomically(project: ProjectRecord, files: GameTextFile[]) {
     const normalizedFiles = normalizeGameTextFiles(files);
-    await this.ensureGameFiles(project);
-    const gamePath = getGamePath(project);
-    const stagePath = path.join(project.path, `.game-stage-${randomUUID()}`);
-    const previousPath = path.join(project.path, `.game-previous-${randomUUID()}`);
-
-    try {
-      await cp(gamePath, stagePath, { recursive: true, errorOnExist: true });
+    await this.publishGameMutation(project, "text:replace", async (stagePath) => {
       for (const file of normalizedFiles) {
         const targetPath = resolveGameTextPathUnderRoot(stagePath, file.path);
         await mkdir(path.dirname(targetPath), { recursive: true });
         await writeFile(targetPath, file.content, "utf8");
       }
-
-      await rename(gamePath, previousPath);
-      try {
-        await rename(stagePath, gamePath);
-      } catch (error) {
-        await rename(previousPath, gamePath);
-        throw error;
-      }
-    } finally {
-      await rm(stagePath, { recursive: true, force: true });
-    }
-
-    // The directory swap is the commit point. Metadata is best-effort so a
-    // database outage cannot report a failed conversion after it is live.
-    void this.updateProject(project.id, (item) => {
-      item.updatedAt = new Date().toISOString();
-    }).catch(() => undefined);
-    void rm(previousPath, { recursive: true, force: true });
+    });
     return normalizedFiles;
+  }
+
+  private async publishGameMutation(project: ProjectRecord, operationKind: string, mutate: (stagePath: string) => Promise<void>, result = "") {
+    const sourceGeneration = project.gameGeneration;
+    const generation = randomUUID();
+    const stagePath = path.join(project.path, "game-generations", generation, GAME_DIR);
+    const sourcePath = getGamePath(project);
+    await mkdir(path.dirname(stagePath), { recursive: true });
+    if (await exists(sourcePath)) await cp(sourcePath, stagePath, { recursive: true, errorOnExist: true });
+    else await mkdir(stagePath, { recursive: true });
+    for (const [fileName, render] of Object.entries(ENGINE_TEMPLATE_FILES)) {
+      const filePath = path.join(stagePath, fileName);
+      if (!(await exists(filePath))) await writeFile(filePath, render(project), "utf8");
+    }
+    await mutate(stagePath);
+    const operationId = `${operationKind}:${randomUUID()}`;
+    await this.updateProject(project.id, (item) => {
+      if (item.gameGeneration !== sourceGeneration) throw new ProjectStoreError("The published game changed while this update was running. Retry the update.", 409);
+      item.gameGeneration = generation;
+      item.updatedAt = new Date().toISOString();
+      item.generationReceipts = appendGenerationReceipt(item.generationReceipts, { operationId, operationKind, sourceGeneration, targetGeneration: generation, committedAt: item.updatedAt });
+    });
+    return result;
   }
 
   private async ensureGameFiles(project: ProjectRecord, templates = TEMPLATE_FILES) {
@@ -451,6 +437,7 @@ class AzureProjectStore implements ProjectStore {
     const trimmedName = name.trim();
     const slug = uniqueSlug(slugifyRequired(trimmedName), await this.listAllProjects());
     const project = buildNewProject(trimmedName, owner, slug, () => `azure://projects/${slug}`);
+    project.gameGeneration = randomUUID();
 
     await this.writeBlob(blobName(project, "README.md"), renderReadme(project), "text/markdown; charset=utf-8");
     await this.ensureGameFiles(project, ENGINE_TEMPLATE_FILES);
@@ -546,13 +533,8 @@ class AzureProjectStore implements ProjectStore {
   async updateGameConfig(project: ProjectRecord, patch: unknown) {
     const current = await this.readGameConfig(project);
     const next = normalizeGameConfig({ ...current, ...asConfigPatch(patch) });
-    await this.writeBlob(
-      blobName(project, `${GAME_DIR}/${GAME_CONFIG_FILE}`),
-      `${JSON.stringify(next, null, 2)}\n`,
-      "application/json; charset=utf-8"
-    );
-    await this.updateProject(project.id, (item) => {
-      item.updatedAt = new Date().toISOString();
+    await this.publishGameMutation(project, "config:update", async (prefix) => {
+      await this.writeBlob(`${prefix}${GAME_CONFIG_FILE}`, `${JSON.stringify(next, null, 2)}\n`, "application/json; charset=utf-8");
     });
     return next;
   }
@@ -564,12 +546,9 @@ class AzureProjectStore implements ProjectStore {
 
   async updateGameInstructions(project: ProjectRecord, instructions: string) {
     const next = normalizeGameInstructions(instructions);
-    await this.ensureGameFiles(project);
-    await this.writeBlob(
-      blobName(project, `${GAME_DIR}/${GAME_INSTRUCTIONS_FILE}`),
-      next,
-      "text/markdown; charset=utf-8"
-    );
+    await this.publishGameMutation(project, "instructions:update", async (prefix) => {
+      await this.writeBlob(`${prefix}${GAME_INSTRUCTIONS_FILE}`, next, "text/markdown; charset=utf-8");
+    });
     return next;
   }
 
@@ -604,28 +583,20 @@ class AzureProjectStore implements ProjectStore {
 
   async uploadGameAsset(project: ProjectRecord, asset: GameAssetUpload) {
     const normalized = normalizeUploadedGameAsset(asset);
-    await this.ensureGameFiles(project);
-    await this.writeBinaryBlob(
-      blobName(project, `${GAME_DIR}/${normalized.path}`),
-      normalized.content,
-      contentTypeForPath(normalized.path)
-    );
-    await this.updateProject(project.id, (item) => {
-      item.updatedAt = new Date().toISOString();
-    });
-    return assetSummary(normalized.path, normalized.content.byteLength, new Date().toISOString());
+    const uploadPath = await immutableUploadPath(this, project, normalized.path, normalized.content);
+    const path = await this.publishGameMutation(project, "asset:upload", async (prefix) => {
+      await this.writeBinaryBlob(`${prefix}${uploadPath}`, normalized.content, contentTypeForPath(uploadPath));
+    }, uploadPath);
+    return assetSummary(path, normalized.content.byteLength, new Date().toISOString());
   }
 
   async deleteGameAsset(project: ProjectRecord, assetPath: string) {
     const normalizedPath = normalizeUploadedAssetPath(assetPath);
     await assertAssetNotReferenced(this, project, normalizedPath);
-    const blob = this.getBlobContainer().getBlockBlobClient(blobName(project, `${GAME_DIR}/${normalizedPath}`));
-    const result = await blob.deleteIfExists();
-    if (!result.succeeded) {
-      throw new ProjectStoreError("Game asset was not found.", 404);
-    }
-    await this.updateProject(project.id, (item) => {
-      item.updatedAt = new Date().toISOString();
+    await this.publishGameMutation(project, "asset:delete", async (prefix) => {
+      const blob = this.getBlobContainer().getBlockBlobClient(`${prefix}${normalizedPath}`);
+      const result = await blob.deleteIfExists();
+      if (!result.succeeded) throw new ProjectStoreError("Game asset was not found.", 404);
     });
   }
 
@@ -651,52 +622,50 @@ class AzureProjectStore implements ProjectStore {
 
   async updateGameTextFiles(project: ProjectRecord, files: GameTextFile[]) {
     const normalizedFiles = normalizeGameTextFiles(files);
-    await this.ensureGameFiles(project);
-
-    for (const file of normalizedFiles) {
-      await this.writeBlob(
-        blobName(project, `${GAME_DIR}/${file.path}`),
-        file.content,
-        contentTypeForPath(file.path)
-      );
-    }
-
-    await this.updateProject(project.id, (item) => {
-      item.updatedAt = new Date().toISOString();
+    await this.publishGameMutation(project, "text:update", async (prefix) => {
+      for (const file of normalizedFiles) await this.writeBlob(`${prefix}${file.path}`, file.content, contentTypeForPath(file.path));
     });
     return normalizedFiles;
   }
 
   async replaceGameTextFilesAtomically(project: ProjectRecord, files: GameTextFile[]) {
     const normalizedFiles = normalizeGameTextFiles(files);
-    await this.ensureGameFiles(project);
+    await this.publishGameMutation(project, "text:replace", async (prefix) => {
+      for (const file of normalizedFiles) await this.writeBlob(`${prefix}${file.path}`, file.content, contentTypeForPath(file.path));
+    });
+    return normalizedFiles;
+  }
+
+  private async publishGameMutation(project: ProjectRecord, operationKind: string, mutate: (targetPrefix: string) => Promise<void>, result = "") {
+    const sourceGeneration = project.gameGeneration;
     const generation = randomUUID();
     const sourcePrefix = blobName(project, `${GAME_DIR}/`);
     const targetPrefix = generationBlobName(project, generation, `${GAME_DIR}/`);
-
-    // Prepare a complete immutable generation before moving the project pointer.
-    // Unreferenced partial generations are never served and can be collected later.
     for await (const blob of this.getBlobContainer().listBlobsFlat({ prefix: sourcePrefix })) {
       const relativePath = blob.name.slice(sourcePrefix.length);
       const content = await this.getBlobContainer().getBlockBlobClient(blob.name).downloadToBuffer();
-      await this.writeBinaryBlob(
-        `${targetPrefix}${relativePath}`,
-        content,
-        blob.properties.contentType || contentTypeForPath(relativePath)
-      );
+      await this.writeBinaryBlob(`${targetPrefix}${relativePath}`, content, blob.properties.contentType || contentTypeForPath(relativePath));
     }
-    for (const file of normalizedFiles) {
-      await this.writeBlob(`${targetPrefix}${file.path}`, file.content, contentTypeForPath(file.path));
+    for (const [fileName, render] of Object.entries(ENGINE_TEMPLATE_FILES)) {
+      const destination = `${targetPrefix}${fileName}`;
+      if (!(await this.getBlobContainer().getBlockBlobClient(destination).exists())) await this.writeBlob(destination, render(project), contentTypeForPath(fileName));
     }
-
-    await this.updateProject(project.id, (item) => {
-      if (item.gameGeneration !== project.gameGeneration) {
-        throw new ProjectStoreError("The published game changed while conversion was running. Start a new conversion.", 409);
-      }
-      item.gameGeneration = generation;
-      item.updatedAt = new Date().toISOString();
-    });
-    return normalizedFiles;
+    await mutate(targetPrefix);
+    const fresh = await this.getRequiredActiveProject(project.id);
+    if (fresh.gameGeneration !== sourceGeneration) throw new ProjectStoreError("The published game changed while this update was running. Retry the update.", 409);
+    const now = new Date().toISOString();
+    fresh.gameGeneration = generation;
+    fresh.updatedAt = now;
+    fresh.generationReceipts = appendGenerationReceipt(fresh.generationReceipts, { operationId: `${operationKind}:${randomUUID()}`, operationKind, sourceGeneration, targetGeneration: generation, committedAt: now });
+    const etag = (fresh as ProjectRecord & { _etag?: string })._etag;
+    if (!etag) throw new ProjectStoreError("Project version is unavailable; retry the update.", 503);
+    try {
+      await this.getCosmosContainer().item(fresh.id, fresh.id).replace(fresh, { accessCondition: { type: "IfMatch", condition: etag } });
+    } catch (error) {
+      if (isCosmosPreconditionFailed(error)) throw new ProjectStoreError("The published game changed while this update was running. Retry the update.", 409);
+      throw error;
+    }
+    return result;
   }
 
   private async ensureGameFiles(project: ProjectRecord, templates = TEMPLATE_FILES) {
@@ -1127,6 +1096,23 @@ function normalizeUploadedGameAsset(asset: GameAssetUpload) {
   };
 }
 
+async function immutableUploadPath(
+  store: Pick<ProjectStore, "readGameAsset">,
+  project: ProjectRecord,
+  requestedPath: string,
+  content: Buffer
+) {
+  try {
+    const existing = await store.readGameAsset(project, requestedPath.split("/"));
+    if (existing.content.equals(content)) return requestedPath;
+    const parsed = path.parse(requestedPath);
+    return `${parsed.dir}/${parsed.name}-${createHash("sha256").update(content).digest("hex").slice(0, 12)}${parsed.ext}`;
+  } catch (error) {
+    if (error instanceof ProjectStoreError && error.status === 404) return requestedPath;
+    throw error;
+  }
+}
+
 function sanitizeAssetFileName(filename: string) {
   const parsed = path.parse(filename);
   const extension = parsed.ext.toLowerCase();
@@ -1267,8 +1253,28 @@ function resolveGameTextPathUnderRoot(rootPath: string, assetPath: string) {
   return resolved;
 }
 
+function resolveGameAssetPathUnderRoot(rootPath: string, assetPath: string) {
+  const safePath = normalizeGameAssetPath(assetPath.split("/"));
+  const resolved = path.resolve(rootPath, safePath);
+  const relative = path.relative(rootPath, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new ProjectStoreError("Game asset path is outside the project game folder.", 400);
+  }
+  return resolved;
+}
+
 function getGamePath(project: ProjectRecord) {
+  if (project.gameGeneration) {
+    return path.join(project.path, "game-generations", project.gameGeneration, GAME_DIR);
+  }
   return path.join(project.path, GAME_DIR);
+}
+
+function appendGenerationReceipt(
+  existing: ProjectRecord["generationReceipts"],
+  receipt: NonNullable<ProjectRecord["generationReceipts"]>[number]
+) {
+  return [...(existing ?? []).filter((item) => item.operationId !== receipt.operationId), receipt].slice(-100);
 }
 
 function blobName(project: ProjectRecord, assetPath: string) {
@@ -1356,6 +1362,10 @@ function isMissingFileError(error: unknown) {
 
 function isCosmosNotFound(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error && error.code === 404;
+}
+
+function isCosmosPreconditionFailed(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === 412;
 }
 
 function requiredEnv(name: string) {

@@ -1,0 +1,8 @@
+{
+  "baselineClass": "synthetic-ci",
+  "viewport": { "width": 3840, "height": 2160 },
+  "renderer": "Chromium SwiftShader",
+  "frameBudgetMs": 33.3333333333,
+  "note": "Reproducible Playwright regression baseline only; not real-hardware performance evidence.",
+  "workloads": []
+}

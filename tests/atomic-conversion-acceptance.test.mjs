@@ -10,16 +10,16 @@ test("conversion acceptance uses the atomic game promotion boundary", () => {
   assert.doesNotMatch(managerSource, /await updateGameTextFiles\(project, record\.candidate\.textFiles\)/);
 });
 
-test("local promotions stage a complete game tree and restore the old tree if the swap fails", () => {
-  assert.match(storeSource, /await cp\(gamePath, stagePath, \{ recursive: true, errorOnExist: true \}\)/);
-  assert.match(storeSource, /await rename\(gamePath, previousPath\)/);
-  assert.match(storeSource, /await rename\(stagePath, gamePath\)/);
-  assert.match(storeSource, /await rename\(previousPath, gamePath\)/);
+test("local promotions stage a complete immutable game tree before moving the pointer", () => {
+  assert.match(storeSource, /game-generations/, "generations are retained instead of directory-swapped");
+  assert.match(storeSource, /await cp\(sourcePath, stagePath, \{ recursive: true, errorOnExist: true \}\)/);
+  assert.match(storeSource, /item\.gameGeneration = generation/);
+  assert.match(storeSource, /appendGenerationReceipt/);
 });
 
 test("Azure promotions publish immutable generations through a single project pointer", () => {
   assert.match(storeSource, /const generation = randomUUID\(\)/);
   assert.match(storeSource, /const targetPrefix = generationBlobName\(project, generation, `\$\{GAME_DIR\}\/`\)/);
-  assert.match(storeSource, /item\.gameGeneration = generation/);
+  assert.match(storeSource, /fresh\.gameGeneration = generation/);
   assert.match(storeSource, /function generationBlobName\(/);
 });

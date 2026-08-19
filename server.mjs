@@ -21,6 +21,7 @@ const defaultConfig = {
 
 await app.prepare();
 
+
 const server = createServer((request, response) => {
   handle(request, response);
 });

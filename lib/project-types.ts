@@ -26,9 +26,19 @@ export type ProjectRecord = {
   updatedAt: string;
   deletedAt?: string;
   // Azure uses this immutable generation as the publish pointer for game files.
-  // Projects without one continue to read their original blob layout.
+  // Projects without one are lazily seeded before their first published mutation.
   gameGeneration?: string;
+  /** Receipts make publish retries safe after the pointer has committed. */
+  generationReceipts?: GenerationPublicationReceipt[];
   messages: ChatMessage[];
+};
+
+export type GenerationPublicationReceipt = {
+  operationId: string;
+  operationKind: string;
+  sourceGeneration?: string;
+  targetGeneration: string;
+  committedAt: string;
 };
 
 export type ProjectDatabase = {
