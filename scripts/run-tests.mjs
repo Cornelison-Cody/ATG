@@ -8,6 +8,7 @@ const files = readdirSync(new URL("../tests", import.meta.url))
     || category === "unit" && !file.includes(".integration.") && !file.includes(".browser.") && !file.includes(".live.")
     || category === "integration" && file.includes(".integration.")
     || category === "browser" && file.includes(".browser.")
+    || category === "azure" && file.includes(".azure.")
     || category === "live" && file.includes(".live."))
   .map((file) => new URL(`../tests/${file}`, import.meta.url).pathname);
 

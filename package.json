@@ -10,6 +10,7 @@
     "test:unit": "node scripts/run-tests.mjs unit",
     "test:integration": "node scripts/run-tests.mjs integration",
     "test:browser": "node scripts/run-tests.mjs browser",
+    "test:azure": "node scripts/run-tests.mjs azure",
     "test:live": "node scripts/run-tests.mjs live",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build",
