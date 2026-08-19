@@ -7,7 +7,8 @@ const conversion = await readFile(new URL("../lib/conversion-manager.mjs", impor
 
 test("Azure storage contract publishes immutable game generations through one pointer", () => {
   assert.match(store, /generationBlobName\(project, generation/);
-  assert.match(store, /item\.gameGeneration = generation/);
-  assert.match(store, /if \(item\.gameGeneration !== project\.gameGeneration\)/);
+  assert.match(store, /fresh\.gameGeneration = generation/);
+  assert.match(store, /fresh\.gameGeneration !== sourceGeneration/);
+  assert.match(store, /accessCondition: \{ type: "IfMatch"/);
   assert.match(conversion, /replaceGameTextFilesAtomically/);
 });
