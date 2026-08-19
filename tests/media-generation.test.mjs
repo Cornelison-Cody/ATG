@@ -30,7 +30,7 @@ test("moderation failures and generation cancellation never store partial assets
   let stored = false;
   let released = false;
   const blocked = createMediaJob({ kind: "sound-effect", provider: "openai-sfx", projectId: "p", prompt: "short buzzer" });
-  await runMediaJob(blocked, { generate: async () => Buffer.from("audio"), moderate: async () => ({ allowed: false, reason: "unsafe" }), store: async () => { stored = true; }, billing: { reserve: async () => "r", release: async () => { released = true; } } });
+  await runMediaJob(blocked, { generate: async () => Buffer.from("audio"), moderate: async ({ phase }) => phase === "output" ? ({ allowed: false, reason: "unsafe" }) : ({ allowed: true }), store: async () => { stored = true; }, billing: { reserve: async () => "r", release: async () => { released = true; } } });
   assert.equal(blocked.status, "failed");
   assert.equal(stored, false);
   assert.equal(released, true);
@@ -40,4 +40,13 @@ test("moderation failures and generation cancellation never store partial assets
   const cancelled = createMediaJob({ kind: "sound-effect", provider: "openai-sfx", projectId: "p", prompt: "buzzer" });
   await runMediaJob(cancelled, { generate: async () => Buffer.from("audio"), store: async () => { throw new Error("must not store"); }, signal: controller.signal });
   assert.equal(cancelled.status, "cancelled");
+});
+
+test("prompt moderation happens before a provider is charged or called", async () => {
+  const job = createMediaJob({ kind: "image", provider: "openai-image", projectId: "p", prompt: "blocked" });
+  let generated = false; let reserved = false;
+  await runMediaJob(job, { moderate: async () => ({ allowed: false, reason: "unsafe" }), generate: async () => { generated = true; }, store: async () => undefined, billing: { reserve: async () => { reserved = true; } } });
+  assert.equal(job.status, "failed");
+  assert.equal(generated, false);
+  assert.equal(reserved, false);
 });
