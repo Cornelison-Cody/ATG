@@ -696,10 +696,7 @@ resource backgroundWorkerJob 'Microsoft.App/jobs@2024-03-01' = {
           passwordSecretRef: 'ghcr-token'
         }
       ]
-      secrets: concat([
-        { name: 'cosmos-key', value: cosmosAccount.listKeys().primaryMasterKey }
-        { name: 'storage-connection-string', value: storageConnectionString }
-      ], empty(ghcrToken) ? [] : [ { name: 'ghcr-token', value: ghcrToken } ])
+      secrets: containerAppSecrets
     }
     template: {
       containers: [
