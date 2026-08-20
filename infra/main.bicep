@@ -100,7 +100,7 @@ var storageAccountName = 'atg${take(normalizedEnvironment, 6)}${nameSeed}st'
 var gameAssetsContainerName = 'game-assets'
 var jobArtifactsContainerName = 'job-artifacts'
 var backgroundJobsQueueName = 'background-jobs'
-var backgroundWorkerJobName = '${prefix}-background-worker'
+var backgroundWorkerJobName = '${prefix}-bg'
 var customDomains = empty(customDomainName) || empty(customDomainCertificateId) ? [] : [
   {
     name: customDomainName
