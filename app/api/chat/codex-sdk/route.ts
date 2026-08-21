@@ -119,13 +119,15 @@ export async function POST(request: Request) {
     billing = await prepareAiBillingForRun({ projectId, userId });
     files = await exportGameTextFiles(projectForAccess);
     config = await readGameConfig(projectForAccess);
-    await appendProjectMessages(projectId, [{
-      content: message,
-      createdAt: new Date().toISOString(),
-      id: randomUUID(),
-      role: "user",
-      status: "done"
-    }]);
+    if (!conversionId) {
+      await appendProjectMessages(projectId, [{
+        content: message,
+        createdAt: new Date().toISOString(),
+        id: randomUUID(),
+        role: "user",
+        status: "done"
+      }]);
+    }
     if (conversionId) {
       await prepareConversion(conversionId);
     }
@@ -263,7 +265,9 @@ export async function POST(request: Request) {
           }
         }
 
-        await persistAssistantMessage(projectId, result.finalResponse, "done");
+        if (!conversionId) {
+          await persistAssistantMessage(projectId, result.finalResponse, "done");
+        }
         send({
           changedFiles: result.changedFiles.map((file) => file.path),
           message: result.finalResponse,
@@ -282,7 +286,9 @@ export async function POST(request: Request) {
         if (conversionId) {
           await failConversionRun(conversionId, message).catch(() => undefined);
         }
-        await persistAssistantMessage(projectId, message, "error").catch(() => undefined);
+        if (!conversionId) {
+          await persistAssistantMessage(projectId, message, "error").catch(() => undefined);
+        }
         send({ message, type: "error" });
       } finally {
         close();
@@ -360,7 +366,9 @@ async function streamAzureJob({
     }
     if (conversionId) await failConversionRun(conversionId, errorMessage).catch(() => undefined);
     runningProjects.delete(projectId);
-    await persistAssistantMessage(projectId, errorMessage, "error");
+    if (!conversionId) {
+      await persistAssistantMessage(projectId, errorMessage, "error");
+    }
     return Response.json({ error: errorMessage }, { status: 502 });
   }
 

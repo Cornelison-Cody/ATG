@@ -28,9 +28,11 @@ export async function POST(request: Request, context: { params: Promise<{ jobId:
         files = await updateGameTextFiles(project, changedFiles);
       }
       const finalMessage = typeof body.finalMessage === "string" ? body.finalMessage : "Codex completed.";
-      await appendProjectMessages(project.id, [{
-        id: randomUUID(), role: "assistant", content: finalMessage, status: "done", createdAt: new Date().toISOString()
-      }]);
+      if (!record.conversionId) {
+        await appendProjectMessages(project.id, [{
+          id: randomUUID(), role: "assistant", content: finalMessage, status: "done", createdAt: new Date().toISOString()
+        }]);
+      }
       const usageResult = await recordCodexUsage({
         idempotencyKey: jobId,
         model: typeof record.model === "string" ? record.model : "",
@@ -61,9 +63,11 @@ export async function POST(request: Request, context: { params: Promise<{ jobId:
       if (typeof record.conversionId === "string" && record.conversionId) {
         await failConversionRun(record.conversionId, errorMessage);
       }
-      await appendProjectMessages(project.id, [{
-        id: randomUUID(), role: "assistant", content: errorMessage, status: "error", createdAt: new Date().toISOString()
-      }]);
+      if (!record.conversionId) {
+        await appendProjectMessages(project.id, [{
+          id: randomUUID(), role: "assistant", content: errorMessage, status: "error", createdAt: new Date().toISOString()
+        }]);
+      }
       if (record.billingMode === AI_BILLING_MODES.MANAGED && typeof record.reservationId === "string") {
         await releaseManagedAiReservation({
           reason: "job-failed",

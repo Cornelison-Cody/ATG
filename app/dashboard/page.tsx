@@ -22,6 +22,7 @@ import {
   PanelRightOpen,
   Pencil,
   Settings,
+  Sparkles,
   Smartphone,
   Trash2,
   Upload,
@@ -193,6 +194,15 @@ const quietRunSteps = [
   "Preparing the final response."
 ];
 
+const upgradeGameStatusMessages = [
+  "Waking up the upgrade wizards...",
+  "Sprinkling in some extra game magic...",
+  "Teaching your game a few shiny new tricks...",
+  "Polishing the pixels until they sparkle...",
+  "Giving the fun meter a little boost...",
+  "Almost ready for its grand entrance..."
+];
+
 export default function Home() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectDetail | null>(null);
@@ -239,10 +249,9 @@ export default function Home() {
   const [isUpdatingCollaborators, setIsUpdatingCollaborators] = useState(false);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const [isUpgradeGameOpen, setIsUpgradeGameOpen] = useState(false);
-  const [isRuntimeUpgradeOpen, setIsRuntimeUpgradeOpen] = useState(false);
   const [runtimeUpgradeOptions, setRuntimeUpgradeOptions] = useState<RuntimeUpgradeOption[]>([]);
-  const [runtimeUpgrade, setRuntimeUpgrade] = useState<RuntimeUpgradeRecord | null>(null);
-  const [runtimeUpgradeWarningsAcknowledged, setRuntimeUpgradeWarningsAcknowledged] = useState(false);
+  const [isRuntimeUpgradeRunning, setIsRuntimeUpgradeRunning] = useState(false);
+  const [runtimeUpgradeFailed, setRuntimeUpgradeFailed] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [activeConversionId, setActiveConversionId] = useState<string | null>(null);
   const [conversionStatus, setConversionStatus] = useState<ConversionStatus | null>(null);
@@ -260,6 +269,13 @@ export default function Home() {
     accessRole: activeProject?.accessRole,
     isRunning
   });
+  const latestRuntimeUpgrade = [...runtimeUpgradeOptions]
+    .reverse()
+    .find((option) => option.compatible && !option.blockingErrors?.length) || null;
+  const canUpgradeGame = !isRunning && !isRuntimeUpgradeRunning && (
+    upgradeGameAvailability.available
+    || Boolean(activeProject?.accessRole && activeProject.engine?.type === "pixi" && latestRuntimeUpgrade)
+  );
 
   const canCreate = useMemo(
     () => newProjectName.trim().length > 0 && !isCreating,
@@ -375,6 +391,13 @@ export default function Home() {
       setMessages(data.project.messages);
       setInput("");
       setChatMode("plan");
+      setActiveConversionId(null);
+      setConversionStatus(null);
+      setConversionRevision(null);
+      setConversionValidation(null);
+      setRuntimeUpgradeOptions([]);
+      setRuntimeUpgradeFailed(false);
+      void loadRuntimeUpgradeOptions(data.project);
       if (shouldUpdateUrl) {
         window.history.pushState(null, "", `/dashboard?project=${encodeURIComponent(projectId)}`);
       }
@@ -402,42 +425,78 @@ export default function Home() {
   }
 
   function openUpgradeGame() {
-    if (!activeProject || !upgradeGameAvailability.available) return;
+    if (!activeProject || !canUpgradeGame) return;
     setIsProjectMenuOpen(false);
+    setRuntimeUpgradeFailed(false);
     setIsUpgradeGameOpen(true);
   }
 
-  async function openRuntimeUpgrade() {
-    if (!activeProject || activeProject.engine?.type !== "pixi" || isRunning) return;
-    setIsProjectMenuOpen(false);
-    const response = await fetch(`/api/projects/${activeProject.id}/runtime-upgrades`, { cache: "no-store" });
-    const data = await response.json() as { options?: RuntimeUpgradeOption[]; upgrades?: RuntimeUpgradeRecord[]; error?: string };
-    if (!response.ok) { setError(data.error || "Unable to load runtime upgrades."); return; }
-    setRuntimeUpgradeOptions(data.options || []);
-    setRuntimeUpgrade(data.upgrades?.find((item) => item.status === "preview") || null);
-    setRuntimeUpgradeWarningsAcknowledged(false);
-    setIsRuntimeUpgradeOpen(true);
+  async function loadRuntimeUpgradeOptions(project: ProjectDetail) {
+    if (project.engine?.type !== "pixi") {
+      setRuntimeUpgradeOptions([]);
+      return;
+    }
+    try {
+      const response = await fetch(`/api/projects/${project.id}/runtime-upgrades`, { cache: "no-store" });
+      const data = await response.json() as { options?: RuntimeUpgradeOption[] };
+      if (!response.ok) {
+        setRuntimeUpgradeOptions([]);
+        return;
+      }
+      setRuntimeUpgradeOptions(data.options || []);
+    } catch {
+      setRuntimeUpgradeOptions([]);
+    }
   }
 
-  async function startRuntimeUpgrade(runtimeVersion: string) {
-    if (!activeProject) return;
-    const response = await fetch(`/api/projects/${activeProject.id}/runtime-upgrades`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ runtimeVersion }) });
-    const data = await response.json() as { upgrade?: RuntimeUpgradeRecord; error?: string };
-    if (!response.ok || !data.upgrade) { setError(data.error || "Unable to start runtime upgrade."); return; }
-    setRuntimeUpgrade(data.upgrade); setRuntimeUpgradeWarningsAcknowledged(false);
-  }
+  async function startLatestRuntimeUpgrade() {
+    if (!activeProject || !latestRuntimeUpgrade) return;
+    setIsRuntimeUpgradeRunning(true);
+    setRuntimeUpgradeFailed(false);
+    setError("");
+    try {
+      const startResponse = await fetch(`/api/projects/${activeProject.id}/runtime-upgrades`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runtimeVersion: latestRuntimeUpgrade.runtimeVersion })
+      });
+      const started = await startResponse.json() as { upgrade?: RuntimeUpgradeRecord; error?: string };
+      if (!startResponse.ok || !started.upgrade) throw new Error(started.error || "Unable to start the game upgrade.");
 
-  async function updateRuntimeUpgrade(action: "accept" | "cancel" | "validate") {
-    if (!activeProject || !runtimeUpgrade) return;
-    const response = await fetch(`/api/projects/${activeProject.id}/runtime-upgrades/${runtimeUpgrade.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, acknowledgeWarnings: runtimeUpgradeWarningsAcknowledged }) });
-    const data = await response.json() as { upgrade?: RuntimeUpgradeRecord; error?: string };
-    if (!response.ok || !data.upgrade) { setError(data.error || "Unable to update runtime upgrade."); return; }
-    setRuntimeUpgrade(data.upgrade); if (action === "accept") { setIsRuntimeUpgradeOpen(false); await refreshOpenProject(activeProject.id); }
+      const validateResponse = await fetch(`/api/projects/${activeProject.id}/runtime-upgrades/${started.upgrade.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "validate" })
+      });
+      const validated = await validateResponse.json() as { upgrade?: RuntimeUpgradeRecord; error?: string };
+      if (!validateResponse.ok || !validated.upgrade) throw new Error(validated.error || "Unable to check the game upgrade.");
+
+      const acceptResponse = await fetch(`/api/projects/${activeProject.id}/runtime-upgrades/${started.upgrade.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "accept", acknowledgeWarnings: true })
+      });
+      const accepted = await acceptResponse.json() as { upgrade?: RuntimeUpgradeRecord; error?: string };
+      if (!acceptResponse.ok || !accepted.upgrade) throw new Error(accepted.error || "Unable to finish the game upgrade.");
+      setRuntimeUpgradeOptions([]);
+      await refreshOpenProject(activeProject.id);
+      await loadProjects();
+      setIsUpgradeGameOpen(false);
+    } catch (upgradeError) {
+      setRuntimeUpgradeFailed(true);
+      setError(upgradeError instanceof Error ? upgradeError.message : "Unable to upgrade the game.");
+    } finally {
+      setIsRuntimeUpgradeRunning(false);
+    }
   }
 
   async function startUpgradeGame() {
-    if (!activeProject || !upgradeGameAvailability.available) return;
-    setIsUpgradeGameOpen(false);
+    if (!activeProject) return;
+    if (activeProject.engine?.type === "pixi") {
+      await startLatestRuntimeUpgrade();
+      return;
+    }
+    if (!upgradeGameAvailability.available) return;
     try {
       const response = await fetch(`/api/projects/${activeProject.id}/conversions`, {
         body: JSON.stringify({}),
@@ -1013,6 +1072,7 @@ export default function Home() {
       return;
     }
     const effectiveChatMode = options.chatMode ?? chatMode;
+    const isConversionRun = Boolean(options.conversionId);
     const effectiveEditingTarget: BuildTarget = options.editingTarget ?? editingTarget;
     const effectiveTargetName =
       effectiveEditingTarget === "both" ? "full plan" : effectiveEditingTarget === "tv" ? "TV" : "phone";
@@ -1033,7 +1093,9 @@ export default function Home() {
       createdAt: new Date().toISOString()
     };
 
-    setMessages((current) => [...current, userMessage, assistantMessage]);
+    if (!isConversionRun) {
+      setMessages((current) => [...current, userMessage, assistantMessage]);
+    }
     setInput("");
     setIsRunning(true);
     setError("");
@@ -1095,7 +1157,13 @@ export default function Home() {
       await refreshOpenProject(activeProject.id);
       await loadProjects();
       if (options.conversionId) {
-        await refreshConversion(activeProject.id, options.conversionId);
+        const conversion = await refreshConversion(activeProject.id, options.conversionId);
+        if (conversion?.status === "review") {
+          const validated = await updateConversion("validate", options.conversionId);
+          if (validated?.status === "review") {
+            await updateConversion("accept", options.conversionId, true);
+          }
+        }
       }
     } catch (chatError) {
       const message = chatError instanceof Error ? chatError.message : "Unknown chat failure.";
@@ -1105,6 +1173,9 @@ export default function Home() {
         )
       );
       setError(message);
+      if (options.conversionId) {
+        setConversionStatus("failed");
+      }
       setRunFeedback((current) => ({
         state: "error",
         label: "Codex stopped",
@@ -1119,31 +1190,36 @@ export default function Home() {
 
   async function refreshConversion(projectId: string, conversionId: string) {
     const response = await fetch(`/api/projects/${projectId}/conversions/${conversionId}`, { cache: "no-store" });
-    if (!response.ok) return;
+    if (!response.ok) return null;
     const data = (await response.json()) as { conversion?: { status: ConversionStatus; candidate?: { candidateRevision?: string }; validation?: ConversionValidation | null } };
     if (data.conversion) {
       setConversionStatus(data.conversion.status);
       setConversionRevision(data.conversion.candidate?.candidateRevision || null);
       setConversionValidation(data.conversion.validation || null);
     }
+    return data.conversion || null;
   }
 
-  async function updateConversion(action: "accept" | "cancel" | "retry" | "validate") {
-    if (!activeProject || !activeConversionId) return;
-    const response = await fetch(`/api/projects/${activeProject.id}/conversions/${activeConversionId}`, {
-      body: JSON.stringify({ action, acknowledgeWarnings: conversionWarningsAcknowledged }),
+  async function updateConversion(action: "accept" | "cancel" | "retry" | "validate", conversionId = activeConversionId, acknowledgeWarnings = conversionWarningsAcknowledged) {
+    if (!activeProject || !conversionId) return null;
+    const response = await fetch(`/api/projects/${activeProject.id}/conversions/${conversionId}`, {
+      body: JSON.stringify({ action, acknowledgeWarnings }),
       headers: { "Content-Type": "application/json" },
       method: "POST"
     });
     const data = (await response.json()) as { conversion?: { status: ConversionStatus; candidate?: { candidateRevision?: string }; validation?: ConversionValidation | null }; error?: string };
     if (!response.ok || !data.conversion) {
       setError(data.error || "Unable to update conversion.");
-      return;
+      return null;
     }
     setConversionStatus(data.conversion.status);
     setConversionRevision(data.conversion.candidate?.candidateRevision || null);
     setConversionValidation(data.conversion.validation || null);
-    if (action === "accept") await refreshOpenProject(activeProject.id);
+    if (action === "accept") {
+      await refreshOpenProject(activeProject.id);
+      setIsUpgradeGameOpen(false);
+    }
+    return data.conversion;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1160,6 +1236,7 @@ export default function Home() {
     const data = (await response.json()) as { project: ProjectDetail };
     setActiveProject(data.project);
     setMessages(data.project.messages);
+    await loadRuntimeUpgradeOptions(data.project);
   }
 
   function applyStreamEvent(eventData: StreamEvent, assistantId: string) {
@@ -1261,7 +1338,6 @@ export default function Home() {
           onOpenInstructions={openInstructions}
           onOpenProjectSettings={openProjectSettings}
           onOpenUpgradeGame={openUpgradeGame}
-          onOpenRuntimeUpgrade={openRuntimeUpgrade}
           onModeChange={setChatMode}
           onQuickAnswer={(answer, options) => {
             if (options?.chatMode) {
@@ -1280,19 +1356,13 @@ export default function Home() {
           isProjectMenuOpen={isProjectMenuOpen}
           projectName={activeProject.name}
           projectRevision={activeProject.updatedAt}
-          canUpgradeGame={upgradeGameAvailability.available}
-          canUpgradeRuntime={activeProject.engine?.type === "pixi" && !isRunning}
-          activeRuntimeUpgrade={runtimeUpgrade}
-          onUpdateRuntimeUpgrade={updateRuntimeUpgrade}
+          canUpgradeGame={canUpgradeGame}
+          isUsingNewEngine={activeProject.engine?.type === "pixi"}
           onSubmit={handleSubmit}
           runFeedback={runFeedback}
           activeConversionId={activeConversionId}
           conversionStatus={conversionStatus}
           conversionRevision={conversionRevision}
-          conversionValidation={conversionValidation}
-          conversionWarningsAcknowledged={conversionWarningsAcknowledged}
-          onConversionWarningsAcknowledged={setConversionWarningsAcknowledged}
-          onUpdateConversion={updateConversion}
         />
       ) : (
         <ProjectDashboard
@@ -1383,13 +1453,14 @@ export default function Home() {
 
       {isUpgradeGameOpen && activeProject ? (
         <UpgradeGameModal
-          isRunning={isRunning}
+          hasFailed={runtimeUpgradeFailed || conversionStatus === "failed"}
+          isRunning={isRunning || isRuntimeUpgradeRunning}
+          isUpgrading={isRuntimeUpgradeRunning || conversionStatus === "queued" || conversionStatus === "running"}
           onCancel={() => setIsUpgradeGameOpen(false)}
           onStart={startUpgradeGame}
-          reason={upgradeGameAvailability.reason}
+          reason={activeProject.engine?.type === "legacy" ? upgradeGameAvailability.reason : ""}
         />
       ) : null}
-      {isRuntimeUpgradeOpen && activeProject ? <RuntimeUpgradeModal options={runtimeUpgradeOptions} upgrade={runtimeUpgrade} acknowledged={runtimeUpgradeWarningsAcknowledged} onAcknowledge={setRuntimeUpgradeWarningsAcknowledged} onCancel={() => setIsRuntimeUpgradeOpen(false)} onStart={startRuntimeUpgrade} onUpdate={updateRuntimeUpgrade} /> : null}
 
       {projectPendingDelete ? (
         <DeleteProjectModal
@@ -1598,51 +1669,78 @@ function ProjectSettingsModal({
 }
 
 function UpgradeGameModal({
+  hasFailed,
   isRunning,
+  isUpgrading,
   onCancel,
   onStart,
   reason
 }: {
+  hasFailed: boolean;
   isRunning: boolean;
+  isUpgrading: boolean;
   onCancel: () => void;
   onStart: () => void;
   reason: string;
 }) {
+  const [statusIndex, setStatusIndex] = useState(0);
+
+  useEffect(() => {
+    if (!isUpgrading) {
+      setStatusIndex(0);
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setStatusIndex((current) => (current + 1) % upgradeGameStatusMessages.length);
+    }, 6600);
+
+    return () => window.clearInterval(interval);
+  }, [isUpgrading]);
+
   return (
-    <div className={styles.modalBackdrop} role="presentation">
-      <section aria-labelledby="upgrade-game-title" aria-modal="true" className={styles.modal} role="dialog">
+    <div className={styles.modalOverlay} role="presentation">
+      <section aria-labelledby="upgrade-game-title" aria-modal="true" className={`${styles.modal} ${styles.upgradeGameModal}`} role="dialog">
         <div className={styles.modalHeader}>
-          <h2 id="upgrade-game-title">Upgrade Game</h2>
-          <button aria-label="Close upgrade game dialog" onClick={onCancel} type="button">
+          <h2 id="upgrade-game-title">Level Up Your Game!</h2>
+          <button aria-label="Close upgrade game dialog" className={styles.closeButton} disabled={isUpgrading} onClick={onCancel} type="button">
             <X aria-hidden="true" />
           </button>
         </div>
         <div className={styles.modalBody}>
-          <p>
-            ATG will prepare a best-effort engine conversion without asking a questionnaire. Phone controls
-            stay DOM-based, and your current published legacy game remains unchanged until you explicitly accept
-            a conversion candidate.
-          </p>
-          {reason ? <p className={styles.errorText}>{reason}</p> : null}
+          {isUpgrading ? (
+            <div aria-live="polite" className={styles.upgradeProgress}>
+              <span aria-label="Upgrading your game" className={styles.upgradeSpinner} role="status" />
+              <p className={styles.upgradeStatus}>{upgradeGameStatusMessages[statusIndex]}</p>
+            </div>
+          ) : (
+            <p>
+              Give your game an awesome upgrade with the latest ATG magic! We’ll create a fresh upgraded version for
+              you while your current game stays safe.
+            </p>
+          )}
+          {reason && !isUpgrading ? <p className={styles.errorText}>{reason}</p> : null}
         </div>
         <div className={styles.modalActions}>
-          <button onClick={onCancel} type="button">Cancel</button>
-          <button disabled={isRunning || Boolean(reason)} onClick={onStart} type="button">
-            Start Upgrade
-          </button>
+          {isUpgrading ? (
+            <button className={styles.modalPrimaryButton} disabled type="button">Working Its Magic...</button>
+          ) : hasFailed ? (
+            <>
+              <button className={styles.secondaryButton} onClick={onCancel} type="button">Maybe Later</button>
+              <button className={styles.modalPrimaryButton} disabled={isRunning || Boolean(reason)} onClick={onStart} type="button">Try Again</button>
+            </>
+          ) : (
+            <>
+              <button className={styles.secondaryButton} onClick={onCancel} type="button">Maybe Later</button>
+              <button className={styles.modalPrimaryButton} disabled={isRunning || Boolean(reason)} onClick={onStart} type="button">
+                Make It Awesome!
+              </button>
+            </>
+          )}
         </div>
       </section>
     </div>
   );
-}
-
-function RuntimeUpgradeModal({ options, upgrade, acknowledged, onAcknowledge, onCancel, onStart, onUpdate }: { options: RuntimeUpgradeOption[]; upgrade: RuntimeUpgradeRecord | null; acknowledged: boolean; onAcknowledge: (value: boolean) => void; onCancel: () => void; onStart: (version: string) => void; onUpdate: (action: "accept" | "cancel" | "validate") => void }) {
-  const [selected, setSelected] = useState(options[0]?.runtimeVersion || "");
-  const candidate = upgrade?.candidate;
-  const validation = upgrade?.validation;
-  const requiresAcknowledgment = Boolean(candidate?.warnings?.length || validation?.warnings?.length);
-  const canAccept = Boolean(validation && !validation.blockingErrors.length && (!requiresAcknowledgment || acknowledged));
-  return <div className={styles.modalBackdrop} role="presentation"><section aria-modal="true" className={styles.modal} role="dialog"><div className={styles.modalHeader}><h2>Runtime Upgrade</h2><button aria-label="Close runtime upgrade dialog" onClick={onCancel} type="button"><X aria-hidden="true" /></button></div><div className={styles.modalBody}><p>Preview a newer registered runtime in isolation. The pinned project runtime changes only when you accept.</p>{upgrade ? <><p><strong>Previewing {candidate?.runtimeVersion}</strong></p><button onClick={() => onUpdate("validate")} type="button">Validate candidate</button>{validation ? <div aria-live="polite"><p><strong>{validation.blockingErrors.length ? "Validation found blocking issues" : "Validation completed"}</strong></p>{validation.checks.map((check) => <p key={check.code}>{check.passed ? "✓" : "✕"} {check.message}</p>)}{validation.warnings.map((warning) => <p key={warning}>Warning: {warning}</p>)}</div> : <p>Run validation before accepting this runtime.</p>}{candidate?.warnings?.map((warning) => <p key={warning}>{warning}</p>)}{requiresAcknowledgment ? <label><input checked={acknowledged} onChange={(event) => onAcknowledge(event.target.checked)} type="checkbox" /> I acknowledge the warnings</label> : null}</> : <select aria-label="Runtime version" onChange={(event) => setSelected(event.target.value)} value={selected}>{options.map((option) => <option disabled={!option.compatible} key={option.runtimeVersion} value={option.runtimeVersion}>{option.runtimeVersion}{option.compatible ? "" : " (incompatible)"}</option>)}</select>}</div><div className={styles.modalActions}><button onClick={onCancel} type="button">Close</button>{upgrade ? <><button onClick={() => onUpdate("cancel")} type="button">Cancel Preview</button><button disabled={!canAccept} onClick={() => onUpdate("accept")} type="button">Accept Runtime</button></> : <button disabled={!selected} onClick={() => onStart(selected)} type="button">Start Preview</button>}</div></section></div>;
 }
 
 function AccountSettingsModal({
@@ -2412,9 +2510,8 @@ function MediaGenerationModal({ assets, jobs, kind, onKindChange, onPromptChange
 }
 
 function ProjectChat({
-  activeRuntimeUpgrade,
-  canUpgradeRuntime,
   canUpgradeGame,
+  isUsingNewEngine,
   canSubmit,
   chatMode,
   editingTarget,
@@ -2430,7 +2527,6 @@ function ProjectChat({
   onOpenInstructions,
   onOpenProjectSettings,
   onOpenUpgradeGame,
-  onOpenRuntimeUpgrade,
   onQuickAnswer,
   onReturnToProjects,
   onTargetChange,
@@ -2443,16 +2539,10 @@ function ProjectChat({
   runFeedback,
   activeConversionId,
   conversionStatus,
-  conversionRevision,
-  conversionValidation,
-  conversionWarningsAcknowledged,
-  onConversionWarningsAcknowledged,
-  onUpdateConversion,
-  onUpdateRuntimeUpgrade
+  conversionRevision
 }: {
-  activeRuntimeUpgrade: RuntimeUpgradeRecord | null;
-  canUpgradeRuntime: boolean;
   canUpgradeGame: boolean;
+  isUsingNewEngine: boolean;
   canSubmit: boolean;
   chatMode: ChatMode;
   editingTarget: EditingTarget;
@@ -2468,7 +2558,6 @@ function ProjectChat({
   onOpenInstructions: () => void;
   onOpenProjectSettings: () => void;
   onOpenUpgradeGame: () => void;
-  onOpenRuntimeUpgrade: () => void;
   onQuickAnswer: (answer: string, options?: ChatSubmitOptions) => void;
   onReturnToProjects: () => void;
   onTargetChange: (target: EditingTarget) => void;
@@ -2482,11 +2571,6 @@ function ProjectChat({
   activeConversionId: string | null;
   conversionStatus: ConversionStatus | null;
   conversionRevision: string | null;
-  conversionValidation: ConversionValidation | null;
-  conversionWarningsAcknowledged: boolean;
-  onConversionWarningsAcknowledged: (acknowledged: boolean) => void;
-  onUpdateConversion: (action: "accept" | "cancel" | "retry" | "validate") => void;
-  onUpdateRuntimeUpgrade: (action: "accept" | "cancel" | "validate") => void;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLElement | null>(null);
@@ -2495,14 +2579,13 @@ function ProjectChat({
   const [hiddenEditorPanel, setHiddenEditorPanel] = useState<HiddenEditorPanel>(null);
   const [isDesktopSplit, setIsDesktopSplit] = useState(false);
   const [isResizingEditor, setIsResizingEditor] = useState(false);
+  const visibleMessages = messages.filter((message) => !isUpgradeConversationMessage(message));
   const showFeedback = runFeedback.state !== "idle";
   const publishedPreviewPath = `${buildGameAssetUrl(projectId, editingTarget, projectRevision)}&atgEditorPreview=1`;
-  const previewPath = activeRuntimeUpgrade?.status === "preview"
-    ? `${publishedPreviewPath}&runtimeUpgrade=${encodeURIComponent(activeRuntimeUpgrade.id)}&revision=${encodeURIComponent(activeRuntimeUpgrade.previewRevision)}`
-    : activeConversionId && conversionStatus === "review" && conversionRevision
+  const previewPath = activeConversionId && conversionStatus === "review" && conversionRevision
     ? `${publishedPreviewPath}&conversion=${encodeURIComponent(activeConversionId)}&revision=${encodeURIComponent(conversionRevision)}`
     : publishedPreviewPath;
-  const latestAssistantMessage = [...messages]
+  const latestAssistantMessage = [...visibleMessages]
     .reverse()
     .find((message) => message.role === "assistant" && message.status === "done");
   const quickAnswers =
@@ -2510,7 +2593,7 @@ function ProjectChat({
   const planningQuestion =
     chatMode === "plan" && latestAssistantMessage ? extractPlanningQuestion(latestAssistantMessage.content) : "";
   const quickAnswersKey = quickAnswers.map((answer) => `${answer.label}:${answer.text}`).join("|");
-  const hasConversation = messages.length > 0 || quickAnswers.length > 0;
+  const hasConversation = visibleMessages.length > 0 || quickAnswers.length > 0;
   const targetName = editingTarget === "tv" ? "TV display" : "phone controller";
   const buildHandoffAnswer = quickAnswers.find((answer) => Boolean(getPlanningQuickAction(answer.text).options?.chatMode));
   const planningAnswers = buildHandoffAnswer ? [buildHandoffAnswer] : quickAnswers;
@@ -2633,33 +2716,45 @@ function ProjectChat({
         </button>
       ) : (
         <section
-          className={`${styles.chatPanel} ${messages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
+          className={`${styles.chatPanel} ${visibleMessages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
           aria-label="Project chat"
         >
           <div className={styles.editorToolbar}>
-            <div className={styles.targetToggle} role="tablist" aria-label="Editing target">
-              <button
-                aria-selected={editingTarget === "tv"}
-                className={editingTarget === "tv" ? styles.activeTargetButton : undefined}
-                onClick={() => onTargetChange("tv")}
-                role="tab"
-                type="button"
-              >
-                <Monitor aria-hidden="true" />
-                TV
-              </button>
-              <button
-                aria-selected={editingTarget === "phone"}
-                className={editingTarget === "phone" ? styles.activeTargetButton : undefined}
-                onClick={() => onTargetChange("phone")}
-                role="tab"
-                type="button"
-              >
-                <Smartphone aria-hidden="true" />
-                Phone
-              </button>
+            <div className={styles.editorToolbarIdentity}>
+              <div className={styles.targetToggle} role="tablist" aria-label="Editing target">
+                <button
+                  aria-selected={editingTarget === "tv"}
+                  className={editingTarget === "tv" ? styles.activeTargetButton : undefined}
+                  onClick={() => onTargetChange("tv")}
+                  role="tab"
+                  type="button"
+                >
+                  <Monitor aria-hidden="true" />
+                  TV
+                </button>
+                <button
+                  aria-selected={editingTarget === "phone"}
+                  className={editingTarget === "phone" ? styles.activeTargetButton : undefined}
+                  onClick={() => onTargetChange("phone")}
+                  role="tab"
+                  type="button"
+                >
+                  <Smartphone aria-hidden="true" />
+                  Phone
+                </button>
+              </div>
+              <span className={`${styles.engineStatus} ${isUsingNewEngine ? styles.engineStatusActive : styles.engineStatusLegacy}`}>
+                <span aria-hidden="true" className={styles.engineStatusDot} />
+                {isUsingNewEngine ? "ATG Engine" : "Classic Game"}
+              </span>
             </div>
             <div className={styles.editorToolbarActions}>
+              {canUpgradeGame ? (
+                <button className={styles.upgradeGameButton} onClick={onOpenUpgradeGame} type="button">
+                  <Sparkles aria-hidden="true" />
+                  Upgrade Game
+                </button>
+              ) : null}
               <div className={styles.modeToggle} role="tablist" aria-label="Chat mode">
                 <button
                   aria-selected={chatMode === "build"}
@@ -2697,7 +2792,7 @@ function ProjectChat({
 
           {hasConversation ? (
             <div className={styles.messages}>
-              {messages.map((message) => {
+              {visibleMessages.map((message) => {
                 return (
                   <div className={styles.messageGroup} key={message.id}>
                     <article
@@ -2721,31 +2816,6 @@ function ProjectChat({
           ) : null}
 
           {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
-
-          {activeConversionId && conversionStatus ? (
-            <div className={styles.settingsMessage} role="status">
-              <strong>Upgrade Game: </strong>{conversionStatus === "review" ? "Candidate ready for review." : conversionStatus}
-              {conversionStatus === "review" ? (
-                <>
-                  <button onClick={() => onUpdateConversion("cancel")} type="button">Cancel Upgrade</button>{" "}
-                  <button onClick={() => onUpdateConversion("validate")} type="button">{conversionValidation ? "Revalidate" : "Validate Candidate"}</button>{" "}
-                  {conversionValidation?.warnings.length ? (
-                    <label>
-                      <input checked={conversionWarningsAcknowledged} onChange={(event) => onConversionWarningsAcknowledged(event.target.checked)} type="checkbox" /> Acknowledge warnings
-                    </label>
-                  ) : null}{" "}
-                  <button
-                    disabled={!conversionValidation || conversionValidation.blockingErrors.length > 0 || (Boolean(conversionValidation.warnings.length) && !conversionWarningsAcknowledged)}
-                    onClick={() => onUpdateConversion("accept")}
-                    type="button"
-                  >Accept Upgrade</button>
-                  {conversionValidation?.blockingErrors.map((finding) => <p className={styles.errorText} key={finding.code}>{finding.message}</p>)}
-                  {conversionValidation?.warnings.map((finding) => <p key={finding.code}>{finding.message}</p>)}
-                </>
-              ) : null}
-              {conversionStatus === "failed" ? <button onClick={() => onUpdateConversion("retry")} type="button">Retry Upgrade</button> : null}
-            </div>
-          ) : null}
 
           {planningAnswers.length > 0 && !isRunning ? (
             <div className={styles.quickAnswers} aria-label="Planning answer choices">
@@ -2850,11 +2920,6 @@ function ProjectChat({
             onOpenAssets={onOpenAssets}
             onOpenInstructions={onOpenInstructions}
             onOpenProjectSettings={onOpenProjectSettings}
-                onOpenUpgradeGame={onOpenUpgradeGame}
-                onOpenRuntimeUpgrade={onOpenRuntimeUpgrade}
-                canUpgradeGame={canUpgradeGame}
-                canUpgradeRuntime={canUpgradeRuntime}
-                onUpdateRuntimeUpgrade={onUpdateRuntimeUpgrade}
             onReturnToProjects={onReturnToProjects}
             onToggle={onToggleProjectMenu}
             projectId={projectId}
@@ -2886,11 +2951,6 @@ function ProjectChat({
                 onOpenAssets={onOpenAssets}
                 onOpenInstructions={onOpenInstructions}
                 onOpenProjectSettings={onOpenProjectSettings}
-                onOpenUpgradeGame={onOpenUpgradeGame}
-                onOpenRuntimeUpgrade={onOpenRuntimeUpgrade}
-                canUpgradeGame={canUpgradeGame}
-                canUpgradeRuntime={canUpgradeRuntime}
-                onUpdateRuntimeUpgrade={onUpdateRuntimeUpgrade}
                 onReturnToProjects={onReturnToProjects}
                 onToggle={onToggleProjectMenu}
                 projectId={projectId}
@@ -2909,32 +2969,22 @@ function ProjectChat({
 }
 
 function ProjectMenu({
-  canUpgradeRuntime,
-  canUpgradeGame,
   className,
   isOpen,
   onOpenAccountSettings,
   onOpenAssets,
   onOpenInstructions,
   onOpenProjectSettings,
-  onOpenUpgradeGame,
-  onOpenRuntimeUpgrade,
-  onUpdateRuntimeUpgrade,
   onReturnToProjects,
   onToggle,
   projectId
 }: {
-  canUpgradeGame: boolean;
-  canUpgradeRuntime: boolean;
   className?: string;
   isOpen: boolean;
   onOpenAccountSettings: () => void;
   onOpenAssets: () => void;
   onOpenInstructions: () => void;
   onOpenProjectSettings: () => void;
-  onOpenUpgradeGame: () => void;
-  onOpenRuntimeUpgrade: () => void;
-  onUpdateRuntimeUpgrade: (action: "accept" | "cancel" | "validate") => void;
   onReturnToProjects: () => void;
   onToggle: () => void;
   projectId: string;
@@ -2952,38 +3002,20 @@ function ProjectMenu({
       </button>
       {isOpen ? (
         <div className={styles.menu} role="menu">
-          <a href={`/tv/${projectId}`} role="menuitem">
+          <a href={`/tv/${projectId}`} rel="noopener noreferrer" role="menuitem" target="_blank">
             Open TV
           </a>
-          <a href={`/join/${projectId}`} role="menuitem">
+          <a href={`/join/${projectId}`} rel="noopener noreferrer" role="menuitem" target="_blank">
             Open Phone
           </a>
           <button onClick={onOpenInstructions} role="menuitem" type="button">
             Game Instructions
           </button>
-          <a href="/engine-guide" role="menuitem">
-            Engine Creator Guide
-          </a>
           <button onClick={onOpenAssets} role="menuitem" type="button">
             Game Assets
           </button>
           <button onClick={onOpenProjectSettings} role="menuitem" type="button">
             Project Settings
-          </button>
-          <button
-            disabled={!canUpgradeGame}
-            onClick={onOpenUpgradeGame}
-            role="menuitem"
-            title={canUpgradeGame ? undefined : "Upgrade Game is available for editable legacy projects only."}
-            type="button"
-          >
-            Upgrade Game
-          </button>
-          <button disabled={!canUpgradeRuntime} onClick={onOpenRuntimeUpgrade} role="menuitem" type="button">
-            Runtime Upgrade
-          </button>
-          <button disabled={!canUpgradeRuntime} onClick={() => onUpdateRuntimeUpgrade("cancel")} role="menuitem" type="button">
-            Cancel Runtime Preview
           </button>
           <button onClick={onOpenAccountSettings} role="menuitem" type="button">
             Account Settings
@@ -2995,6 +3027,17 @@ function ProjectMenu({
       ) : null}
     </div>
   );
+}
+
+function isUpgradeConversationMessage(message: ChatMessage) {
+  const content = message.content.trim();
+  if (message.role === "user" && (
+    content === UPGRADE_GAME_PROMPT
+    || /^Convert this legacy game to the ATG engine in one best-effort pass\./i.test(content)
+  )) return true;
+  return message.role === "assistant"
+    && /^\*\*(?:Candidate Ready|Converted Candidate)\*\*/i.test(content)
+    && /ATGEngine|migrationStatus|ATG engine/i.test(content);
 }
 
 function extractPlanningChoices(content: string) {

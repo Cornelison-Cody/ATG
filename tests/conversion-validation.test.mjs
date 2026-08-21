@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateConvertedGame } from "../lib/conversion-validation.mjs";
+import { normalizeConvertedGameFiles, validateConvertedGame } from "../lib/conversion-validation.mjs";
 
 const goodFiles = [
   { path: "config.json", content: JSON.stringify({ engine: { formatVersion: 1, migrationStatus: "upgraded", runtimeVersion: "atg-2d-1.3.0", type: "pixi" } }) },
@@ -15,6 +15,40 @@ test("valid converted games pass metadata, runtime, bridge, asset, and instructi
   const report = validateConvertedGame({ files: goodFiles, assets: [], runtime: { loaded: true }, performance: { fps: 30 } });
   assert.equal(report.ok, true);
   assert.equal(report.blockingErrors.length, 0);
+});
+
+test("phone controls may use the ATG bridge through shared game.js", () => {
+  const files = goodFiles.map((file) => {
+    if (file.path === "phone.html") return { ...file, content: '<button id="ready">Ready</button><script src="./game.js" defer></script>' };
+    if (file.path === "game.js") return { ...file, content: "window.ATGEngine.ready; window.ATG.sendAction('ready');" };
+    return file;
+  });
+
+  const report = validateConvertedGame({ files, runtime: { loaded: true } });
+  assert.equal(report.ok, true);
+  assert.equal(report.blockingErrors.some((finding) => finding.code === "phone-bridge"), false);
+});
+
+test("conversion normalization repairs flattened engine metadata", () => {
+  const [file] = normalizeConvertedGameFiles([{
+    path: "config.json",
+    content: JSON.stringify({
+      title: "Chess",
+      formatVersion: 1,
+      migrationStatus: "upgraded",
+      runtimeVersion: "atg-2d-1.3.0",
+      type: "pixi"
+    })
+  }]);
+  const config = JSON.parse(file.content);
+
+  assert.deepEqual(config.engine, {
+    formatVersion: 1,
+    migrationStatus: "upgraded",
+    runtimeVersion: "atg-2d-1.3.0",
+    type: "pixi"
+  });
+  assert.equal(config.type, undefined);
 });
 
 test("broken runtime, metadata, bridge, and missing assets block acceptance", () => {

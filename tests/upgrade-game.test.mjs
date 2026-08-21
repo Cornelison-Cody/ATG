@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { buildEngineConversionPrompt, getUpgradeGameAvailability, UPGRADE_GAME_PROMPT } from "../lib/upgrade-game.mjs";
 
 const legacy = { formatVersion: 1, migrationStatus: "legacy", runtimeVersion: null, type: "legacy" };
@@ -13,12 +14,70 @@ test("every editable legacy project exposes Upgrade Game", () => {
 test("engine-backed games and active edits are unavailable", () => {
   assert.equal(getUpgradeGameAvailability({ engine, accessRole: "owner" }).available, false);
   assert.equal(getUpgradeGameAvailability({ engine: legacy, accessRole: "owner", isRunning: true }).available, false);
+  assert.equal(getUpgradeGameAvailability({ engine: legacy, accessRole: "owner", isRunning: true }).reason, "Your game is busy adding some magic right now. Try again in a moment.");
   assert.equal(getUpgradeGameAvailability({ engine: legacy, accessRole: null }).available, false);
 });
 
 test("conversion prompt preserves the no-publish boundary", () => {
   assert.match(buildEngineConversionPrompt("atg-2d-1.3.0"), /window\.ATGEngine/);
-  assert.match(UPGRADE_GAME_PROMPT, /migrationStatus upgraded/);
+  assert.match(UPGRADE_GAME_PROMPT, /exact nested object/);
+  assert.match(UPGRADE_GAME_PROMPT, /"engine": \{ "formatVersion": 1, "migrationStatus": "upgraded"/);
+  assert.match(UPGRADE_GAME_PROMPT, /Never place those four engine fields at the top level/);
   assert.match(UPGRADE_GAME_PROMPT, /phone controls must remain accessible DOM UI/);
   assert.match(UPGRADE_GAME_PROMPT, /Do not publish or replace/);
+});
+
+test("Upgrade Game renders in the fixed modal overlay", () => {
+  const dashboard = fs.readFileSync(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8");
+  const modal = dashboard.match(/function UpgradeGameModal[\s\S]*?\n}\n\nfunction AccountSettingsModal/);
+
+  assert.ok(modal, "UpgradeGameModal should be present");
+  assert.match(modal[0], /className=\{styles\.modalOverlay\}/);
+  assert.match(modal[0], /aria-modal="true"/);
+  assert.match(modal[0], /role="dialog"/);
+  assert.match(modal[0], /Level Up Your Game!/);
+  assert.match(modal[0], /Make It Awesome!/);
+  assert.match(modal[0], /Maybe Later/);
+  assert.match(modal[0], /upgradeSpinner/);
+  assert.match(modal[0], /upgradeGameStatusMessages/);
+  assert.doesNotMatch(modal[0], /Your game is getting its glow-up/);
+  assert.doesNotMatch(modal[0], /styles\.modalBackdrop/);
+});
+
+test("upgrade completion validates and accepts automatically", () => {
+  const dashboard = fs.readFileSync(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(dashboard.match(/async function startUpgradeGame[\s\S]*?\n  }/)[0], /setIsUpgradeGameOpen\(false\)/);
+  assert.match(dashboard, /await updateConversion\("validate", options\.conversionId\)/);
+  assert.match(dashboard, /await updateConversion\("accept", options\.conversionId, true\)/);
+  assert.match(dashboard, /async function startLatestRuntimeUpgrade/);
+  assert.match(dashboard, /body: JSON\.stringify\(\{ action: "validate" \}\)/);
+  assert.match(dashboard, /body: JSON\.stringify\(\{ action: "accept", acknowledgeWarnings: true \}\)/);
+});
+
+test("the editor shows engine status and keeps upgrade actions out of chat", () => {
+  const dashboard = fs.readFileSync(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8");
+  const projectChat = dashboard.match(/function ProjectChat[\s\S]*?\n}\n\nfunction ProjectMenu/);
+
+  assert.ok(projectChat, "ProjectChat should be present");
+  assert.match(projectChat[0], /ATG Engine/);
+  assert.match(projectChat[0], /Classic Game/);
+  assert.match(projectChat[0], /Upgrade Game/);
+  assert.doesNotMatch(projectChat[0], /Cancel Upgrade|Validate Candidate|Accept Upgrade/);
+  assert.doesNotMatch(projectChat[0], /<ProjectMenu[\s\S]*Upgrade Game/);
+  assert.doesNotMatch(dashboard, /Runtime Upgrade|Cancel Runtime Preview|RuntimeUpgradeModal/);
+  assert.match(dashboard, /const latestRuntimeUpgrade/);
+  assert.match(dashboard, /canUpgradeGame=\{canUpgradeGame\}/);
+  assert.match(dashboard, /isUpgradeConversationMessage/);
+  assert.match(dashboard, /Candidate Ready\|Converted Candidate/);
+  assert.match(dashboard, /Convert this legacy game to the ATG engine/);
+});
+
+test("the game menu opens TV and Phone in new tabs", () => {
+  const dashboard = fs.readFileSync(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8");
+  const projectMenu = dashboard.match(/function ProjectMenu[\s\S]*?\n}\n\nfunction isUpgradeConversationMessage/);
+
+  assert.ok(projectMenu, "ProjectMenu should be present");
+  assert.match(projectMenu[0], /href=\{`\/tv\/\$\{projectId\}`\} rel="noopener noreferrer" role="menuitem" target="_blank"/);
+  assert.match(projectMenu[0], /href=\{`\/join\/\$\{projectId\}`\} rel="noopener noreferrer" role="menuitem" target="_blank"/);
 });
