@@ -1609,7 +1609,7 @@ function UpgradeGameModal({
   reason: string;
 }) {
   return (
-    <div className={styles.modalBackdrop} role="presentation">
+    <div className={styles.modalOverlay} role="presentation">
       <section aria-labelledby="upgrade-game-title" aria-modal="true" className={styles.modal} role="dialog">
         <div className={styles.modalHeader}>
           <h2 id="upgrade-game-title">Upgrade Game</h2>

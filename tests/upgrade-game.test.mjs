@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { buildEngineConversionPrompt, getUpgradeGameAvailability, UPGRADE_GAME_PROMPT } from "../lib/upgrade-game.mjs";
 
 const legacy = { formatVersion: 1, migrationStatus: "legacy", runtimeVersion: null, type: "legacy" };
@@ -21,4 +22,15 @@ test("conversion prompt preserves the no-publish boundary", () => {
   assert.match(UPGRADE_GAME_PROMPT, /migrationStatus upgraded/);
   assert.match(UPGRADE_GAME_PROMPT, /phone controls must remain accessible DOM UI/);
   assert.match(UPGRADE_GAME_PROMPT, /Do not publish or replace/);
+});
+
+test("Upgrade Game renders in the fixed modal overlay", () => {
+  const dashboard = fs.readFileSync(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8");
+  const modal = dashboard.match(/function UpgradeGameModal[\s\S]*?\n}\n\nfunction RuntimeUpgradeModal/);
+
+  assert.ok(modal, "UpgradeGameModal should be present");
+  assert.match(modal[0], /className=\{styles\.modalOverlay\}/);
+  assert.match(modal[0], /aria-modal="true"/);
+  assert.match(modal[0], /role="dialog"/);
+  assert.doesNotMatch(modal[0], /styles\.modalBackdrop/);
 });
