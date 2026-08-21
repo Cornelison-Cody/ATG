@@ -47,3 +47,15 @@ test("upgrade completion validates and accepts automatically", () => {
   assert.match(dashboard, /await updateConversion\("validate", options\.conversionId\)/);
   assert.match(dashboard, /await updateConversion\("accept", options\.conversionId, true\)/);
 });
+
+test("the editor shows engine status and keeps upgrade actions out of chat", () => {
+  const dashboard = fs.readFileSync(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8");
+  const projectChat = dashboard.match(/function ProjectChat[\s\S]*?\n}\n\nfunction ProjectMenu/);
+
+  assert.ok(projectChat, "ProjectChat should be present");
+  assert.match(projectChat[0], /ATG Engine/);
+  assert.match(projectChat[0], /Classic Game/);
+  assert.match(projectChat[0], /Upgrade Game/);
+  assert.doesNotMatch(projectChat[0], /Cancel Upgrade|Validate Candidate|Accept Upgrade/);
+  assert.doesNotMatch(projectChat[0], /<ProjectMenu[\s\S]*Upgrade Game/);
+});

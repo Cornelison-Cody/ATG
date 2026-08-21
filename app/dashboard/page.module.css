@@ -525,6 +525,74 @@
   padding: 10px 12px;
 }
 
+.editorToolbarIdentity {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.engineStatus {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 850;
+  gap: 7px;
+  min-height: 32px;
+  padding: 6px 10px;
+  text-transform: uppercase;
+}
+
+.engineStatusActive {
+  background: rgba(77, 214, 201, 0.12);
+  border-color: rgba(77, 214, 201, 0.38);
+  color: var(--accent-strong);
+}
+
+.engineStatusLegacy {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+}
+
+.engineStatusDot {
+  background: currentColor;
+  border-radius: 50%;
+  height: 7px;
+  width: 7px;
+}
+
+.upgradeGameButton {
+  align-items: center;
+  background: linear-gradient(135deg, var(--accent) 0%, #8cf3cf 100%);
+  border: 0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(77, 214, 201, 0.18);
+  color: #04110f;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 900;
+  gap: 7px;
+  min-height: 40px;
+  padding: 9px 13px;
+  transition: box-shadow 160ms ease, filter 160ms ease, transform 160ms ease;
+}
+
+.upgradeGameButton:hover,
+.upgradeGameButton:focus-visible {
+  box-shadow: 0 12px 30px rgba(77, 214, 201, 0.3), 0 0 0 3px rgba(77, 214, 201, 0.14);
+  filter: brightness(1.05);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.upgradeGameButton svg {
+  height: 17px;
+  width: 17px;
+}
+
 .editorToolbarActions {
   align-items: center;
   display: flex;
@@ -1959,6 +2027,21 @@
   .editorShell {
     gap: 12px;
     padding: 12px;
+  }
+
+  .editorToolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .editorToolbarIdentity,
+  .editorToolbarActions {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .editorToolbarIdentity {
+    flex-wrap: wrap;
   }
 
   .header,

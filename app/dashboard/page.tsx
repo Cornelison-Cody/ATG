@@ -22,6 +22,7 @@ import {
   PanelRightOpen,
   Pencil,
   Settings,
+  Sparkles,
   Smartphone,
   Trash2,
   Upload,
@@ -1303,6 +1304,7 @@ export default function Home() {
           projectName={activeProject.name}
           projectRevision={activeProject.updatedAt}
           canUpgradeGame={upgradeGameAvailability.available}
+          isUsingNewEngine={activeProject.engine?.type === "pixi"}
           canUpgradeRuntime={activeProject.engine?.type === "pixi" && !isRunning}
           activeRuntimeUpgrade={runtimeUpgrade}
           onUpdateRuntimeUpgrade={updateRuntimeUpgrade}
@@ -1311,10 +1313,6 @@ export default function Home() {
           activeConversionId={activeConversionId}
           conversionStatus={conversionStatus}
           conversionRevision={conversionRevision}
-          conversionValidation={conversionValidation}
-          conversionWarningsAcknowledged={conversionWarningsAcknowledged}
-          onConversionWarningsAcknowledged={setConversionWarningsAcknowledged}
-          onUpdateConversion={updateConversion}
         />
       ) : (
         <ProjectDashboard
@@ -1644,7 +1642,7 @@ function UpgradeGameModal({
 
     const interval = window.setInterval(() => {
       setStatusIndex((current) => (current + 1) % upgradeGameStatusMessages.length);
-    }, 2200);
+    }, 6600);
 
     return () => window.clearInterval(interval);
   }, [isUpgrading]);
@@ -1668,7 +1666,7 @@ function UpgradeGameModal({
           ) : (
             <p>
               Give your game an awesome upgrade with the latest ATG magic! We’ll create a fresh upgraded version for
-              you while your current game stays safe. Then we’ll finish the makeover for you.
+              you while your current game stays safe.
             </p>
           )}
           {reason ? <p className={styles.errorText}>{reason}</p> : null}
@@ -2474,6 +2472,7 @@ function ProjectChat({
   activeRuntimeUpgrade,
   canUpgradeRuntime,
   canUpgradeGame,
+  isUsingNewEngine,
   canSubmit,
   chatMode,
   editingTarget,
@@ -2503,15 +2502,12 @@ function ProjectChat({
   activeConversionId,
   conversionStatus,
   conversionRevision,
-  conversionValidation,
-  conversionWarningsAcknowledged,
-  onConversionWarningsAcknowledged,
-  onUpdateConversion,
   onUpdateRuntimeUpgrade
 }: {
   activeRuntimeUpgrade: RuntimeUpgradeRecord | null;
   canUpgradeRuntime: boolean;
   canUpgradeGame: boolean;
+  isUsingNewEngine: boolean;
   canSubmit: boolean;
   chatMode: ChatMode;
   editingTarget: EditingTarget;
@@ -2541,10 +2537,6 @@ function ProjectChat({
   activeConversionId: string | null;
   conversionStatus: ConversionStatus | null;
   conversionRevision: string | null;
-  conversionValidation: ConversionValidation | null;
-  conversionWarningsAcknowledged: boolean;
-  onConversionWarningsAcknowledged: (acknowledged: boolean) => void;
-  onUpdateConversion: (action: "accept" | "cancel" | "retry" | "validate") => void;
   onUpdateRuntimeUpgrade: (action: "accept" | "cancel" | "validate") => void;
 }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -2696,29 +2688,41 @@ function ProjectChat({
           aria-label="Project chat"
         >
           <div className={styles.editorToolbar}>
-            <div className={styles.targetToggle} role="tablist" aria-label="Editing target">
-              <button
-                aria-selected={editingTarget === "tv"}
-                className={editingTarget === "tv" ? styles.activeTargetButton : undefined}
-                onClick={() => onTargetChange("tv")}
-                role="tab"
-                type="button"
-              >
-                <Monitor aria-hidden="true" />
-                TV
-              </button>
-              <button
-                aria-selected={editingTarget === "phone"}
-                className={editingTarget === "phone" ? styles.activeTargetButton : undefined}
-                onClick={() => onTargetChange("phone")}
-                role="tab"
-                type="button"
-              >
-                <Smartphone aria-hidden="true" />
-                Phone
-              </button>
+            <div className={styles.editorToolbarIdentity}>
+              <div className={styles.targetToggle} role="tablist" aria-label="Editing target">
+                <button
+                  aria-selected={editingTarget === "tv"}
+                  className={editingTarget === "tv" ? styles.activeTargetButton : undefined}
+                  onClick={() => onTargetChange("tv")}
+                  role="tab"
+                  type="button"
+                >
+                  <Monitor aria-hidden="true" />
+                  TV
+                </button>
+                <button
+                  aria-selected={editingTarget === "phone"}
+                  className={editingTarget === "phone" ? styles.activeTargetButton : undefined}
+                  onClick={() => onTargetChange("phone")}
+                  role="tab"
+                  type="button"
+                >
+                  <Smartphone aria-hidden="true" />
+                  Phone
+                </button>
+              </div>
+              <span className={`${styles.engineStatus} ${isUsingNewEngine ? styles.engineStatusActive : styles.engineStatusLegacy}`}>
+                <span aria-hidden="true" className={styles.engineStatusDot} />
+                {isUsingNewEngine ? "ATG Engine" : "Classic Game"}
+              </span>
             </div>
             <div className={styles.editorToolbarActions}>
+              {canUpgradeGame ? (
+                <button className={styles.upgradeGameButton} onClick={onOpenUpgradeGame} type="button">
+                  <Sparkles aria-hidden="true" />
+                  Upgrade Game
+                </button>
+              ) : null}
               <div className={styles.modeToggle} role="tablist" aria-label="Chat mode">
                 <button
                   aria-selected={chatMode === "build"}
@@ -2780,31 +2784,6 @@ function ProjectChat({
           ) : null}
 
           {showFeedback ? <RunFeedback feedback={runFeedback} /> : null}
-
-          {activeConversionId && conversionStatus ? (
-            <div className={styles.settingsMessage} role="status">
-              <strong>Upgrade Game: </strong>{conversionStatus === "review" ? "Candidate ready for review." : conversionStatus}
-              {conversionStatus === "review" ? (
-                <>
-                  <button onClick={() => onUpdateConversion("cancel")} type="button">Cancel Upgrade</button>{" "}
-                  <button onClick={() => onUpdateConversion("validate")} type="button">{conversionValidation ? "Revalidate" : "Validate Candidate"}</button>{" "}
-                  {conversionValidation?.warnings.length ? (
-                    <label>
-                      <input checked={conversionWarningsAcknowledged} onChange={(event) => onConversionWarningsAcknowledged(event.target.checked)} type="checkbox" /> Acknowledge warnings
-                    </label>
-                  ) : null}{" "}
-                  <button
-                    disabled={!conversionValidation || conversionValidation.blockingErrors.length > 0 || (Boolean(conversionValidation.warnings.length) && !conversionWarningsAcknowledged)}
-                    onClick={() => onUpdateConversion("accept")}
-                    type="button"
-                  >Accept Upgrade</button>
-                  {conversionValidation?.blockingErrors.map((finding) => <p className={styles.errorText} key={finding.code}>{finding.message}</p>)}
-                  {conversionValidation?.warnings.map((finding) => <p key={finding.code}>{finding.message}</p>)}
-                </>
-              ) : null}
-              {conversionStatus === "failed" ? <button onClick={() => onUpdateConversion("retry")} type="button">Retry Upgrade</button> : null}
-            </div>
-          ) : null}
 
           {planningAnswers.length > 0 && !isRunning ? (
             <div className={styles.quickAnswers} aria-label="Planning answer choices">
@@ -2909,10 +2888,8 @@ function ProjectChat({
             onOpenAssets={onOpenAssets}
             onOpenInstructions={onOpenInstructions}
             onOpenProjectSettings={onOpenProjectSettings}
-                onOpenUpgradeGame={onOpenUpgradeGame}
-                onOpenRuntimeUpgrade={onOpenRuntimeUpgrade}
-                canUpgradeGame={canUpgradeGame}
-                canUpgradeRuntime={canUpgradeRuntime}
+            onOpenRuntimeUpgrade={onOpenRuntimeUpgrade}
+            canUpgradeRuntime={canUpgradeRuntime}
                 onUpdateRuntimeUpgrade={onUpdateRuntimeUpgrade}
             onReturnToProjects={onReturnToProjects}
             onToggle={onToggleProjectMenu}
@@ -2945,9 +2922,7 @@ function ProjectChat({
                 onOpenAssets={onOpenAssets}
                 onOpenInstructions={onOpenInstructions}
                 onOpenProjectSettings={onOpenProjectSettings}
-                onOpenUpgradeGame={onOpenUpgradeGame}
                 onOpenRuntimeUpgrade={onOpenRuntimeUpgrade}
-                canUpgradeGame={canUpgradeGame}
                 canUpgradeRuntime={canUpgradeRuntime}
                 onUpdateRuntimeUpgrade={onUpdateRuntimeUpgrade}
                 onReturnToProjects={onReturnToProjects}
@@ -2969,21 +2944,18 @@ function ProjectChat({
 
 function ProjectMenu({
   canUpgradeRuntime,
-  canUpgradeGame,
   className,
   isOpen,
   onOpenAccountSettings,
   onOpenAssets,
   onOpenInstructions,
   onOpenProjectSettings,
-  onOpenUpgradeGame,
   onOpenRuntimeUpgrade,
   onUpdateRuntimeUpgrade,
   onReturnToProjects,
   onToggle,
   projectId
 }: {
-  canUpgradeGame: boolean;
   canUpgradeRuntime: boolean;
   className?: string;
   isOpen: boolean;
@@ -2991,7 +2963,6 @@ function ProjectMenu({
   onOpenAssets: () => void;
   onOpenInstructions: () => void;
   onOpenProjectSettings: () => void;
-  onOpenUpgradeGame: () => void;
   onOpenRuntimeUpgrade: () => void;
   onUpdateRuntimeUpgrade: (action: "accept" | "cancel" | "validate") => void;
   onReturnToProjects: () => void;
@@ -3028,15 +2999,6 @@ function ProjectMenu({
           </button>
           <button onClick={onOpenProjectSettings} role="menuitem" type="button">
             Project Settings
-          </button>
-          <button
-            disabled={!canUpgradeGame}
-            onClick={onOpenUpgradeGame}
-            role="menuitem"
-            title={canUpgradeGame ? undefined : "Upgrade Game is available for editable legacy projects only."}
-            type="button"
-          >
-            Upgrade Game
           </button>
           <button disabled={!canUpgradeRuntime} onClick={onOpenRuntimeUpgrade} role="menuitem" type="button">
             Runtime Upgrade
