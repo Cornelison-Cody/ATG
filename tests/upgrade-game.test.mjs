@@ -32,5 +32,8 @@ test("Upgrade Game renders in the fixed modal overlay", () => {
   assert.match(modal[0], /className=\{styles\.modalOverlay\}/);
   assert.match(modal[0], /aria-modal="true"/);
   assert.match(modal[0], /role="dialog"/);
+  assert.match(modal[0], /Level Up Your Game!/);
+  assert.match(modal[0], /Make It Awesome!/);
+  assert.match(modal[0], /Maybe Later/);
   assert.doesNotMatch(modal[0], /styles\.modalBackdrop/);
 });

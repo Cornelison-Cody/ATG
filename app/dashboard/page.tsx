@@ -1612,23 +1612,22 @@ function UpgradeGameModal({
     <div className={styles.modalOverlay} role="presentation">
       <section aria-labelledby="upgrade-game-title" aria-modal="true" className={styles.modal} role="dialog">
         <div className={styles.modalHeader}>
-          <h2 id="upgrade-game-title">Upgrade Game</h2>
+          <h2 id="upgrade-game-title">Level Up Your Game!</h2>
           <button aria-label="Close upgrade game dialog" onClick={onCancel} type="button">
             <X aria-hidden="true" />
           </button>
         </div>
         <div className={styles.modalBody}>
           <p>
-            ATG will prepare a best-effort engine conversion without asking a questionnaire. Phone controls
-            stay DOM-based, and your current published legacy game remains unchanged until you explicitly accept
-            a conversion candidate.
+            Give your game an awesome upgrade with the latest ATG magic! We’ll create a fresh upgraded version for
+            you to preview while your current game stays safe. When you’re thrilled with it, you can make it live.
           </p>
           {reason ? <p className={styles.errorText}>{reason}</p> : null}
         </div>
         <div className={styles.modalActions}>
-          <button onClick={onCancel} type="button">Cancel</button>
-          <button disabled={isRunning || Boolean(reason)} onClick={onStart} type="button">
-            Start Upgrade
+          <button className={styles.secondaryButton} onClick={onCancel} type="button">Maybe Later</button>
+          <button className={styles.modalPrimaryButton} disabled={isRunning || Boolean(reason)} onClick={onStart} type="button">
+            Make It Awesome!
           </button>
         </div>
       </section>
