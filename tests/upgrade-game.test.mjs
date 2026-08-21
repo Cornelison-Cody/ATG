@@ -29,7 +29,7 @@ test("conversion prompt preserves the no-publish boundary", () => {
 
 test("Upgrade Game renders in the fixed modal overlay", () => {
   const dashboard = fs.readFileSync(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8");
-  const modal = dashboard.match(/function UpgradeGameModal[\s\S]*?\n}\n\nfunction RuntimeUpgradeModal/);
+  const modal = dashboard.match(/function UpgradeGameModal[\s\S]*?\n}\n\nfunction AccountSettingsModal/);
 
   assert.ok(modal, "UpgradeGameModal should be present");
   assert.match(modal[0], /className=\{styles\.modalOverlay\}/);
@@ -50,6 +50,9 @@ test("upgrade completion validates and accepts automatically", () => {
   assert.doesNotMatch(dashboard.match(/async function startUpgradeGame[\s\S]*?\n  }/)[0], /setIsUpgradeGameOpen\(false\)/);
   assert.match(dashboard, /await updateConversion\("validate", options\.conversionId\)/);
   assert.match(dashboard, /await updateConversion\("accept", options\.conversionId, true\)/);
+  assert.match(dashboard, /async function startLatestRuntimeUpgrade/);
+  assert.match(dashboard, /body: JSON\.stringify\(\{ action: "validate" \}\)/);
+  assert.match(dashboard, /body: JSON\.stringify\(\{ action: "accept", acknowledgeWarnings: true \}\)/);
 });
 
 test("the editor shows engine status and keeps upgrade actions out of chat", () => {
@@ -62,5 +65,10 @@ test("the editor shows engine status and keeps upgrade actions out of chat", () 
   assert.match(projectChat[0], /Upgrade Game/);
   assert.doesNotMatch(projectChat[0], /Cancel Upgrade|Validate Candidate|Accept Upgrade/);
   assert.doesNotMatch(projectChat[0], /<ProjectMenu[\s\S]*Upgrade Game/);
+  assert.doesNotMatch(dashboard, /Runtime Upgrade|Cancel Runtime Preview|RuntimeUpgradeModal/);
+  assert.match(dashboard, /const latestRuntimeUpgrade/);
+  assert.match(dashboard, /canUpgradeGame=\{canUpgradeGame\}/);
   assert.match(dashboard, /isUpgradeConversationMessage/);
+  assert.match(dashboard, /Candidate Ready\|Converted Candidate/);
+  assert.match(dashboard, /Convert this legacy game to the ATG engine/);
 });
