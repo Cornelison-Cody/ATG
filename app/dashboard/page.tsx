@@ -1652,7 +1652,7 @@ function UpgradeGameModal({
 
   return (
     <div className={styles.modalOverlay} role="presentation">
-      <section aria-labelledby="upgrade-game-title" aria-modal="true" className={styles.modal} role="dialog">
+      <section aria-labelledby="upgrade-game-title" aria-modal="true" className={`${styles.modal} ${styles.upgradeGameModal}`} role="dialog">
         <div className={styles.modalHeader}>
           <h2 id="upgrade-game-title">Level Up Your Game!</h2>
           <button aria-label="Close upgrade game dialog" className={styles.closeButton} disabled={isUpgrading} onClick={onCancel} type="button">
@@ -1664,7 +1664,6 @@ function UpgradeGameModal({
             <div aria-live="polite" className={styles.upgradeProgress}>
               <span aria-label="Upgrading your game" className={styles.upgradeSpinner} role="status" />
               <p className={styles.upgradeStatus}>{upgradeGameStatusMessages[statusIndex]}</p>
-              <p>Your game is getting its glow-up. Hang tight—we’ll make it awesome for you.</p>
             </div>
           ) : (
             <p>
@@ -1672,7 +1671,7 @@ function UpgradeGameModal({
               you while your current game stays safe.
             </p>
           )}
-          {reason ? <p className={styles.errorText}>{reason}</p> : null}
+          {reason && !isUpgrading ? <p className={styles.errorText}>{reason}</p> : null}
         </div>
         <div className={styles.modalActions}>
           {isUpgrading ? (

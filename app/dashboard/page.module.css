@@ -1098,6 +1098,23 @@
   width: min(100%, 560px);
 }
 
+.upgradeGameModal {
+  max-width: 440px;
+  width: min(100%, 440px);
+}
+
+.upgradeGameModal .modalHeader {
+  padding: 14px 18px;
+}
+
+.upgradeGameModal .modalBody {
+  padding: 16px 18px;
+}
+
+.upgradeGameModal .modalActions {
+  padding: 12px 18px;
+}
+
 .accountSettingsModal {
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   max-height: min(760px, calc(100dvh - 48px));
@@ -1146,7 +1163,7 @@
   display: grid;
   gap: 10px;
   justify-items: center;
-  min-height: 150px;
+  min-height: 96px;
   text-align: center;
 }
 

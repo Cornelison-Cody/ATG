@@ -40,6 +40,7 @@ test("Upgrade Game renders in the fixed modal overlay", () => {
   assert.match(modal[0], /Maybe Later/);
   assert.match(modal[0], /upgradeSpinner/);
   assert.match(modal[0], /upgradeGameStatusMessages/);
+  assert.doesNotMatch(modal[0], /Your game is getting its glow-up/);
   assert.doesNotMatch(modal[0], /styles\.modalBackdrop/);
 });
 
