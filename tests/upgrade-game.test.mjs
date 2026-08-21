@@ -20,7 +20,9 @@ test("engine-backed games and active edits are unavailable", () => {
 
 test("conversion prompt preserves the no-publish boundary", () => {
   assert.match(buildEngineConversionPrompt("atg-2d-1.3.0"), /window\.ATGEngine/);
-  assert.match(UPGRADE_GAME_PROMPT, /migrationStatus upgraded/);
+  assert.match(UPGRADE_GAME_PROMPT, /exact nested object/);
+  assert.match(UPGRADE_GAME_PROMPT, /"engine": \{ "formatVersion": 1, "migrationStatus": "upgraded"/);
+  assert.match(UPGRADE_GAME_PROMPT, /Never place those four engine fields at the top level/);
   assert.match(UPGRADE_GAME_PROMPT, /phone controls must remain accessible DOM UI/);
   assert.match(UPGRADE_GAME_PROMPT, /Do not publish or replace/);
 });
@@ -59,4 +61,5 @@ test("the editor shows engine status and keeps upgrade actions out of chat", () 
   assert.match(projectChat[0], /Upgrade Game/);
   assert.doesNotMatch(projectChat[0], /Cancel Upgrade|Validate Candidate|Accept Upgrade/);
   assert.doesNotMatch(projectChat[0], /<ProjectMenu[\s\S]*Upgrade Game/);
+  assert.match(dashboard, /isUpgradeConversationMessage/);
 });

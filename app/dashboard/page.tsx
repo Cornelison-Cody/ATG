@@ -1022,6 +1022,7 @@ export default function Home() {
       return;
     }
     const effectiveChatMode = options.chatMode ?? chatMode;
+    const isConversionRun = Boolean(options.conversionId);
     const effectiveEditingTarget: BuildTarget = options.editingTarget ?? editingTarget;
     const effectiveTargetName =
       effectiveEditingTarget === "both" ? "full plan" : effectiveEditingTarget === "tv" ? "TV" : "phone";
@@ -1042,7 +1043,9 @@ export default function Home() {
       createdAt: new Date().toISOString()
     };
 
-    setMessages((current) => [...current, userMessage, assistantMessage]);
+    if (!isConversionRun) {
+      setMessages((current) => [...current, userMessage, assistantMessage]);
+    }
     setInput("");
     setIsRunning(true);
     setError("");
@@ -2546,6 +2549,7 @@ function ProjectChat({
   const [hiddenEditorPanel, setHiddenEditorPanel] = useState<HiddenEditorPanel>(null);
   const [isDesktopSplit, setIsDesktopSplit] = useState(false);
   const [isResizingEditor, setIsResizingEditor] = useState(false);
+  const visibleMessages = messages.filter((message) => !isUpgradeConversationMessage(message));
   const showFeedback = runFeedback.state !== "idle";
   const publishedPreviewPath = `${buildGameAssetUrl(projectId, editingTarget, projectRevision)}&atgEditorPreview=1`;
   const previewPath = activeRuntimeUpgrade?.status === "preview"
@@ -2553,7 +2557,7 @@ function ProjectChat({
     : activeConversionId && conversionStatus === "review" && conversionRevision
     ? `${publishedPreviewPath}&conversion=${encodeURIComponent(activeConversionId)}&revision=${encodeURIComponent(conversionRevision)}`
     : publishedPreviewPath;
-  const latestAssistantMessage = [...messages]
+  const latestAssistantMessage = [...visibleMessages]
     .reverse()
     .find((message) => message.role === "assistant" && message.status === "done");
   const quickAnswers =
@@ -2561,7 +2565,7 @@ function ProjectChat({
   const planningQuestion =
     chatMode === "plan" && latestAssistantMessage ? extractPlanningQuestion(latestAssistantMessage.content) : "";
   const quickAnswersKey = quickAnswers.map((answer) => `${answer.label}:${answer.text}`).join("|");
-  const hasConversation = messages.length > 0 || quickAnswers.length > 0;
+  const hasConversation = visibleMessages.length > 0 || quickAnswers.length > 0;
   const targetName = editingTarget === "tv" ? "TV display" : "phone controller";
   const buildHandoffAnswer = quickAnswers.find((answer) => Boolean(getPlanningQuickAction(answer.text).options?.chatMode));
   const planningAnswers = buildHandoffAnswer ? [buildHandoffAnswer] : quickAnswers;
@@ -2684,7 +2688,7 @@ function ProjectChat({
         </button>
       ) : (
         <section
-          className={`${styles.chatPanel} ${messages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
+          className={`${styles.chatPanel} ${visibleMessages.length === 0 && !showFeedback ? styles.emptyChatPanel : ""}`}
           aria-label="Project chat"
         >
           <div className={styles.editorToolbar}>
@@ -2760,7 +2764,7 @@ function ProjectChat({
 
           {hasConversation ? (
             <div className={styles.messages}>
-              {messages.map((message) => {
+              {visibleMessages.map((message) => {
                 return (
                   <div className={styles.messageGroup} key={message.id}>
                     <article
@@ -3016,6 +3020,14 @@ function ProjectMenu({
       ) : null}
     </div>
   );
+}
+
+function isUpgradeConversationMessage(message: ChatMessage) {
+  const content = message.content.trim();
+  if (message.role === "user" && content === UPGRADE_GAME_PROMPT) return true;
+  return message.role === "assistant"
+    && /^\*\*Candidate Ready\*\*/i.test(content)
+    && /ATGEngine|migrationStatus|ATG engine/i.test(content);
 }
 
 function extractPlanningChoices(content: string) {
