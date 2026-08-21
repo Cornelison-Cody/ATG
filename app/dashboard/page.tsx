@@ -193,6 +193,15 @@ const quietRunSteps = [
   "Preparing the final response."
 ];
 
+const upgradeGameStatusMessages = [
+  "Waking up the upgrade wizards...",
+  "Sprinkling in some extra game magic...",
+  "Teaching your game a few shiny new tricks...",
+  "Polishing the pixels until they sparkle...",
+  "Giving the fun meter a little boost...",
+  "Almost ready for its grand entrance..."
+];
+
 export default function Home() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectDetail | null>(null);
@@ -437,7 +446,6 @@ export default function Home() {
 
   async function startUpgradeGame() {
     if (!activeProject || !upgradeGameAvailability.available) return;
-    setIsUpgradeGameOpen(false);
     try {
       const response = await fetch(`/api/projects/${activeProject.id}/conversions`, {
         body: JSON.stringify({}),
@@ -1095,7 +1103,13 @@ export default function Home() {
       await refreshOpenProject(activeProject.id);
       await loadProjects();
       if (options.conversionId) {
-        await refreshConversion(activeProject.id, options.conversionId);
+        const conversion = await refreshConversion(activeProject.id, options.conversionId);
+        if (conversion?.status === "review") {
+          const validated = await updateConversion("validate", options.conversionId);
+          if (validated?.status === "review") {
+            await updateConversion("accept", options.conversionId, true);
+          }
+        }
       }
     } catch (chatError) {
       const message = chatError instanceof Error ? chatError.message : "Unknown chat failure.";
@@ -1105,6 +1119,9 @@ export default function Home() {
         )
       );
       setError(message);
+      if (options.conversionId) {
+        setConversionStatus("failed");
+      }
       setRunFeedback((current) => ({
         state: "error",
         label: "Codex stopped",
@@ -1119,31 +1136,36 @@ export default function Home() {
 
   async function refreshConversion(projectId: string, conversionId: string) {
     const response = await fetch(`/api/projects/${projectId}/conversions/${conversionId}`, { cache: "no-store" });
-    if (!response.ok) return;
+    if (!response.ok) return null;
     const data = (await response.json()) as { conversion?: { status: ConversionStatus; candidate?: { candidateRevision?: string }; validation?: ConversionValidation | null } };
     if (data.conversion) {
       setConversionStatus(data.conversion.status);
       setConversionRevision(data.conversion.candidate?.candidateRevision || null);
       setConversionValidation(data.conversion.validation || null);
     }
+    return data.conversion || null;
   }
 
-  async function updateConversion(action: "accept" | "cancel" | "retry" | "validate") {
-    if (!activeProject || !activeConversionId) return;
-    const response = await fetch(`/api/projects/${activeProject.id}/conversions/${activeConversionId}`, {
-      body: JSON.stringify({ action, acknowledgeWarnings: conversionWarningsAcknowledged }),
+  async function updateConversion(action: "accept" | "cancel" | "retry" | "validate", conversionId = activeConversionId, acknowledgeWarnings = conversionWarningsAcknowledged) {
+    if (!activeProject || !conversionId) return null;
+    const response = await fetch(`/api/projects/${activeProject.id}/conversions/${conversionId}`, {
+      body: JSON.stringify({ action, acknowledgeWarnings }),
       headers: { "Content-Type": "application/json" },
       method: "POST"
     });
     const data = (await response.json()) as { conversion?: { status: ConversionStatus; candidate?: { candidateRevision?: string }; validation?: ConversionValidation | null }; error?: string };
     if (!response.ok || !data.conversion) {
       setError(data.error || "Unable to update conversion.");
-      return;
+      return null;
     }
     setConversionStatus(data.conversion.status);
     setConversionRevision(data.conversion.candidate?.candidateRevision || null);
     setConversionValidation(data.conversion.validation || null);
-    if (action === "accept") await refreshOpenProject(activeProject.id);
+    if (action === "accept") {
+      await refreshOpenProject(activeProject.id);
+      setIsUpgradeGameOpen(false);
+    }
+    return data.conversion;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1383,6 +1405,7 @@ export default function Home() {
 
       {isUpgradeGameOpen && activeProject ? (
         <UpgradeGameModal
+          conversionStatus={conversionStatus}
           isRunning={isRunning}
           onCancel={() => setIsUpgradeGameOpen(false)}
           onStart={startUpgradeGame}
@@ -1598,37 +1621,74 @@ function ProjectSettingsModal({
 }
 
 function UpgradeGameModal({
+  conversionStatus,
   isRunning,
   onCancel,
   onStart,
   reason
 }: {
+  conversionStatus: ConversionStatus | null;
   isRunning: boolean;
   onCancel: () => void;
   onStart: () => void;
   reason: string;
 }) {
+  const isUpgrading = conversionStatus === "queued" || conversionStatus === "running";
+  const [statusIndex, setStatusIndex] = useState(0);
+
+  useEffect(() => {
+    if (!isUpgrading) {
+      setStatusIndex(0);
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setStatusIndex((current) => (current + 1) % upgradeGameStatusMessages.length);
+    }, 2200);
+
+    return () => window.clearInterval(interval);
+  }, [isUpgrading]);
+
   return (
     <div className={styles.modalOverlay} role="presentation">
       <section aria-labelledby="upgrade-game-title" aria-modal="true" className={styles.modal} role="dialog">
         <div className={styles.modalHeader}>
           <h2 id="upgrade-game-title">Level Up Your Game!</h2>
-          <button aria-label="Close upgrade game dialog" onClick={onCancel} type="button">
+          <button aria-label="Close upgrade game dialog" className={styles.closeButton} disabled={isUpgrading} onClick={onCancel} type="button">
             <X aria-hidden="true" />
           </button>
         </div>
         <div className={styles.modalBody}>
-          <p>
-            Give your game an awesome upgrade with the latest ATG magic! We’ll create a fresh upgraded version for
-            you to preview while your current game stays safe. When you’re thrilled with it, you can make it live.
-          </p>
+          {isUpgrading ? (
+            <div aria-live="polite" className={styles.upgradeProgress}>
+              <span aria-label="Upgrading your game" className={styles.upgradeSpinner} role="status" />
+              <p className={styles.upgradeStatus}>{upgradeGameStatusMessages[statusIndex]}</p>
+              <p>Your game is getting its glow-up. Hang tight—we’ll make it awesome for you.</p>
+            </div>
+          ) : (
+            <p>
+              Give your game an awesome upgrade with the latest ATG magic! We’ll create a fresh upgraded version for
+              you while your current game stays safe. Then we’ll finish the makeover for you.
+            </p>
+          )}
           {reason ? <p className={styles.errorText}>{reason}</p> : null}
         </div>
         <div className={styles.modalActions}>
-          <button className={styles.secondaryButton} onClick={onCancel} type="button">Maybe Later</button>
-          <button className={styles.modalPrimaryButton} disabled={isRunning || Boolean(reason)} onClick={onStart} type="button">
-            Make It Awesome!
-          </button>
+          {isUpgrading ? (
+            <button className={styles.modalPrimaryButton} disabled type="button">Working Its Magic...</button>
+          ) : conversionStatus === "failed" ? (
+            <>
+              <button className={styles.secondaryButton} onClick={onCancel} type="button">Maybe Later</button>
+              <button className={styles.modalPrimaryButton} disabled={isRunning || Boolean(reason)} onClick={onStart} type="button">Try Again</button>
+            </>
+          ) : (
+            <>
+              <button className={styles.secondaryButton} onClick={onCancel} type="button">Maybe Later</button>
+              <button className={styles.modalPrimaryButton} disabled={isRunning || Boolean(reason)} onClick={onStart} type="button">
+                Make It Awesome!
+              </button>
+            </>
+          )}
         </div>
       </section>
     </div>

@@ -35,5 +35,15 @@ test("Upgrade Game renders in the fixed modal overlay", () => {
   assert.match(modal[0], /Level Up Your Game!/);
   assert.match(modal[0], /Make It Awesome!/);
   assert.match(modal[0], /Maybe Later/);
+  assert.match(modal[0], /upgradeSpinner/);
+  assert.match(modal[0], /upgradeGameStatusMessages/);
   assert.doesNotMatch(modal[0], /styles\.modalBackdrop/);
+});
+
+test("upgrade completion validates and accepts automatically", () => {
+  const dashboard = fs.readFileSync(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(dashboard.match(/async function startUpgradeGame[\s\S]*?\n  }/)[0], /setIsUpgradeGameOpen\(false\)/);
+  assert.match(dashboard, /await updateConversion\("validate", options\.conversionId\)/);
+  assert.match(dashboard, /await updateConversion\("accept", options\.conversionId, true\)/);
 });

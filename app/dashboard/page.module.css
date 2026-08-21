@@ -1073,6 +1073,35 @@
   padding: 22px 20px;
 }
 
+.upgradeProgress {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  min-height: 150px;
+  text-align: center;
+}
+
+.upgradeProgress p {
+  margin: 0;
+}
+
+.upgradeProgress .upgradeStatus {
+  color: var(--accent-strong);
+  font-size: 1.08rem;
+  font-weight: 850;
+}
+
+.upgradeSpinner {
+  animation: spin 900ms linear infinite;
+  border: 4px solid rgba(77, 214, 201, 0.2);
+  border-radius: 50%;
+  border-top-color: var(--accent);
+  display: block;
+  height: 42px;
+  width: 42px;
+}
+
 .modalActions {
   align-items: center;
   background: rgba(7, 9, 13, 0.28);
