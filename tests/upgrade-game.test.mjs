@@ -72,3 +72,12 @@ test("the editor shows engine status and keeps upgrade actions out of chat", () 
   assert.match(dashboard, /Candidate Ready\|Converted Candidate/);
   assert.match(dashboard, /Convert this legacy game to the ATG engine/);
 });
+
+test("the game menu opens TV and Phone in new tabs", () => {
+  const dashboard = fs.readFileSync(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8");
+  const projectMenu = dashboard.match(/function ProjectMenu[\s\S]*?\n}\n\nfunction isUpgradeConversationMessage/);
+
+  assert.ok(projectMenu, "ProjectMenu should be present");
+  assert.match(projectMenu[0], /href=\{`\/tv\/\$\{projectId\}`\} rel="noopener noreferrer" role="menuitem" target="_blank"/);
+  assert.match(projectMenu[0], /href=\{`\/join\/\$\{projectId\}`\} rel="noopener noreferrer" role="menuitem" target="_blank"/);
+});

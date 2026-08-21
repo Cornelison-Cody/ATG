@@ -3002,10 +3002,10 @@ function ProjectMenu({
       </button>
       {isOpen ? (
         <div className={styles.menu} role="menu">
-          <a href={`/tv/${projectId}`} role="menuitem">
+          <a href={`/tv/${projectId}`} rel="noopener noreferrer" role="menuitem" target="_blank">
             Open TV
           </a>
-          <a href={`/join/${projectId}`} role="menuitem">
+          <a href={`/join/${projectId}`} rel="noopener noreferrer" role="menuitem" target="_blank">
             Open Phone
           </a>
           <button onClick={onOpenInstructions} role="menuitem" type="button">
