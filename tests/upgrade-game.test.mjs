@@ -14,6 +14,7 @@ test("every editable legacy project exposes Upgrade Game", () => {
 test("engine-backed games and active edits are unavailable", () => {
   assert.equal(getUpgradeGameAvailability({ engine, accessRole: "owner" }).available, false);
   assert.equal(getUpgradeGameAvailability({ engine: legacy, accessRole: "owner", isRunning: true }).available, false);
+  assert.equal(getUpgradeGameAvailability({ engine: legacy, accessRole: "owner", isRunning: true }).reason, "Your game is busy adding some magic right now. Try again in a moment.");
   assert.equal(getUpgradeGameAvailability({ engine: legacy, accessRole: null }).available, false);
 });
 
