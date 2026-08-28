@@ -8,7 +8,7 @@ The Bicep template in `infra/main.bicep` creates:
 
 - Container Apps environment and Container App.
 - Log Analytics workspace.
-- Cosmos DB NoSQL account, `atg` database, and `projects`, `user-settings`, `codex-jobs`, and `ai-usage-budget` containers.
+- Cosmos DB NoSQL free-tier account, `atg-shared` database with 1,000 RU/s shared throughput, and all application containers. The account-level throughput cap prevents later resources from silently exceeding the free-tier allowance.
 - Storage account and private `game-assets` blob container.
 - Container App secrets and environment variables for the Azure storage backend.
 
@@ -87,6 +87,7 @@ managed identity or job resource is replaced.
 - `ATG_MANAGED_AI_ENABLED=true` enables ATG-managed AI for authenticated tenant users. Managed jobs use only `ATG_MANAGED_OPENAI_API_KEY`, reserve $0.25 of the user's monthly beta credit before launch, and reconcile the reservation after reported usage arrives. Set `ATG_MANAGED_AI_ENABLED=false` to disable managed AI without disabling BYOK.
 - Per-user OpenAI API keys are stored in the dedicated Cosmos DB `user-settings` container. Keep `ATG_USER_SETTINGS_ENCRYPTION_KEY` stable across deployments; rotating it requires re-encrypting or clearing existing keys.
 - ATG-local AI usage estimates and monthly budget preferences are stored in the dedicated Cosmos DB `ai-usage-budget` container. If Account Settings usage calls fail after an image-only deployment, rerun the Bicep deployment so this container and `AZURE_COSMOS_AI_USAGE_CONTAINER` are present.
+- All Cosmos containers share the database's 1,000 RU/s allocation. Do not add dedicated container throughput: it exceeds the lifetime free-tier allowance. Existing dedicated-throughput databases can be copied with `scripts/migrate-cosmos-shared-throughput.mjs`; verify the copy and production cutover before deleting the source database.
 - Deployed Codex edits run in a manual Container Apps Job. The web app managed
   identity receives `Container Apps Jobs Operator` scoped only to that job through
   the one-time RBAC bootstrap. The execution receives a short-lived job token
