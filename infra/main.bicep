@@ -86,7 +86,7 @@ var logAnalyticsName = '${prefix}-logs'
 var containerAppsEnvironmentName = '${prefix}-env'
 var containerAppName = '${prefix}-app'
 var cosmosAccountName = 'atg-${take(normalizedEnvironment, 12)}-${nameSeed}-cosmos'
-var cosmosDatabaseName = 'atg'
+var cosmosDatabaseName = 'atg-shared'
 var cosmosProjectsContainerName = 'projects'
 var cosmosUserSettingsContainerName = 'user-settings'
 var cosmosCodexJobsContainerName = 'codex-jobs'
@@ -95,6 +95,20 @@ var cosmosConversionsContainerName = 'conversions'
 var cosmosRuntimeUpgradesContainerName = 'runtime-upgrades'
 var cosmosMediaJobsContainerName = 'media-jobs'
 var cosmosBackgroundJobsContainerName = 'background-jobs'
+var cosmosIndexingPolicy = {
+  indexingMode: 'consistent'
+  automatic: true
+  includedPaths: [
+    {
+      path: '/*'
+    }
+  ]
+  excludedPaths: [
+    {
+      path: '/"_etag"/?'
+    }
+  ]
+}
 var codexJobName = '${prefix}-codex-job'
 var storageAccountName = 'atg${take(normalizedEnvironment, 6)}${nameSeed}st'
 var gameAssetsContainerName = 'game-assets'
@@ -337,6 +351,9 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
   properties: {
     databaseAccountOfferType: 'Standard'
     enableFreeTier: true
+    capacity: {
+      totalThroughputLimit: 1000
+    }
     locations: [
       {
         locationName: location
@@ -358,6 +375,9 @@ resource cosmosDatabase 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024
     resource: {
       id: cosmosDatabaseName
     }
+    options: {
+      throughput: 1000
+    }
   }
 }
 
@@ -373,20 +393,7 @@ resource projectsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/c
         ]
         kind: 'Hash'
       }
-      indexingPolicy: {
-        indexingMode: 'consistent'
-        automatic: true
-        includedPaths: [
-          {
-            path: '/*'
-          }
-        ]
-        excludedPaths: [
-          {
-            path: '/"_etag"/?'
-          }
-        ]
-      }
+      indexingPolicy: cosmosIndexingPolicy
     }
   }
 }
@@ -403,20 +410,7 @@ resource userSettingsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabas
         ]
         kind: 'Hash'
       }
-      indexingPolicy: {
-        indexingMode: 'consistent'
-        automatic: true
-        includedPaths: [
-          {
-            path: '/*'
-          }
-        ]
-        excludedPaths: [
-          {
-            path: '/"_etag"/?'
-          }
-        ]
-      }
+      indexingPolicy: cosmosIndexingPolicy
     }
   }
 }
@@ -434,6 +428,7 @@ resource codexJobsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/
         ]
         kind: 'Hash'
       }
+      indexingPolicy: cosmosIndexingPolicy
     }
   }
 }
@@ -450,20 +445,7 @@ resource aiUsageContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/co
         ]
         kind: 'Hash'
       }
-      indexingPolicy: {
-        indexingMode: 'consistent'
-        automatic: true
-        includedPaths: [
-          {
-            path: '/*'
-          }
-        ]
-        excludedPaths: [
-          {
-            path: '/"_etag"/?'
-          }
-        ]
-      }
+      indexingPolicy: cosmosIndexingPolicy
     }
   }
 }
@@ -486,6 +468,7 @@ resource domainContainers 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/co
         ]
         kind: 'Hash'
       }
+      indexingPolicy: cosmosIndexingPolicy
     }
   }
 }]
